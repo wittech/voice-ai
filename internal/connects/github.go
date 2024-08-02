@@ -6,13 +6,16 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/go-resty/resty/v2"
 	"github.com/lexatic/web-backend/config"
 	"github.com/lexatic/web-backend/pkg/commons"
+	"github.com/lexatic/web-backend/pkg/connectors"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/github"
 )
 
 type GithubConnect struct {
+	ExternalConnect
 	logger            commons.Logger
 	githubOauthConfig oauth2.Config
 }
@@ -21,15 +24,17 @@ var (
 	GITHUB_AUTHENTICATION_SCOPE = []string{"user"}
 	GITHUB_AUTHENTICATION_URL   = "/connect-common/github" //"/auth/signin"
 
-	GITHUB_CODE_SCOPE   = []string{}
+	GITHUB_CODE_SCOPE   = []string{"read:org"}
 	GITHUB_CODE_CONNECT = "/connect-common/github"
 
 	GITHUB_ACTION_SCOPE   = []string{}
 	GITHUB_ACTION_CONNECT = "/connect-common/github"
 )
 
-func NewGithubAuthenticationConnect(cfg *config.AppConfig, logger commons.Logger) GithubConnect {
+func NewGithubAuthenticationConnect(cfg *config.AppConfig, logger commons.Logger,
+	postgres connectors.PostgresConnector) GithubConnect {
 	return GithubConnect{
+		ExternalConnect: NewExternalConnect(cfg, logger, postgres),
 		githubOauthConfig: oauth2.Config{
 			RedirectURL:  fmt.Sprintf("%s%s", cfg.BaseUrl(), GITHUB_AUTHENTICATION_URL),
 			ClientID:     cfg.GithubClientId,
@@ -41,8 +46,9 @@ func NewGithubAuthenticationConnect(cfg *config.AppConfig, logger commons.Logger
 	}
 }
 
-func NewGithubCodeConnect(cfg *config.AppConfig, logger commons.Logger) GithubConnect {
+func NewGithubCodeConnect(cfg *config.AppConfig, logger commons.Logger, postgres connectors.PostgresConnector) GithubConnect {
 	return GithubConnect{
+		ExternalConnect: NewExternalConnect(cfg, logger, postgres),
 		githubOauthConfig: oauth2.Config{
 			RedirectURL:  fmt.Sprintf("%s%s", cfg.BaseUrl(), GITHUB_CODE_CONNECT),
 			ClientID:     cfg.GithubClientId,
@@ -53,8 +59,9 @@ func NewGithubCodeConnect(cfg *config.AppConfig, logger commons.Logger) GithubCo
 		logger: logger,
 	}
 }
-func NewGithubActionConnect(cfg *config.AppConfig, logger commons.Logger) GithubConnect {
+func NewGithubActionConnect(cfg *config.AppConfig, logger commons.Logger, postgres connectors.PostgresConnector) GithubConnect {
 	return GithubConnect{
+		ExternalConnect: NewExternalConnect(cfg, logger, postgres),
 		githubOauthConfig: oauth2.Config{
 			RedirectURL:  fmt.Sprintf("%s%s", cfg.BaseUrl(), GITHUB_ACTION_CONNECT),
 			ClientID:     cfg.GithubClientId,
@@ -110,4 +117,100 @@ func (wAuthApi *GithubConnect) GithubUserInfo(c context.Context, state string, c
 		Name:     content["name"].(string),
 		Id:       fmt.Sprintf("%f", content["id"].(float64)),
 	}, nil
+}
+
+func (wAuthApi *GithubConnect) Token(c context.Context, code string) (*oauth2.Token, error) {
+	return wAuthApi.githubOauthConfig.Exchange(c, code)
+}
+
+type GitHubRepository struct {
+	ID           int    `json:"id"`
+	Name         string `json:"name"`
+	FullName     string `json:"full_name"`
+	Description  string `json:"description"`
+	HTMLURL      string `json:"html_url"`
+	Organization string `json:"organization"`
+}
+
+func (githubConnect *GithubConnect) Repositories(ctx context.Context,
+	token *oauth2.Token,
+	q *string,
+	pageToken *string) ([]GitHubRepository, error) {
+	client := githubConnect.githubOauthConfig.Client(context.Background(), token)
+	restyClient := githubConnect.GetClient(client)
+	var results []GitHubRepository
+	userRepos, err := githubConnect.fetchRepositories(restyClient, "")
+	if err != nil {
+		githubConnect.log.Errorf("there is no personal repository for the user or error occured %+v", err)
+	}
+
+	for _, rep := range userRepos {
+		rep.Organization = "Personal"
+		results = append(results, rep)
+	}
+
+	orgs, err := githubConnect.fetchUserOrganizations(restyClient)
+	if err != nil {
+		githubConnect.log.Errorf("there is no org associated with the user or error %+v", err)
+	}
+
+	// Fetch repositories for each organization
+	for _, org := range orgs {
+		repos, err := githubConnect.fetchRepositories(restyClient, org.Login)
+		if err != nil {
+			githubConnect.log.Errorf("there is no org repository for user or error %+v", err)
+		}
+		for _, rep := range repos {
+			rep.Organization = org.Login
+			results = append(results, rep)
+		}
+	}
+
+	return results, nil
+}
+
+type GitHubOrganization struct {
+	ID          int    `json:"id"`
+	Login       string `json:"login"`
+	AvatarURL   string `json:"avatar_url"`
+	Description string `json:"description"`
+}
+
+func (githubConnect *GithubConnect) fetchUserOrganizations(client *resty.Client) ([]GitHubOrganization, error) {
+	resp, err := client.R().
+		SetHeader("Accept", "application/vnd.github.v3+json").
+		Get("https://api.github.com/user/orgs")
+	if err != nil {
+		return nil, err
+	}
+
+	var orgs []GitHubOrganization
+	if err := json.Unmarshal(resp.Body(), &orgs); err != nil {
+		return nil, err
+	}
+
+	return orgs, nil
+}
+
+func (githubConnect *GithubConnect) fetchRepositories(client *resty.Client, org string) ([]GitHubRepository, error) {
+	var url string
+	if org != "" {
+		url = "https://api.github.com/orgs/" + org + "/repos"
+	} else {
+		url = "https://api.github.com/user/repos"
+	}
+
+	resp, err := client.R().
+		SetHeader("Accept", "application/vnd.github.v3+json").
+		Get(url)
+	if err != nil {
+		return nil, err
+	}
+
+	var repos []GitHubRepository
+	if err := json.Unmarshal(resp.Body(), &repos); err != nil {
+		return nil, err
+	}
+
+	return repos, nil
 }
