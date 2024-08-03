@@ -17,7 +17,6 @@ import (
 	"github.com/lexatic/web-backend/pkg/types"
 	"github.com/lexatic/web-backend/pkg/utils"
 	web_api "github.com/lexatic/web-backend/protos/lexatic-backend"
-	"golang.org/x/oauth2"
 )
 
 type webConnectApi struct {
@@ -90,7 +89,7 @@ func (wConnectApi *webConnectGRPCApi) KnowledgeConnect(ctx context.Context, kcr 
 		return utils.Error[web_api.KnowledgeConnectResponse](err, "illegal state for oauth")
 	}
 
-	var tokenInfo *oauth2.Token
+	var tokenInfo internal_connects.ExternalConnectToken
 	switch decodedState.ToolConnect {
 	case KN_GOOGLE_DRIVE:
 		tokenInfo, err = wConnectApi.googleDriveConnect.Token(ctx, kcr.Code)
@@ -119,39 +118,44 @@ func (wConnectApi *webConnectGRPCApi) KnowledgeConnect(ctx context.Context, kcr 
 			wConnectApi.logger.Errorf("illegal while getting token %v", err)
 			return utils.Error[web_api.KnowledgeConnectResponse](err, "illegal state for getting oauth2 token ")
 		}
+
 	case KN_ONE_DRIVE:
 		tokenInfo, err = wConnectApi.microsoftOnedriveConnect.Token(ctx, kcr.Code, kcr.State)
 		if err != nil {
 			wConnectApi.logger.Errorf("illegal while getting token %v", err)
 			return utils.Error[web_api.KnowledgeConnectResponse](err, "illegal state for getting oauth2 token ")
 		}
+
 	case KN_GITHUB_CODE:
 		tokenInfo, err = wConnectApi.githubCodeConnect.Token(ctx, kcr.Code)
 		if err != nil {
 			wConnectApi.logger.Errorf("illegal while getting token %v", err)
 			return utils.Error[web_api.KnowledgeConnectResponse](err, "illegal state for getting oauth2 token ")
 		}
+
 	case KN_GITLAB_CODE:
 		tokenInfo, err = wConnectApi.gitlabCodeConnect.Token(ctx, kcr.Code)
 		if err != nil {
 			wConnectApi.logger.Errorf("illegal while getting token %v", err)
 			return utils.Error[web_api.KnowledgeConnectResponse](err, "illegal state for getting oauth2 token ")
 		}
+
 	default:
 		return utils.Error[web_api.KnowledgeConnectResponse](err, "Unknown connector request.")
 
 	}
 
 	credential := map[string]interface{}{
-		"accessToken":  tokenInfo.AccessToken,
-		"tokenType":    tokenInfo.TokenType,
-		"refreshToken": tokenInfo.RefreshToken,
-		"expiry":       tokenInfo.Expiry,
-		"scope":        kcr.Scope,
-		"code":         kcr.Code,
-		"connect":      decodedState.ToolConnect,
-		"state":        kcr.State,
+		"scope":   kcr.GetScope(),
+		"code":    kcr.GetCode(),
+		"connect": decodedState.ToolConnect,
+		"state":   kcr.GetState(),
 	}
+
+	for k, v := range tokenInfo.Map() {
+		credential[k] = v
+	}
+
 	if decodedState.Linker == gorm_types.VAULT_LEVEL_ORGANIZATION {
 		_, err := wConnectApi.vaultService.CreateOrganizationToolCredential(
 			ctx, auth, decodedState.ToolId, "connected-org-tool", credential)
@@ -189,7 +193,7 @@ func (wConnectApi *webConnectGRPCApi) ActionConnect(ctx context.Context, acr *we
 		return utils.Error[web_api.ActionConnectResponse](err, "illegal state for oauth")
 	}
 
-	var tokenInfo *oauth2.Token
+	var tokenInfo internal_connects.ExternalConnectToken
 	switch decodedState.ToolConnect {
 	case AN_GOOGLE_DRIVE:
 		tokenInfo, err = wConnectApi.googleDriveConnect.Token(ctx, acr.Code)
@@ -224,15 +228,16 @@ func (wConnectApi *webConnectGRPCApi) ActionConnect(ctx context.Context, acr *we
 	}
 
 	credential := map[string]interface{}{
-		"accessToken":  tokenInfo.AccessToken,
-		"tokenType":    tokenInfo.TokenType,
-		"refreshToken": tokenInfo.RefreshToken,
-		"expiry":       tokenInfo.Expiry,
-		"scope":        acr.Scope,
-		"code":         acr.Code,
-		"connect":      decodedState.ToolConnect,
-		"state":        acr.State,
+		"scope":   acr.GetScope(),
+		"code":    acr.GetCode(),
+		"connect": decodedState.ToolConnect,
+		"state":   acr.GetState(),
 	}
+
+	for k, v := range tokenInfo.Map() {
+		credential[k] = v
+	}
+
 	if decodedState.Linker == gorm_types.VAULT_LEVEL_ORGANIZATION {
 		_, err := wConnectApi.vaultService.CreateOrganizationToolCredential(
 			ctx, auth, decodedState.ToolId, "connected-org-tool", credential)

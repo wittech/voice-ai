@@ -18,6 +18,11 @@ import (
 	"golang.org/x/oauth2"
 )
 
+type ExternalConnectToken interface {
+	Token() *oauth2.Token
+	Map() map[string]interface{}
+}
+
 type ExternalConnect struct {
 	cfg      *config.AppConfig
 	log      commons.Logger

@@ -57,7 +57,26 @@ type NotionTokenResponse struct {
 	WorkspaceId   string `json:"workspace_id"`
 }
 
-func (notionConnect *NotionConnect) Token(c context.Context, code string) (*oauth2.Token, error) {
+func (gtr *NotionTokenResponse) Token() *oauth2.Token {
+	return &oauth2.Token{
+		AccessToken: gtr.AccessToken,
+		TokenType:   gtr.TokenType,
+	}
+}
+
+func (gtr *NotionTokenResponse) Map() map[string]interface{} {
+	return map[string]interface{}{
+		"accessToken":   gtr.AccessToken,
+		"tokenType":     gtr.TokenType,
+		"botId":         gtr.BotId,
+		"owner":         gtr.Owner,
+		"workspaceName": gtr.WorkspaceName,
+		"workspaceIcon": gtr.WorkspaceIcon,
+		"workspaceId":   gtr.WorkspaceId,
+	}
+}
+
+func (notionConnect *NotionConnect) Token(c context.Context, code string) (ExternalConnectToken, error) {
 	resp, err := notionConnect.NewHttpClient().R().
 		SetBasicAuth(notionConnect.notionOauthConfig.ClientID, notionConnect.notionOauthConfig.ClientSecret).
 		SetHeader("Content-Type", "application/json").
@@ -83,19 +102,8 @@ func (notionConnect *NotionConnect) Token(c context.Context, code string) (*oaut
 		return nil, fmt.Errorf("failed to decode token response: %v", err)
 	}
 
-	notionConnect.log.Debugf("retuned atlasian token %+v", tokenResponse)
-
-	token := &oauth2.Token{
-		AccessToken: tokenResponse.AccessToken,
-		TokenType:   tokenResponse.TokenType,
-	}
-
-	return token, nil
+	return &tokenResponse, nil
 }
-
-// func (notionConnect *NotionConnect) Token(c context.Context, code string) (*oauth2.Token, error) {
-// 	return notionConnect.notionOauthConfig.Exchange(c, code)
-// }
 
 func (notionConnect *NotionConnect) AuthCodeURL(state string) string {
 	notionConnect.log.Debugf("generating code url from notion with state = %v", state)

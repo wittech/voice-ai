@@ -2,7 +2,10 @@ package internal_connects
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"time"
 
 	"github.com/lexatic/web-backend/config"
 	"github.com/lexatic/web-backend/pkg/commons"
@@ -73,6 +76,81 @@ func (gitlabConnect *GitlabConnect) AuthCodeURL(state string) string {
 	return gitlabConnect.gitlabOauthConfig.AuthCodeURL(state)
 }
 
-func (gitlabConnect *GitlabConnect) Token(c context.Context, code string) (*oauth2.Token, error) {
-	return gitlabConnect.gitlabOauthConfig.Exchange(c, code)
+type GitlabTokenResponse struct {
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token,omitempty"`
+	TokenType    string `json:"token_type"`
+	Scope        string `json:"scope"`
+	ExpiresIn    int    `json:"expires_in,omitempty"`
+}
+
+func (gtr *GitlabTokenResponse) Token() *oauth2.Token {
+	// Calculate token expiry time (if ExpiresIn is provided)
+	var expiry time.Time
+	if gtr.ExpiresIn > 0 {
+		expiry = time.Now().Add(time.Duration(gtr.ExpiresIn) * time.Second)
+	} else {
+		// GitLab tokens may have an unspecified expiry, set a far future expiry
+		expiry = time.Now().Add(24 * 365 * time.Hour) // 1 year
+	}
+
+	return &oauth2.Token{
+		AccessToken:  gtr.AccessToken,
+		TokenType:    gtr.TokenType,
+		RefreshToken: gtr.RefreshToken,
+		Expiry:       expiry,
+	}
+}
+
+func (gtr *GitlabTokenResponse) Map() map[string]interface{} {
+	var expiry time.Time
+	if gtr.ExpiresIn > 0 {
+		expiry = time.Now().Add(time.Duration(gtr.ExpiresIn) * time.Second)
+	} else {
+		// GitLab tokens may have an unspecified expiry, set a far future expiry
+		expiry = time.Now().Add(24 * 365 * time.Hour) // 1 year
+	}
+	return map[string]interface{}{
+		"accessToken":  gtr.AccessToken,
+		"tokenType":    gtr.TokenType,
+		"refreshToken": gtr.RefreshToken,
+		"expiry":       expiry,
+	}
+}
+
+func (gitlabConnect *GitlabConnect) Token(c context.Context, code string) (ExternalConnectToken, error) {
+	// return gitlabConnect.gitlabOauthConfig.Exchange(c, code)
+	tokenEndpoint := gitlabConnect.gitlabOauthConfig.Endpoint.TokenURL
+
+	// Prepare the data for the request
+	data := map[string]string{
+		"code":          code,
+		"client_id":     gitlabConnect.gitlabOauthConfig.ClientID,
+		"client_secret": gitlabConnect.gitlabOauthConfig.ClientSecret,
+		"redirect_uri":  gitlabConnect.gitlabOauthConfig.RedirectURL,
+		"grant_type":    "authorization_code",
+	}
+
+	// Make the request
+	resp, err := gitlabConnect.NewHttpClient().R().
+		SetContext(c).
+		SetHeader("Accept", "application/json").
+		SetFormData(data).
+		Post(tokenEndpoint)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode() != 200 {
+		return nil, errors.New("failed to exchange token")
+	}
+
+	// Parse the response
+	var tokenResponse GitlabTokenResponse
+	if err := json.Unmarshal(resp.Body(), &tokenResponse); err != nil {
+		return nil, err
+	}
+
+	return &tokenResponse, nil
 }

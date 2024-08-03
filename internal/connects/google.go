@@ -3,8 +3,10 @@ package internal_connects
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/lexatic/web-backend/config"
 	"github.com/lexatic/web-backend/pkg/commons"
@@ -91,20 +93,79 @@ func NewGmailConnect(cfg *config.AppConfig, logger commons.Logger, postgres conn
 Google implimentation
 */
 
+type GoogleTokenResponse struct {
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+	TokenType    string `json:"token_type"`
+	ExpiresIn    int    `json:"expires_in"`
+	Scope        string `json:"scope"`
+}
+
+func (gtr *GoogleTokenResponse) Token() *oauth2.Token {
+	return &oauth2.Token{
+		AccessToken:  gtr.AccessToken,
+		TokenType:    gtr.TokenType,
+		RefreshToken: gtr.RefreshToken,
+		Expiry:       time.Now().Add(time.Duration(gtr.ExpiresIn) * time.Second),
+	}
+}
+
+func (gtr *GoogleTokenResponse) Map() map[string]interface{} {
+	return map[string]interface{}{
+		"accessToken":  gtr.AccessToken,
+		"tokenType":    gtr.TokenType,
+		"refreshToken": gtr.RefreshToken,
+		"expiry":       time.Now().Add(time.Duration(gtr.ExpiresIn) * time.Second),
+		"scope":        gtr.Scope,
+	}
+}
+
 // "google"
 func (wAuthApi *GoogleConnect) AuthCodeURL(state string) string {
 	return wAuthApi.googleOauthConfig.AuthCodeURL(state)
 }
 
-func (wAuthApi *GoogleConnect) Token(c context.Context, code string) (*oauth2.Token, error) {
-	return wAuthApi.googleOauthConfig.Exchange(c, code)
+func (wAuthApi *GoogleConnect) Token(c context.Context, code string) (ExternalConnectToken, error) {
+	tokenEndpoint := wAuthApi.googleOauthConfig.Endpoint.TokenURL
+
+	// Prepare the data for the request
+	data := map[string]string{
+		"code":          code,
+		"client_id":     wAuthApi.googleOauthConfig.ClientID,
+		"client_secret": wAuthApi.googleOauthConfig.ClientSecret,
+		"redirect_uri":  wAuthApi.googleOauthConfig.RedirectURL,
+		"grant_type":    "authorization_code",
+	}
+
+	// Make the request
+	resp, err := wAuthApi.NewHttpClient().R().
+		SetContext(c).
+		SetHeader("Content-Type", "application/x-www-form-urlencoded").
+		SetFormData(data).
+		Post(tokenEndpoint)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode() != 200 {
+		return nil, errors.New("failed to exchange token")
+	}
+
+	// Parse the response
+	var tokenResponse GoogleTokenResponse
+	if err := json.Unmarshal(resp.Body(), &tokenResponse); err != nil {
+		return nil, err
+	}
+	return &tokenResponse, nil
 }
 func (wAuthApi *GoogleConnect) GoogleUserInfo(c context.Context, code string) (*OpenID, error) {
-	token, err := wAuthApi.Token(c, code)
+	externalToken, err := wAuthApi.Token(c, code)
 	if err != nil {
 		wAuthApi.logger.Errorf("google authentication exchange failed %v", err)
 		return nil, fmt.Errorf("code exchange failed: %s", err.Error())
 	}
+	token := externalToken.Token()
 	response, err := http.Get("https://www.googleapis.com/oauth2/v2/userinfo?access_token=" + token.AccessToken)
 	if err != nil {
 		wAuthApi.logger.Errorf("unable to get userinfo using the access token %v", err)

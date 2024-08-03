@@ -86,7 +86,26 @@ type AtlassianTokenResponse struct {
 	Scope        string `json:"scope"`
 }
 
-func (atlassianConnect *AtlassianConnect) Token(c context.Context, code string) (*oauth2.Token, error) {
+func (gtr *AtlassianTokenResponse) Token() *oauth2.Token {
+	return &oauth2.Token{
+		AccessToken:  gtr.AccessToken,
+		TokenType:    gtr.TokenType,
+		RefreshToken: gtr.RefreshToken,
+		Expiry:       time.Now().Add(time.Duration(gtr.ExpiresIn) * time.Second),
+	}
+}
+
+func (gtr *AtlassianTokenResponse) Map() map[string]interface{} {
+	return map[string]interface{}{
+		"accessToken":  gtr.AccessToken,
+		"tokenType":    gtr.TokenType,
+		"refreshToken": gtr.RefreshToken,
+		"expiry":       time.Now().Add(time.Duration(gtr.ExpiresIn) * time.Second),
+		"scope":        gtr.Scope,
+	}
+}
+
+func (atlassianConnect *AtlassianConnect) Token(c context.Context, code string) (ExternalConnectToken, error) {
 
 	data := url.Values{}
 	data.Set("client_id", atlassianConnect.atlassianOauthConfig.ClientID)
@@ -115,17 +134,7 @@ func (atlassianConnect *AtlassianConnect) Token(c context.Context, code string) 
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode token response: %v", err)
 	}
-
-	atlassianConnect.log.Debugf("retuned atlasian token %+v", tokenResponse)
-
-	token := &oauth2.Token{
-		AccessToken:  tokenResponse.AccessToken,
-		TokenType:    tokenResponse.TokenType,
-		RefreshToken: tokenResponse.RefreshToken,
-		Expiry:       time.Now().Add(time.Duration(tokenResponse.ExpiresIn) * time.Second),
-	}
-
-	return token, nil
+	return &tokenResponse, nil
 }
 
 // give all the pages in side. a space

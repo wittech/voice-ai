@@ -3,8 +3,10 @@ package internal_connects
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/go-resty/resty/v2"
 	"github.com/lexatic/web-backend/config"
@@ -119,8 +121,80 @@ func (wAuthApi *GithubConnect) GithubUserInfo(c context.Context, state string, c
 	}, nil
 }
 
-func (wAuthApi *GithubConnect) Token(c context.Context, code string) (*oauth2.Token, error) {
-	return wAuthApi.githubOauthConfig.Exchange(c, code)
+type GithubTokenResponse struct {
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token,omitempty"`
+	TokenType    string `json:"token_type"`
+	Scope        string `json:"scope"`
+	ExpiresIn    int    `json:"expires_in,omitempty"`
+}
+
+func (gtr *GithubTokenResponse) Token() *oauth2.Token {
+	// Calculate token expiry time (if ExpiresIn is provided)
+	var expiry time.Time
+	if gtr.ExpiresIn > 0 {
+		expiry = time.Now().Add(time.Duration(gtr.ExpiresIn) * time.Second)
+	} else {
+		// GitHub tokens are often long-lived, set a far future expiry
+		expiry = time.Now().Add(24 * 365 * time.Hour) // 1 year
+	}
+	return &oauth2.Token{
+		AccessToken:  gtr.AccessToken,
+		TokenType:    gtr.TokenType,
+		RefreshToken: gtr.RefreshToken,
+		Expiry:       expiry,
+	}
+}
+
+func (gtr *GithubTokenResponse) Map() map[string]interface{} {
+	var expiry time.Time
+	if gtr.ExpiresIn > 0 {
+		expiry = time.Now().Add(time.Duration(gtr.ExpiresIn) * time.Second)
+	} else {
+		// GitHub tokens are often long-lived, set a far future expiry
+		expiry = time.Now().Add(24 * 365 * time.Hour) // 1 year
+	}
+	return map[string]interface{}{
+		"accessToken":  gtr.AccessToken,
+		"tokenType":    gtr.TokenType,
+		"refreshToken": gtr.RefreshToken,
+		"expiry":       expiry,
+	}
+}
+func (wAuthApi *GithubConnect) Token(c context.Context, code string) (ExternalConnectToken, error) {
+	tokenEndpoint := wAuthApi.githubOauthConfig.Endpoint.TokenURL
+
+	// Prepare the data for the request
+	data := map[string]string{
+		"code":          code,
+		"client_id":     wAuthApi.githubOauthConfig.ClientID,
+		"client_secret": wAuthApi.githubOauthConfig.ClientSecret,
+		"redirect_uri":  wAuthApi.githubOauthConfig.RedirectURL,
+		"grant_type":    "authorization_code",
+	}
+
+	// Make the request
+	resp, err := wAuthApi.NewHttpClient().R().
+		SetContext(c).
+		SetHeader("Accept", "application/json").
+		SetFormData(data).
+		Post(tokenEndpoint)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode() != 200 {
+		return nil, errors.New("failed to exchange token, status code is not ")
+	}
+
+	// Parse the response
+	var tokenResponse GithubTokenResponse
+	if err := json.Unmarshal(resp.Body(), &tokenResponse); err != nil {
+		return nil, err
+	}
+
+	return &tokenResponse, nil
 }
 
 type GitHubRepository struct {

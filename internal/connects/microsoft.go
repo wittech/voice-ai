@@ -120,7 +120,25 @@ type MicrosoftTokenResponse struct {
 	Expiry       int64  `json:"expires_in"`
 }
 
-func (microsoft *MicrosoftConnect) Token(c context.Context, code string, state string) (*oauth2.Token, error) {
+func (gtr *MicrosoftTokenResponse) Token() *oauth2.Token {
+	return &oauth2.Token{
+		AccessToken:  gtr.AccessToken,
+		TokenType:    gtr.TokenType,
+		RefreshToken: gtr.RefreshToken,
+		Expiry:       time.Now().Add(time.Duration(gtr.Expiry) * time.Second),
+	}
+}
+
+func (gtr *MicrosoftTokenResponse) Map() map[string]interface{} {
+	return map[string]interface{}{
+		"accessToken":  gtr.AccessToken,
+		"tokenType":    gtr.TokenType,
+		"refreshToken": gtr.RefreshToken,
+		"expiry":       time.Now().Add(time.Duration(gtr.Expiry) * time.Second),
+	}
+}
+
+func (microsoft *MicrosoftConnect) Token(c context.Context, code string, state string) (ExternalConnectToken, error) {
 	microsoft.log.Debugf("requesting to get token from microsoft %v", code)
 	client := resty.New()
 
@@ -155,16 +173,7 @@ func (microsoft *MicrosoftConnect) Token(c context.Context, code string, state s
 		return nil, fmt.Errorf("failed to decode token response: %v", err)
 	}
 
-	expiryDuration := time.Duration(tokenResponse.Expiry) * time.Second
-
-	token := &oauth2.Token{
-		AccessToken:  tokenResponse.AccessToken,
-		TokenType:    tokenResponse.TokenType,
-		RefreshToken: tokenResponse.RefreshToken,
-		Expiry:       time.Now().Add(expiryDuration),
-	}
-
-	return token, nil
+	return &tokenResponse, nil
 }
 
 type Folder struct {
