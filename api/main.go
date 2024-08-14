@@ -315,7 +315,7 @@ func (g *AppRunner) KnowledgeApiRoute() {
 }
 func (g *AppRunner) AssistantApiRoute() {
 	web_api.RegisterAssistantServiceServer(g.S, webApi.NewAssistantGRPC(g.Cfg, g.Logger, g.Postgres, g.Redis))
-	web_api.RegisterAssistantConversactionServiceServer(g.S, webApi.NewAssistantConversactionGRPC(g.Cfg, g.Logger, g.Postgres, g.Redis))
+	web_api.RegisterTalkServiceServer(g.S, webApi.NewTalkGRPC(g.Cfg, g.Logger, g.Postgres, g.Redis))
 }
 
 func (g *AppRunner) KnowledgeConnectApiRoute() {
