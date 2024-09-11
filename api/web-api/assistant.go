@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	assistant_client "github.com/lexatic/web-backend/pkg/clients/workflow"
+	"github.com/lexatic/web-backend/pkg/exceptions"
 	"github.com/lexatic/web-backend/pkg/utils"
 	web_api "github.com/lexatic/web-backend/protos/lexatic-backend"
 
@@ -16,16 +17,34 @@ import (
 
 type webAssistantApi struct {
 	WebApi
-	cfg                         *config.AppConfig
-	logger                      commons.Logger
-	postgres                    connectors.PostgresConnector
-	redis                       connectors.RedisConnector
-	assistantClient             assistant_client.AssistantServiceClient
-	assistantConversationClient assistant_client.AssistantConversationServiceClient
+	cfg             *config.AppConfig
+	logger          commons.Logger
+	postgres        connectors.PostgresConnector
+	redis           connectors.RedisConnector
+	assistantClient assistant_client.AssistantServiceClient
 }
 
 type webAssistantGRPCApi struct {
 	webAssistantApi
+}
+
+// GetAllAssistantMessage implements lexatic_backend.AssistantServiceServer.
+func (assistant *webAssistantGRPCApi) GetAllAssistantMessage(c context.Context, iRequest *web_api.GetAllAssistantMessageRequest) (*web_api.GetAllAssistantMessageResponse, error) {
+	assistant.logger.Debugf("GetAllAssistantMessage from grpc with requestPayload %v, %v", iRequest, c)
+	iAuth, isAuthenticated := types.GetAuthPrincipleGPRC(c)
+	if !isAuthenticated {
+		assistant.logger.Errorf("unauthenticated request for get actvities")
+		return exceptions.AuthenticationError[web_api.GetAllAssistantMessageResponse]()
+	}
+
+	_page, _assistant, err := assistant.assistantClient.GetAllAssistantMessage(c, iAuth, iRequest.GetAssistantId(), iRequest.GetCriterias(), iRequest.GetPaginate(), iRequest.GetOrder())
+	if err != nil {
+		return exceptions.InternalServerError[web_api.GetAllAssistantMessageResponse](err, "Unable to get all the assistant messages")
+	}
+
+	return utils.PaginatedSuccess[web_api.GetAllAssistantMessageResponse, []*web_api.AssistantConversationMessage](
+		_page.GetTotalItem(), _page.GetCurrentPage(),
+		_assistant)
 }
 
 // CreateAssistantKnowledgeConfiguration implements lexatic_backend.AssistantServiceServer.
