@@ -187,3 +187,33 @@ func (wVault *webVaultGRPCApi) GetProviderCredential(ctx context.Context, reques
 	}
 	return utils.Success[web_api.GetProviderCredentialResponse, *web_api.VaultCredential](&out)
 }
+
+func (wVault *webVaultGRPCApi) CreateToolCredential(
+	ctx context.Context,
+	irRequest *web_api.CreateToolCredentialRequest) (*web_api.CreateToolCredentialResponse, error) {
+	wVault.logger.Debugf("CreateToolCredentialRequest from grpc with requestPayload %v, %v", irRequest, ctx)
+	iAuth, isAuthenticated := types.GetAuthPrincipleGPRC(ctx)
+	if !isAuthenticated {
+		wVault.logger.Errorf("CreateToolCredentialRequest from grpc with unauthenticated request")
+		return nil, errors.New("unauthenticated request")
+	}
+	// first verify the credentials if not verified then return to user and say its not good credentials
+
+	vlt, err := wVault.vaultService.CreateOrganizationToolCredential(ctx,
+		iAuth,
+		irRequest.GetToolId(),
+		irRequest.GetName(), irRequest.GetCredential().AsMap())
+	if err != nil {
+		wVault.logger.Errorf("vaultService.Create from grpc with err %v", err)
+		return utils.Error[web_api.CreateToolCredentialResponse](
+			err,
+			"Unable to create tool credential, please try again")
+	}
+
+	out := &web_api.VaultCredential{}
+	err = utils.Cast(vlt, out)
+	if err != nil {
+		wVault.logger.Errorf("unable to cast the provider credentials to proto %v", err)
+	}
+	return utils.Success[web_api.CreateToolCredentialResponse](out)
+}
