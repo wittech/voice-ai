@@ -59,6 +59,9 @@ type AppConfig struct {
 	SlackClientSecret       string `mapstructure:"slack_client_secret" validate:"required"`
 	SlackSigningSecret      string `mapstructure:"slack_signing_secret" validate:"required"`
 	SlackVerificationSecret string `mapstructure:"slack_verification_secret" validate:"required"`
+
+	HubspotClientId     string `mapstructure:"hubspot_client_id" validate:"required"`
+	HubspotClientSecret string `mapstructure:"hubspot_client_secret" validate:"required"`
 }
 
 func (cfg *AppConfig) IsDevelopment() bool {

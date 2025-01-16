@@ -40,6 +40,21 @@ func (ua *UserAuth) GetEmail() string {
 	return ua.Email
 }
 
+type UserFeaturePermission struct {
+	gorm_model.Audited
+	UserAuthId uint64 `json:"user_auth_id" gorm:"type:bigint;size:20;not null;"`
+	// deployments.endpoints
+	// deployments.workflows
+	// deployments.assistants
+	//
+	// knowledges
+	Feature   string `json:"feature" gorm:"type:string;size:200;not null"`
+	IsEnabled bool   `json:"is_enabled" gorm:"type:bool;not null"`
+	CreatedBy uint64 `json:"created_by" gorm:"type:bigint;size:20;not null"`
+	UpdatedBy uint64 `json:"updated_by" gorm:"type:bigint;size:20;"`
+	Status    string `json:"status" gorm:"type:string;size:50;not null;default:active"`
+}
+
 type UserAuthToken struct {
 	gorm_model.Audited
 	UserAuthId uint64    `json:"user_auth_id" gorm:"type:bigint;size:20;not null;index:up_idx_auth_id"`

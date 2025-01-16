@@ -345,6 +345,11 @@ func (g *AppRunner) KnowledgeConnectApiRoute() {
 		actionApiv1.GET("/jira/", connectApi.JiraActionConnect)
 		actionApiv1.GET("/slack/", connectApi.SlackActionConnect)
 	}
+
+	crmConnectApiv1 := g.E.Group("/connect-crm")
+	{
+		crmConnectApiv1.GET("/hubspot/", connectApi.HubspotCRMConnect)
+	}
 }
 
 func (g *AppRunner) HealthCheckRoutes() {

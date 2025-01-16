@@ -49,8 +49,6 @@ func (wActivity *webActivityGRPCApi) GetAuditLog(c context.Context, irRequest *w
 		wActivity.logger.Errorf("unauthenticated request for get actvities")
 		return nil, errors.New("unauthenticated request")
 	}
-
-	// check if he is already part of current organization
 	return wActivity.auditClient.GetAuditLog(c, iAuth, irRequest.GetId())
 }
 

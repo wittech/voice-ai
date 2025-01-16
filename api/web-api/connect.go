@@ -45,6 +45,9 @@ type webConnectApi struct {
 	slackConnect internal_connects.SlackConnect
 	gmailConnect internal_connects.GoogleConnect
 
+	// hubspot connect
+	hubspotConnect internal_connects.HubspotConnect
+
 	//
 	vaultService internal_services.VaultService
 }
@@ -74,7 +77,72 @@ const (
 	AN_JIRA         string = "action/atlassian/jira"
 	AN_SLACK        string = "action/slack"
 	AN_TWILIO       string = "action/twilio"
+
+	// general
+
+	CRM_HUBSPOT string = "crm/hubspot"
 )
+
+func (wConnectApi *webConnectGRPCApi) GeneralConnect(ctx context.Context, kcr *web_api.GeneralConnectRequest) (*web_api.GeneralConnectResponse, error) {
+	auth, isAuthenticated := types.GetAuthPrincipleGPRC(ctx)
+	if !isAuthenticated {
+		wConnectApi.logger.Errorf("unauthenticated request to fork endpoint")
+		return utils.AuthenticateError[web_api.GeneralConnectResponse]()
+	}
+	decodedState, err := wConnectApi.googleDriveConnect.DecodeState(ctx, auth, kcr.State)
+	if err != nil {
+		wConnectApi.logger.Errorf("illegal state for oauth %v", err)
+		return utils.Error[web_api.GeneralConnectResponse](err, "illegal state for oauth")
+	}
+
+	var tokenInfo internal_connects.ExternalConnectToken
+	switch decodedState.ToolConnect {
+	case CRM_HUBSPOT:
+		tokenInfo, err = wConnectApi.hubspotConnect.Token(ctx, kcr.Code)
+		if err != nil {
+			wConnectApi.logger.Errorf("illegal while getting token %v", err)
+			return utils.Error[web_api.GeneralConnectResponse](err, "illegal state for getting oauth2 token ")
+		}
+
+	default:
+		return utils.Error[web_api.GeneralConnectResponse](err, "Unknown connector request.")
+
+	}
+
+	credential := map[string]interface{}{
+		"scope":   kcr.GetScope(),
+		"code":    kcr.GetCode(),
+		"connect": decodedState.ToolConnect,
+		"state":   kcr.GetState(),
+	}
+
+	for k, v := range tokenInfo.Map() {
+		credential[k] = v
+	}
+
+	if decodedState.Linker == gorm_types.VAULT_LEVEL_ORGANIZATION {
+		_, err := wConnectApi.vaultService.CreateOrganizationToolCredential(
+			ctx, auth, decodedState.ToolId, "connected-org-tool", credential)
+		if err != nil {
+			return utils.Error[web_api.GeneralConnectResponse](err, "Unable to store the generated token")
+		}
+	}
+	if decodedState.Linker == gorm_types.VAULT_LEVEL_USER {
+		_, err := wConnectApi.vaultService.CreateUserToolCredential(
+			ctx, auth, decodedState.ToolId, "connected-user-tool", credential)
+		if err != nil {
+			return utils.Error[web_api.GeneralConnectResponse](err, "Unable to store the generated token")
+		}
+
+	}
+	// decodedState.Linker
+	return &web_api.GeneralConnectResponse{
+		Success:    true,
+		Code:       200,
+		ToolId:     decodedState.ToolId,
+		RedirectTo: decodedState.RedirectTo,
+	}, nil
+}
 
 // KnowledgeConnect implements lexatic_backend.ConnectServiceServer.
 func (wConnectApi *webConnectGRPCApi) KnowledgeConnect(ctx context.Context, kcr *web_api.KnowledgeConnectRequest) (*web_api.KnowledgeConnectResponse, error) {
@@ -141,7 +209,7 @@ func (wConnectApi *webConnectGRPCApi) KnowledgeConnect(ctx context.Context, kcr 
 		}
 
 	default:
-		return utils.Error[web_api.KnowledgeConnectResponse](err, "Unknown connector request.")
+		return utils.Error[web_api.KnowledgeConnectResponse](errors.New("unsupported"), "Unknown connector request.")
 
 	}
 
@@ -283,6 +351,8 @@ func NewConnectRPC(config *config.AppConfig, logger commons.Logger, postgres con
 			slackConnect: internal_connects.NewSlackActionConnect(config, logger, postgres),
 			jiraConnect:  internal_connects.NewJiraConnect(config, logger, postgres),
 			gmailConnect: internal_connects.NewGmailConnect(config, logger, postgres),
+
+			hubspotConnect: internal_connects.NewHubspotConnect(config, logger, postgres),
 		},
 	}
 }
@@ -308,6 +378,8 @@ func NewConnectGRPC(config *config.AppConfig, logger commons.Logger, postgres co
 			slackConnect: internal_connects.NewSlackActionConnect(config, logger, postgres),
 			jiraConnect:  internal_connects.NewJiraConnect(config, logger, postgres),
 			gmailConnect: internal_connects.NewGmailConnect(config, logger, postgres),
+
+			hubspotConnect: internal_connects.NewHubspotConnect(config, logger, postgres),
 		},
 	}
 }
@@ -463,6 +535,17 @@ func (connectApi *webConnectRPCApi) GmailActionConnect(c *gin.Context) {
 		return
 	}
 	url := connectApi.gmailConnect.AuthCodeURL(state)
+	connectApi.logger.Debugf("url generated for confluence connect %v", url)
+	c.Redirect(http.StatusTemporaryRedirect, url)
+	return
+}
+
+func (connectApi *webConnectRPCApi) HubspotCRMConnect(c *gin.Context) {
+	state, err := connectApi.buildConnectParameter(c, CRM_HUBSPOT)
+	if err != nil {
+		return
+	}
+	url := connectApi.hubspotConnect.AuthCodeURL(state)
 	connectApi.logger.Debugf("url generated for confluence connect %v", url)
 	c.Redirect(http.StatusTemporaryRedirect, url)
 	return

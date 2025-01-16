@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	internal_gorm "github.com/lexatic/web-backend/internal/gorm"
@@ -13,13 +14,13 @@ import (
 	"github.com/lexatic/web-backend/pkg/connectors"
 	gorm_models "github.com/lexatic/web-backend/pkg/models/gorm"
 	"github.com/lexatic/web-backend/pkg/types"
+	type_enums "github.com/lexatic/web-backend/pkg/types/enums"
 	web_api "github.com/lexatic/web-backend/protos/lexatic-backend"
+	"golang.org/x/sync/errgroup"
 	"gorm.io/gorm/clause"
 )
 
-const (
-	USER_PROJECT_ORG_QUERY = "user_auth_id = ? and status = ?"
-)
+var DEFAULT_USER_FEATURE_PERMISSION = []string{"/deployment/.*", "/knowledge/.*", "/observability/.*"}
 
 type userService struct {
 	logger   commons.Logger
@@ -48,23 +49,57 @@ func (aS *userService) Authenticate(ctx context.Context, email string, password 
 		aS.logger.Errorf("exception in DB transaction %v", tx.Error)
 		return nil, tx.Error
 	}
-	aToken, err := aS.GetAuthToken(ctx, aUser.Id)
-	if err != nil {
-		aS.logger.Errorf("exception in DB transaction %v", err)
-		return nil, err
-	}
 
+	var wg sync.WaitGroup
+	var aToken *internal_gorm.UserAuthToken
 	var rt internal_gorm.UserOrganizationRole
-	tx = db.Preload("Organization").First(&rt, "user_auth_id = ? AND status = ?", aUser.Id, "active")
-	//This fails first request to create org
-	if tx.Error != nil {
-		aS.logger.Errorf("exception in DB transaction %v", tx.Error)
-		aS.logger.Debugf("organization not found for the user %v", tx.Error)
-		// return nil, tx.Error
-	}
+	var prjs *[]internal_gorm.UserProjectRole
+	var permissions []*internal_gorm.UserFeaturePermission
 
-	prjs := aS.getUserProjectRoles(ctx, aUser.Id, rt.OrganizationId)
-	return &authPrinciple{user: &aUser, userAuthToken: aToken, userOrgRole: &rt, userProjectRoles: prjs}, nil
+	var errChan = make(chan error, 3)
+
+	// all is done in goroutine
+	wg.Add(4)
+
+	go func() {
+		defer wg.Done()
+		var err error
+		aToken, err = aS.GetAuthToken(ctx, aUser.Id)
+		if err != nil {
+			errChan <- fmt.Errorf("exception in DB transaction: %v", err)
+		}
+	}()
+
+	go func() {
+		defer wg.Done()
+		tx := db.Preload("Organization").First(&rt, "user_auth_id = ? AND status = ?", aUser.Id, "active")
+		if tx.Error != nil {
+			aS.logger.Debugf("organization not found for the user: %v", tx.Error)
+			// Uncomment the following line if you want to treat this as an error
+			// errChan <- fmt.Errorf("exception in DB transaction: %v", tx.Error)
+		}
+	}()
+
+	go func() {
+		defer wg.Done()
+		prjs = aS.getUserProjectRoles(ctx, aUser.Id, rt.OrganizationId)
+	}()
+
+	go func() {
+		defer wg.Done()
+		permissions, _ = aS.GetAllUserFeaturePermission(ctx, aUser.Id)
+	}()
+
+	wg.Wait()
+	close(errChan)
+
+	for err := range errChan {
+		if err != nil {
+			aS.logger.Errorf("error on one of the routine of authentication %v", err)
+			return nil, err
+		}
+	}
+	return &authPrinciple{user: &aUser, userAuthToken: aToken, userOrgRole: &rt, userProjectRoles: prjs, featurePermissions: permissions}, nil
 }
 
 func (aS *userService) getUserProjectRoles(ctx context.Context, userId uint64, organizationId uint64) *[]internal_gorm.UserProjectRole {
@@ -271,34 +306,56 @@ func (aS *userService) GetOrganizationRole(ctx context.Context, userId uint64) (
 }
 
 func (aS *userService) AuthPrinciple(ctx context.Context, userId uint64) (types.Principle, error) {
-
 	db := aS.postgres.DB(ctx)
-	var ct internal_gorm.UserAuthToken
-	tx := db.Last(&ct, "user_auth_id = ? AND token_type = ? ", userId, "auth-token")
-	if tx.Error != nil {
-		aS.logger.Errorf("exception in DB transaction %v", tx.Error)
-		return nil, tx.Error
+	var authToken internal_gorm.UserAuthToken
+	var userAuth internal_gorm.UserAuth
+	var orgRole internal_gorm.UserOrganizationRole
+	var prjs *[]internal_gorm.UserProjectRole
+
+	g, ctx := errgroup.WithContext(ctx)
+	g.Go(func() error {
+		tx := db.Last(&authToken, "user_auth_id = ? AND token_type = ? ", userId, "auth-token")
+		if tx.Error != nil {
+			aS.logger.Errorf("exception in DB transaction %v", tx.Error)
+			return tx.Error
+		}
+		return nil
+	})
+
+	g.Go(func() error {
+		tx := db.First(&userAuth, "id = ? AND status = ? ", userId, "active")
+		if tx.Error != nil {
+			aS.logger.Errorf("exception in DB transaction %v", tx.Error)
+			return tx.Error
+		}
+		return nil
+	})
+
+	g.Go(func() error {
+		tx := db.Preload("Organization").First(&orgRole, "user_auth_id = ? AND status = ?", userId, "active")
+		if tx.Error != nil {
+			aS.logger.Errorf("exception in DB transaction %v", tx.Error)
+			aS.logger.Debugf("organization not found for the user %v", tx.Error)
+			// Note: We're not returning an error here as per the original code
+		}
+		return nil
+	})
+
+	g.Go(func() error {
+		prjs = aS.getUserProjectRoles(ctx, userId, orgRole.OrganizationId)
+		return nil
+	})
+
+	var permissions []*internal_gorm.UserFeaturePermission
+	g.Go(func() error {
+		permissions, _ = aS.GetAllUserFeaturePermission(ctx, userId)
+		return nil
+	})
+
+	if err := g.Wait(); err != nil {
+		return nil, err
 	}
-
-	var aUser internal_gorm.UserAuth
-	tx = db.First(&aUser, "id = ? AND status = ? ", userId, "active")
-	if tx.Error != nil {
-		aS.logger.Errorf("exception in DB transaction %v", tx.Error)
-		return nil, tx.Error
-	}
-
-	var rt internal_gorm.UserOrganizationRole
-	tx = db.Preload("Organization").First(&rt, "user_auth_id = ? AND status = ?", userId, "active")
-	//This fails first request to create org
-	if tx.Error != nil {
-		aS.logger.Errorf("exception in DB transaction %v", tx.Error)
-		aS.logger.Debugf("organization not found for the user %v", tx.Error)
-		// return nil, tx.Error
-	}
-
-	prjs := aS.getUserProjectRoles(ctx, userId, rt.OrganizationId)
-
-	return &authPrinciple{user: &aUser, userAuthToken: &ct, userOrgRole: &rt, userProjectRoles: prjs}, nil
+	return &authPrinciple{user: &userAuth, userAuthToken: &authToken, userOrgRole: &orgRole, userProjectRoles: prjs, featurePermissions: permissions}, nil
 }
 
 func (aS *userService) Authorize(ctx context.Context, token string, userId uint64) (types.Principle, error) {
@@ -493,4 +550,38 @@ func (aS *userService) GetProjectRolesForUsers(ctx context.Context, pIds []uint6
 		return nil, err
 	}
 	return pr, nil
+}
+
+func (service *userService) GetAllUserFeaturePermission(ctx context.Context, userId uint64) ([]*internal_gorm.UserFeaturePermission, error) {
+	db := service.postgres.DB(ctx)
+	var permissions []*internal_gorm.UserFeaturePermission
+	if err := db.Where("user_auth_id = ? and status = ?", userId, type_enums.RECORD_ACTIVE.String()).Find(&permissions).Error; err != nil {
+		return nil, err
+	}
+	return permissions, nil
+}
+
+func (service *userService) EnableAllDefaultUserFeaturePermission(ctx context.Context, userId uint64) ([]*internal_gorm.UserFeaturePermission, error) {
+	db := service.postgres.DB(ctx)
+	allPermission := make([]*internal_gorm.UserFeaturePermission, 0)
+	for _, prm := range DEFAULT_USER_FEATURE_PERMISSION {
+		allPermission = append(allPermission, &internal_gorm.UserFeaturePermission{
+			UserAuthId: userId,
+			Feature:    prm,
+			IsEnabled:  true,
+			Status:     type_enums.RECORD_ACTIVE.String(),
+		})
+	}
+
+	if len(allPermission) == 0 {
+		return allPermission, nil
+	}
+
+	tx := db.Save(allPermission)
+	if tx.Error != nil {
+		service.logger.Errorf("exception while adding permission in DB transaction %v", tx.Error)
+		return nil, tx.Error
+	}
+	return allPermission, nil
+
 }

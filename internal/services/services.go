@@ -30,19 +30,17 @@ type UserService interface {
 
 	GetProjectRole(ctx context.Context, userId uint64, projectId uint64) (*internal_gorm.UserProjectRole, error)
 	GetOrganizationRole(ctx context.Context, userId uint64) (*internal_gorm.UserOrganizationRole, error)
-	//
 	Activate(ctx context.Context, Id uint64, name string, source *string) (types.Principle, error)
-	// GetAllUser(ctx context.Context, uIds []uint64, criterias []*web_api.Criteria, paginate *web_api.Paginate) (int64, []*internal_gorm.UserAuth, error)
 
 	CreateSocial(ctx context.Context, userId uint64, id string, token string, source string, verified bool) (*internal_gorm.UserSocial, error)
 	GetSocial(ctx context.Context, userId uint64) (*internal_gorm.UserSocial, error)
-	// GetUsers(ctx context.Context, uIds []uint64, limit uint32, offset uint32) ([]*internal_gorm.UserAuth, error)
 
-	// GetOrInviteUser(ctx context.Context, email string, organizationId uint64) (*internal_gorm.UserAuth, error)
 	GetAllActiveProjectMember(ctx context.Context, projectId uint64) (*[]internal_gorm.UserProjectRole, error)
 	GetAllUserRolesForOrg(ctx context.Context, organizationId uint64) ([]*internal_gorm.UserOrganizationRole, error)
 	GetProjectRolesForUsers(ctx context.Context, pIds []uint64, uIds []uint64) ([]*internal_gorm.UserProjectRole, error)
-	// GetAllProjectMembers(ctx context.Context, projectId uint64) (*[]internal_gorm.UserProjectRole, error)
+
+	GetAllUserFeaturePermission(ctx context.Context, userId uint64) ([]*internal_gorm.UserFeaturePermission, error)
+	EnableAllDefaultUserFeaturePermission(ctx context.Context, userId uint64) ([]*internal_gorm.UserFeaturePermission, error)
 }
 
 type OrganizationService interface {

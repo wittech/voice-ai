@@ -14,6 +14,7 @@ type authPrinciple struct {
 	userOrgRole        *internal_gorm.UserOrganizationRole
 	userProjectRoles   *[]internal_gorm.UserProjectRole
 	currentProjectRole *types.ProjectRole
+	featurePermissions []*internal_gorm.UserFeaturePermission
 }
 
 func (aP *authPrinciple) GetAuthToken() *types.AuthToken {
@@ -57,7 +58,26 @@ func (aP *authPrinciple) GetProjectRoles() []*types.ProjectRole {
 			ProjectName: pr.Project.Name,
 		}
 	}
+	return prs
+}
 
+func (aP *authPrinciple) GetFeaturePermission() []*types.FeaturePermission {
+	if aP.featurePermissions == nil {
+		return nil
+	}
+
+	if aP.featurePermissions != nil && len(aP.featurePermissions) == 0 {
+		return nil
+	}
+
+	prs := make([]*types.FeaturePermission, len(aP.featurePermissions))
+	for idx, pr := range aP.featurePermissions {
+		prs[idx] = &types.FeaturePermission{
+			Id:       pr.Id,
+			Feature:  pr.Feature,
+			IsEnable: pr.IsEnabled,
+		}
+	}
 	return prs
 }
 
@@ -77,6 +97,7 @@ func (ap *authPrinciple) PlainAuthPrinciple() types.PlainAuthPrinciple {
 	}
 	alt.OrganizationRole = ap.GetOrganizationRole()
 	alt.ProjectRoles = ap.GetProjectRoles()
+	alt.FeaturePermissions = ap.GetFeaturePermission()
 	return alt
 
 }
