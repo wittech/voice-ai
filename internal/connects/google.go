@@ -204,6 +204,7 @@ func (wAuthApi *GoogleConnect) GoogleDriveFiles(ctx context.Context,
 	driveClient := wAuthApi.googleOauthConfig.Client(ctx, token)
 	googleDrive, err := drive.NewService(ctx, option.WithHTTPClient(driveClient))
 	if err != nil {
+		wAuthApi.logger.Errorf("google connect with drive files %+v", err)
 		return nil, err
 	}
 
@@ -215,11 +216,13 @@ func (wAuthApi *GoogleConnect) GoogleDriveFiles(ctx context.Context,
 		// Q("mimeType='application/vnd.google-apps.folder'").
 		driveRequest = driveRequest.Q(*q)
 	}
+	driveRequest.MaxResults(20)
 	driveRequest = driveRequest.
 		Fields("nextPageToken", "items(id,fileSize,mimeType,modifiedDate,originalFilename,title,downloadUrl,fileExtension,parents)")
 
 	fls, err := driveRequest.Do()
 	if err != nil {
+		wAuthApi.logger.Errorf("google connect with drive files %+v", err)
 		return nil, err
 	}
 
