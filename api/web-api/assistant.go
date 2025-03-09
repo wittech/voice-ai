@@ -66,20 +66,38 @@ func (assistant *webAssistantGRPCApi) GetAssistantSkill(c context.Context, iRequ
 }
 
 // GetAllAssistantSession implements lexatic_backend.AssistantServiceServer.
-func (assistant *webAssistantGRPCApi) GetAllAssistantSession(c context.Context, iRequest *web_api.GetAllAssistantSessionRequest) (*web_api.GetAllAssistantSessionResponse, error) {
-	assistant.logger.Debugf("GetAllAssistantSession from grpc with requestPayload %v, %v", iRequest, c)
+func (assistant *webAssistantGRPCApi) GetAllAssistantConversation(c context.Context, iRequest *web_api.GetAllAssistantConversationRequest) (*web_api.GetAllAssistantConversationResponse, error) {
+	assistant.logger.Debugf("GetAllAssistantConversation from grpc with requestPayload %v, %v", iRequest, c)
 	iAuth, isAuthenticated := types.GetAuthPrincipleGPRC(c)
 	if !isAuthenticated {
 		assistant.logger.Errorf("unauthenticated request for get actvities")
-		return exceptions.AuthenticationError[web_api.GetAllAssistantSessionResponse]()
+		return exceptions.AuthenticationError[web_api.GetAllAssistantConversationResponse]()
 	}
 
-	_page, _assistant, err := assistant.assistantClient.GetAllAssistantSession(c, iAuth, iRequest.GetAssistantId(), iRequest.GetCriterias(), iRequest.GetPaginate(), nil)
+	_page, _assistant, err := assistant.assistantClient.GetAllAssistantConversation(c, iAuth, iRequest.GetAssistantId(), iRequest.GetCriterias(), iRequest.GetPaginate(), nil)
 	if err != nil {
-		return exceptions.InternalServerError[web_api.GetAllAssistantSessionResponse](err, "Unable to get all the assistant sessions")
+		return exceptions.InternalServerError[web_api.GetAllAssistantConversationResponse](err, "Unable to get all the assistant sessions")
 	}
 
-	return utils.PaginatedSuccess[web_api.GetAllAssistantSessionResponse, []*web_api.AssistantConversation](
+	return utils.PaginatedSuccess[web_api.GetAllAssistantConversationResponse, []*web_api.AssistantConversation](
+		_page.GetTotalItem(), _page.GetCurrentPage(),
+		_assistant)
+}
+
+func (assistant *webAssistantGRPCApi) GetAllConversationMessage(c context.Context, iRequest *web_api.GetAllConversationMessageRequest) (*web_api.GetAllConversationMessageResponse, error) {
+	assistant.logger.Debugf("GetAllConversationMessage from grpc with requestPayload %v, %v", iRequest, c)
+	iAuth, isAuthenticated := types.GetAuthPrincipleGPRC(c)
+	if !isAuthenticated {
+		assistant.logger.Errorf("unauthenticated request for get actvities")
+		return exceptions.AuthenticationError[web_api.GetAllConversationMessageResponse]()
+	}
+
+	_page, _assistant, err := assistant.assistantClient.GetAllConversationMessage(c, iAuth, iRequest.GetAssistantId(), iRequest.GetAssistantConversationId(), iRequest.GetCriterias(), iRequest.GetPaginate(), nil)
+	if err != nil {
+		return exceptions.InternalServerError[web_api.GetAllConversationMessageResponse](err, "Unable to get all the assistant sessions")
+	}
+
+	return utils.PaginatedSuccess[web_api.GetAllConversationMessageResponse, []*web_api.AssistantConversationMessage](
 		_page.GetTotalItem(), _page.GetCurrentPage(),
 		_assistant)
 }
