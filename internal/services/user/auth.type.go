@@ -119,7 +119,11 @@ func (aP *authPrinciple) GetUserId() *uint64 {
 }
 
 func (aP *authPrinciple) GetCurrentOrganizationId() *uint64 {
-	return &aP.GetOrganizationRole().OrganizationId
+	if aP.GetOrganizationRole() != nil {
+		return &aP.GetOrganizationRole().OrganizationId
+	}
+
+	return nil
 }
 
 func (aP *authPrinciple) GetCurrentProjectId() *uint64 {

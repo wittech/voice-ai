@@ -307,13 +307,3 @@ func (assistantGRPCApi *webAssistantGRPCApi) UpdateAssistantDetail(ctx context.C
 	}
 	return assistantGRPCApi.assistantClient.UpdateAssistantDetail(ctx, iAuth, iRequest)
 }
-
-func (assistantGRPCApi *webAssistantGRPCApi) PersonalizeAssistant(ctx context.Context, iRequest *web_api.PersonalizeAssistantRequest) (*web_api.GetAssistantResponse, error) {
-	assistantGRPCApi.logger.Debugf("personalize assistant request ctx %v", ctx)
-	iAuth, isAuthenticated := types.GetAuthPrincipleGPRC(ctx)
-	if !isAuthenticated {
-		assistantGRPCApi.logger.Errorf("unauthenticated request to personalize assistant")
-		return nil, errors.New("unauthenticated request")
-	}
-	return assistantGRPCApi.assistantClient.PersonalizeAssistant(ctx, iAuth, iRequest)
-}
