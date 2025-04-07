@@ -59,15 +59,17 @@ func main() {
 	// init
 	appRunner.S = grpc.NewServer(
 		grpc.ChainStreamInterceptor(
-			middlewares.StreamServerInterceptor(internal_user_service.NewAuthenticator(appRunner.Logger, appRunner.Postgres), appRunner.Logger),
+			middlewares.NewRequestLoggerStreamServerMiddleware(appRunner.Cfg.Name, appRunner.Logger),
+			middlewares.NewAuthenticationStreamServerMiddleware(internal_user_service.NewAuthenticator(appRunner.Logger, appRunner.Postgres), appRunner.Logger),
 		),
 		grpc.ChainUnaryInterceptor(
-			middlewares.UnaryServerInterceptor(internal_user_service.NewAuthenticator(appRunner.Logger, appRunner.Postgres), appRunner.Logger),
-			middlewares.ProjectAuthenticatorUnaryServerInterceptor(
+			middlewares.NewRequestLoggerUnaryServerMiddleware(appRunner.Cfg.Name, appRunner.Logger),
+			middlewares.NewAuthenticationUnaryServerMiddleware(internal_user_service.NewAuthenticator(appRunner.Logger, appRunner.Postgres), appRunner.Logger),
+			middlewares.NewProjectAuthenticatorUnaryServerMiddleware(
 				internal_project_service.NewProjectAuthenticator(appRunner.Logger, appRunner.Postgres),
 				appRunner.Logger,
 			),
-			middlewares.ServiceAuthenticatorUnaryServerInterceptor(
+			middlewares.NewServiceAuthenticatorUnaryServerMiddleware(
 				authenticators.NewServiceAuthenticator(appRunner.Cfg, appRunner.Logger, appRunner.Postgres),
 				appRunner.Logger,
 			),
@@ -253,7 +255,7 @@ func (g *AppRunner) AllMiddlewares() {
 	g.RecoveryMiddleware()
 	g.CorsMiddleware()
 	g.RequestLoggerMiddleware()
-	g.E.Use(middlewares.AuthenticationMiddleware(internal_user_service.NewAuthenticator(g.Logger, g.Postgres), g.Logger))
+	g.E.Use(middlewares.NewAuthenticationMiddleware(internal_user_service.NewAuthenticator(g.Logger, g.Postgres), g.Logger))
 }
 
 func (g *AppRunner) AuthApiRoutes() {
@@ -394,5 +396,5 @@ func (g *AppRunner) CorsMiddleware() {
 // Logger Middleware
 func (g *AppRunner) RequestLoggerMiddleware() {
 	g.Logger.Info("Adding request middleware to the applicaiton.")
-	g.E.Use(middlewares.RequestLoggerMiddleware(g.Cfg.Name, g.Logger))
+	g.E.Use(middlewares.NewRequestLoggerMiddleware(g.Cfg.Name, g.Logger))
 }
