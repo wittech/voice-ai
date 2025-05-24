@@ -10,7 +10,8 @@ import (
 	internal_vault_service "github.com/lexatic/web-backend/api/web-api/internal/service/vault"
 	config "github.com/lexatic/web-backend/config"
 	integration_client "github.com/lexatic/web-backend/pkg/clients/integration"
-	provider_client "github.com/lexatic/web-backend/pkg/clients/provider"
+
+	// provider_client "github.com/lexatic/web-backend/pkg/clients/provider"
 	commons "github.com/lexatic/web-backend/pkg/commons"
 	"github.com/lexatic/web-backend/pkg/connectors"
 	"github.com/lexatic/web-backend/pkg/types"
@@ -24,10 +25,8 @@ type webVaultApi struct {
 	postgres          connectors.PostgresConnector
 	redis             connectors.RedisConnector
 	vaultService      internal_service.VaultService
-	providerClient    provider_client.ProviderServiceClient
 	integrationClient integration_client.IntegrationServiceClient
-	// hubspot connect
-	hubspotConnect internal_connect.HubspotConnect
+	hubspotConnect    internal_connect.HubspotConnect
 }
 
 type webVaultRPCApi struct {
@@ -45,7 +44,6 @@ func NewVaultRPC(config *config.AppConfig, oauthCfg *config.OAuthConfig, logger 
 			logger:            logger,
 			postgres:          postgres,
 			vaultService:      internal_vault_service.NewVaultService(logger, postgres),
-			providerClient:    provider_client.NewProviderServiceClientGRPC(config, logger, redis),
 			integrationClient: integration_client.NewIntegrationServiceClientGRPC(config, logger, redis),
 			hubspotConnect:    internal_connects.NewHubspotConnect(config, oauthCfg, logger, postgres),
 		},
@@ -60,7 +58,6 @@ func NewVaultGRPC(config *config.AppConfig, oauthCfg *config.OAuthConfig, logger
 			postgres:          postgres,
 			redis:             redis,
 			vaultService:      internal_vault_service.NewVaultService(logger, postgres),
-			providerClient:    provider_client.NewProviderServiceClientGRPC(config, logger, redis),
 			integrationClient: integration_client.NewIntegrationServiceClientGRPC(config, logger, redis),
 			hubspotConnect:    internal_connects.NewHubspotConnect(config, oauthCfg, logger, postgres),
 		},

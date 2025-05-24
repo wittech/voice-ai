@@ -5,9 +5,9 @@ import (
 
 	internal_service "github.com/lexatic/web-backend/api/web-api/internal/service"
 	internal_organization_service "github.com/lexatic/web-backend/api/web-api/internal/service/organization"
+	internal_provider_service "github.com/lexatic/web-backend/api/web-api/internal/service/provider"
 	internal_user_service "github.com/lexatic/web-backend/api/web-api/internal/service/user"
 	config "github.com/lexatic/web-backend/config"
-	provider_client "github.com/lexatic/web-backend/pkg/clients/provider"
 	commons "github.com/lexatic/web-backend/pkg/commons"
 	"github.com/lexatic/web-backend/pkg/connectors"
 	"github.com/lexatic/web-backend/pkg/types"
@@ -16,21 +16,21 @@ import (
 )
 
 type WebApi struct {
-	cfg            *config.AppConfig
-	logger         commons.Logger
-	postgres       connectors.PostgresConnector
-	redis          connectors.RedisConnector
-	userService    internal_service.UserService
-	providerClient provider_client.ProviderServiceClient
-	orgService     internal_service.OrganizationService
+	cfg             *config.AppConfig
+	logger          commons.Logger
+	postgres        connectors.PostgresConnector
+	redis           connectors.RedisConnector
+	userService     internal_service.UserService
+	providerService internal_service.ProviderService
+	orgService      internal_service.OrganizationService
 }
 
 func NewWebApi(cfg *config.AppConfig, logger commons.Logger, postgres connectors.PostgresConnector, redis connectors.RedisConnector) WebApi {
 	return WebApi{
-		cfg, logger, postgres, redis,
-		internal_user_service.NewUserService(logger, postgres),
-		provider_client.NewProviderServiceClientGRPC(cfg, logger, redis),
-		internal_organization_service.NewOrganizationService(logger, postgres),
+		cfg: cfg, logger: logger, postgres: postgres, redis: redis,
+		userService:     internal_user_service.NewUserService(logger, postgres),
+		orgService:      internal_organization_service.NewOrganizationService(logger, postgres),
+		providerService: internal_provider_service.NewProviderService(logger, postgres),
 	}
 }
 
@@ -63,9 +63,14 @@ func (w *WebApi) GetOrganization(c context.Context, auth types.SimplePrinciple, 
 }
 
 func (w *WebApi) GetProviderModel(ctx context.Context, auth types.SimplePrinciple, providerModelId uint64) *web_api.ProviderModel {
-	mdl, err := w.providerClient.GetModel(ctx, auth, providerModelId)
+	mdl, err := w.providerService.GetModel(ctx, providerModelId)
 	if err != nil {
 		w.logger.Errorf("unable to get provider model %v", err)
 	}
-	return mdl
+	model := &web_api.ProviderModel{}
+	err = utils.Cast(mdl, model)
+	if err != nil {
+		w.logger.Debugf("error while type casting model type err %v", err)
+	}
+	return model
 }
