@@ -102,11 +102,18 @@ func (vS *vaultService) GetAllOrganizationCredential(ctx context.Context, auth t
 	var vaults []internal_entity.Vault
 	var cnt int64
 
-	qry := db.Model(internal_entity.Vault{})
+	qry := db.Debug().Model(internal_entity.Vault{})
 	qry.
 		Where("vault_level = ? AND vault_level_id = ? AND status = ?", gorm_types.VAULT_LEVEL_ORGANIZATION, *auth.GetCurrentOrganizationId(), "active")
 	for _, ct := range criterias {
-		qry.Where(fmt.Sprintf("%s = ?", ct.GetKey()), ct.GetValue())
+		switch ct.GetLogic() {
+		case "or":
+			qry.Or(fmt.Sprintf("%s = ?", ct.GetKey()), ct.GetValue())
+		case "like":
+			qry.Where(fmt.Sprintf("%s %s ?", ct.GetKey(), ct.GetLogic()), fmt.Sprintf("%%%s%%", ct.GetValue()))
+		default:
+			qry.Where(fmt.Sprintf("%s %s ?", ct.GetKey(), ct.GetLogic()), ct.GetValue())
+		}
 	}
 	tx := qry.
 		Scopes(gorm_models.
