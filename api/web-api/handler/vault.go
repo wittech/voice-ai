@@ -227,8 +227,8 @@ func (wVault *webVaultGRPCApi) GetOauth2Credential(ctx context.Context, request 
 		wVault.logger.Errorf("GetAllProviderCredential from grpc with unauthenticated request")
 		return utils.AuthenticateError[web_api.GetCredentialResponse]()
 	}
-	vlt, err := wVault.vaultService.GetToolCredential(
-		ctx, iAuth, request.GetProviderId())
+	vlt, err := wVault.vaultService.Get(
+		ctx, iAuth, request.GetVaultId())
 
 	if err != nil {
 		wVault.logger.Errorf("unable to get tool credentials %v", err)
@@ -259,7 +259,7 @@ func (wVault *webVaultGRPCApi) GetCredential(ctx context.Context, request *web_a
 		return utils.AuthenticateError[web_api.GetCredentialResponse]()
 	}
 	//
-	vlt, err := wVault.vaultService.Get(ctx, iAuth, request.GetProviderId(), request.GetVaultId())
+	vlt, err := wVault.vaultService.Get(ctx, iAuth, request.GetVaultId())
 	if err != nil {
 		return utils.Error[web_api.GetCredentialResponse](
 			err,
