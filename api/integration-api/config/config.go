@@ -12,7 +12,7 @@ import (
 
 // Application config structure
 type IntegrationConfig struct {
-	config.AppConfig
+	config.AppConfig `mapstructure:",squash"`
 	PostgresConfig   configs.PostgresConfig   `mapstructure:"postgres" validate:"required"`
 	RedisConfig      configs.RedisConfig      `mapstructure:"redis" validate:"required"`
 	SendgridApiKey   string                   `mapstructure:"sendgrid_api_key" validate:"required"`
@@ -23,8 +23,8 @@ type IntegrationConfig struct {
 func InitConfig() (*viper.Viper, error) {
 	vConfig := viper.NewWithOptions(viper.KeyDelimiter("__"))
 
-	vConfig.AddConfigPath(".")
-	vConfig.SetConfigName(".env")
+	vConfig.AddConfigPath("./env/")
+	vConfig.SetConfigName(".integration.env")
 	path := os.Getenv("ENV_PATH")
 	if path != "" {
 		log.Printf("env path %v", path)
