@@ -3,53 +3,70 @@ FROM node:22-alpine AS builder
 
 WORKDIR /app
 
-# Copy package files
+# Copy package files and install deps
 COPY ui/package.json ui/yarn.lock ./
 
-# Install dependencies
-RUN yarn install
+# Copy only source code
+COPY ui/.babel-plugin-macrosrc.js ./
+COPY ui/.dockerignore ./
+COPY ui/.editorconfig ./
+COPY ui/.env.production ./
+COPY ui/.eslintignore ./
+COPY ui/.eslintrc.js ./
+COPY ui/.gitattributes ./
+COPY ui/.gitignore ./
+COPY ui/.npmrc ./
+COPY ui/.nvmrc ./
+COPY ui/.pre-commit-config.yaml ./
+COPY ui/.prettierignore ./
+COPY ui/.prettierrc ./
+COPY ui/.stylelintrc ./
+COPY ui/amplify.yml ./
+COPY ui/commitlint.config.js ./
+COPY ui/craco.config.js ./
+COPY ui/electron-builder.yml ./
+COPY ui/package.json ./
+COPY ui/postcss.config.js ./
+COPY ui/template.json ./
+COPY ui/tsconfig.json ./
+COPY ui/tsconfig.paths.json ./
+COPY ui/yarn.lock ./
 
-# Copy source code
-COPY ui/ .
+# RUN yarn install --frozen-lockfile
+RUN yarn install --frozen-lockfile --cache-folder .yarn-cache && \
+    rm -rf .yarn-cache
+
+# Copy directories
+COPY ui/public/ ./public
+COPY ui/src/ ./src
+
 
 # Build the React app
-RUN export NODE_ENV="production" && \
-    export PATH="$PATH:./node_modules/.bin" && \
-    yarn run build
+RUN yarn build
 
-# Final stage - Nginx
+# # Final stage - Nginx
 FROM nginx:alpine
 
-# Create rapida-app user
+# Create user
 RUN addgroup -g 1000 rapida-app && \
     adduser -D -u 1000 -G rapida-app rapida-app
 
 # Copy nginx config
 COPY docker/nginx/nginx.conf /etc/nginx/conf.d/default.conf
 
-# Copy built app from builder
+# Copy built app
 COPY --from=builder /app/build /usr/share/nginx/html
 
-# Copy images directory if it exists
-COPY --from=builder /app/public/images /usr/share/nginx/html/images
+# Ensure ownership
+RUN chown -R rapida-app:rapida-app /usr/share/nginx/html /var/cache/nginx /var/log/nginx
+RUN mkdir -p /run && chown -R rapida-app:rapida-app /run
 
-# Create directory for assets
-RUN mkdir -p /usr/share/nginx/html/assets && \
-    chown -R rapida-app:rapida-app /usr/share/nginx/html && \
-    chown -R rapida-app:rapida-app /var/cache/nginx && \
-    chown -R rapida-app:rapida-app /var/log/nginx && \
-    touch /var/run/nginx.pid && \
-    chown -R rapida-app:rapida-app /var/run/nginx.pid
 
-# Switch to rapida-app user
+# Switch to user
 USER rapida-app
 
 # Expose port
 EXPOSE 3000
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:3000/ || exit 1
 
 # Run nginx
 CMD ["nginx", "-g", "daemon off;"]
