@@ -11,7 +11,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - /opt/apps/db:/var/lib/postgresql/data   
       - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
       - api-network
@@ -28,7 +28,7 @@ services:
     ports:
       - "6379:6379"
     volumes:
-      - redis_data:/data
+      - /opt/apps/redis:/data
     networks:
       - api-network
     healthcheck:
@@ -57,7 +57,7 @@ services:
         soft: 65536
         hard: 65536
     volumes:
-      - opensearch_data:/usr/share/opensearch/data
+      - /opt/apps/opensearch:/usr/share/opensearch/data
     ports:
       - "9200:9200"
       - "9600:9600"
@@ -78,7 +78,6 @@ services:
       - "3000:3000"
     depends_on:
       - web-api
-      # - assistant-api
       - integration-api
       - endpoint-api
     volumes:
@@ -86,7 +85,7 @@ services:
     networks:
       - api-network
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--method=GET", "-O", "/dev/null", "http://localhost:3000/"]
+      test: ["CMD-SHELL", "curl --fail --silent http://localhost:3000/ || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -120,35 +119,35 @@ services:
       retries: 3
 
   # Assistant API Service
-  # assistant-api:
-  #   build:
-  #     context: .
-  #     dockerfile: docker/assistant-api/Dockerfile
-  #   container_name: assistant-api
-  #   ports:
-  #     - "9007:9007"
-  #   env_file:
-  #     - ./docker/assistant-api/.assistant.env
-  #   depends_on:
-  #     postgres:
-  #       condition: service_healthy
-  #     redis:
-  #       condition: service_healthy
-  #     opensearch:
-  #       condition: service_healthy
+  assistant-api:
+    build:
+      context: .
+      dockerfile: docker/assistant-api/Dockerfile
+    container_name: assistant-api
+    ports:
+      - "9007:9007"
+    env_file:
+      - ./docker/assistant-api/.assistant.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      opensearch:
+        condition: service_healthy
 
-  #   volumes:
-  #     - ./docker/assistant-api/.assistant.env:/opt/apps/env/.assistant.env:ro
-  #     - assets_volume:/opt/apps/assets
+    volumes:
+      - ./docker/assistant-api/.assistant.env:/opt/apps/env/.assistant.env:ro
+      - assets_volume:/opt/apps/assets
 
-  #   networks:
-  #     - api-network
+    networks:
+      - api-network
 
-  #   healthcheck:
-  #     test: [ "CMD", "wget", "--no-verbose", "--tries=1", "http://localhost:9007/readiness/" ]
-  #     interval: 30s
-  #     timeout: 3s
-  #     retries: 3
+    healthcheck:
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "http://localhost:9007/readiness/" ]
+      interval: 30s
+      timeout: 3s
+      retries: 3
 
   # Integration API Service
   integration-api:
@@ -174,7 +173,7 @@ services:
       - api-network
 
     healthcheck:
-      test: [ "CMD", "wget", "--no-verbose", "-q -O", "--tries=1", "http://localhost:9004/readiness/" ]
+      test: [ "CMD", "wget", "--quiet", "--tries=1", "--method=GET", "-O", "/dev/null", "http://localhost:9004/readiness/" ]
       interval: 30s
       timeout: 3s
       retries: 3
@@ -210,8 +209,6 @@ services:
 
  
 volumes:
-  postgres_data:
-    driver: local
   redis_data:
     driver: local
   opensearch_data:

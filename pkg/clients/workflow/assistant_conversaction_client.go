@@ -26,8 +26,8 @@ type assistantConversationServiceClient struct {
 }
 
 func NewAssistantConversationServiceClientGRPC(config *config.AppConfig, logger commons.Logger, redis connectors.RedisConnector) AssistantConversationServiceClient {
-	logger.Debugf("conntecting to assistant conversaction client with %s", config.WorkflowHost)
-	conn, err := grpc.NewClient(config.WorkflowHost, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	logger.Debugf("conntecting to assistant conversaction client with %s", config.AssistantHost)
+	conn, err := grpc.NewClient(config.AssistantHost, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		logger.Errorf("Unable to create connection %v", err)
 	}
