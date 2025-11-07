@@ -8,12 +8,11 @@ type AppConfig struct {
 	Port     int    `mapstructure:"port" validate:"required"`
 	LogLevel string `mapstructure:"log_level" validate:"required"`
 	Secret   string `mapstructure:"secret" validate:"required"`
+
 	// all the host
-	ProviderHost    string `mapstructure:"provider_host" validate:"required"`
 	IntegrationHost string `mapstructure:"integration_host" validate:"required"`
 	EndpointHost    string `mapstructure:"endpoint_host" validate:"required"`
-	WorkflowHost    string `mapstructure:"workflow_host" validate:"required"`
-	WebhookHost     string `mapstructure:"webhook_host" validate:"required"`
+	AssistantHost   string `mapstructure:"assistant_host" validate:"required"`
 	WebHost         string `mapstructure:"web_host" validate:"required"`
 	DocumentHost    string `mapstructure:"document_host" validate:"required"`
 }

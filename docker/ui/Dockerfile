@@ -3,6 +3,8 @@ FROM node:22-alpine AS builder
 
 WORKDIR /app
 
+RUN apk add --no-cache curl
+
 # Copy package files and install deps
 COPY ui/package.json ui/yarn.lock ./
 
