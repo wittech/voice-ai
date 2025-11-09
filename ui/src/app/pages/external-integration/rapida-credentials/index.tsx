@@ -1,4 +1,4 @@
-import React, { useState, useContext, useCallback, useEffect, FC } from 'react';
+import { useState, useContext, useCallback, useEffect, FC } from 'react';
 import {
   CreateProjectCredential,
   GetAllProjectCredential,
@@ -18,7 +18,7 @@ import { PageTitleBlock } from '@/app/components/blocks/page-title-block';
 import { IBlueButton, IButton } from '@/app/components/Form/Button';
 import { ExternalLink, Info, Plus, RotateCw } from 'lucide-react';
 import { connectionConfig } from '@/configs';
-import { Eye, EyeOff, Copy, CheckCircle, Zap } from 'lucide-react';
+import { Eye, EyeOff, Copy, CheckCircle } from 'lucide-react';
 import { toHumanReadableDate } from '@/styles/media';
 import { Card, CardTitle } from '@/app/components/base/cards';
 import { YellowNoticeBlock } from '@/app/components/container/message/notice-block';
@@ -172,18 +172,15 @@ export function ProjectCredentialPage() {
           rel="noreferrer"
         >
           Read documentation
-          <ExternalLink
-            className="shrink-0 w-4 h-4 ml-1.5"
-            strokeWidth={1.5}
-          />
+          <ExternalLink className="shrink-0 w-4 h-4 ml-1.5" strokeWidth={1.5} />
         </a>
       </YellowNoticeBlock>
       {ourKeys && ourKeys.length > 0 ? (
         <div className="grid grid-cols-3 gap-3 px-4 py-4 flex-1 overflow-auto">
           {ourKeys.map((pc, idx) => {
             return (
-              <div>
-                <CredentialCard key={idx} credential={pc}></CredentialCard>
+              <div key={idx}>
+                <CredentialCard credential={pc}></CredentialCard>
               </div>
             );
           })}
