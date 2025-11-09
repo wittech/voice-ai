@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"log"
 	"net"
@@ -295,6 +296,13 @@ func (g *AppRunner) RequestLoggerMiddleware() {
 }
 
 func (app *AppRunner) Migrate() error {
+	withMigration := flag.Bool("with-migration", false, "Run migration when provided, eg: -with-migration")
+	flag.Parse()
+	if withMigration == nil || *withMigration == false {
+		app.Logger.Infof("Skipping the migration, if not you need to check the argument -with-migration")
+		return nil
+	}
+
 	dsn := fmt.Sprintf(
 		"postgres://%s:%s@%s:%d/%s?sslmode=%s",
 		app.Cfg.PostgresConfig.Auth.User,
