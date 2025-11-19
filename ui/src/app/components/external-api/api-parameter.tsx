@@ -45,7 +45,7 @@ export const APiParameter: FC<{
         {initialValues.map((parameter, index) => (
           <div
             key={`param-${index}`}
-            className="grid grid-cols-2 border-b border-gray-400 dark:border-gray-600"
+            className="grid grid-cols-2 border-b border-gray-300 dark:border-gray-700"
           >
             <div className="flex col-span-1 items-center border-r">
               <Input

@@ -67,7 +67,7 @@ export const EndpointDropdown: FC<EndpointDropdownProps> = props => {
         className={cn(
           'outline-solid outline-transparent',
           'focus-within:outline-blue-600 focus:outline-blue-600',
-          'border-b border-gray-400 dark:border-gray-600',
+          'border-b border-gray-300 dark:border-gray-700',
           'focus-within:border-transparent!',
           'transition-all duration-200 ease-in-out',
           'flex relative',

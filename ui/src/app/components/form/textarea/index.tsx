@@ -1,6 +1,6 @@
 import { CodeEditor } from '@/app/components/form/editor/code-editor';
 import { cn } from '@/utils';
-import React, { HTMLAttributes, useState } from 'react';
+import React, { useState } from 'react';
 
 interface TextAreaProps
   extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
@@ -29,7 +29,7 @@ export const Textarea = React.forwardRef<HTMLTextAreaElement, TextAreaProps>(
           'dark:placeholder-gray-600 placeholder-gray-400',
           'outline-solid outline-[1.5px] outline-transparent',
           'focus-within:outline-blue-600 focus:outline-blue-600 outline-offset-[-1.5px]',
-          'border-b border-gray-400 dark:border-gray-600',
+          'border-b border-gray-300 dark:border-gray-700',
           'dark:focus:border-blue-600 focus:border-blue-600',
           'transition-all duration-200 ease-in-out',
           'dark:text-gray-300 text-gray-600',
@@ -77,7 +77,7 @@ export const ScalableTextarea = React.forwardRef<
         'dark:placeholder-gray-600 placeholder-gray-400',
         'outline-solid outline-[1.5px] outline-transparent',
         'focus-within:outline-blue-600 focus:outline-blue-600 outline-offset-[-1.5px]',
-        'border-b border-gray-400 dark:border-gray-600',
+        'border-b border-gray-300 dark:border-gray-700',
         'dark:focus:border-blue-600 focus:border-blue-600',
         'transition-all duration-200 ease-in-out',
         'dark:text-gray-300 text-gray-600',

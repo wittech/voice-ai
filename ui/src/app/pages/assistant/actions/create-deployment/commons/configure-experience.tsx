@@ -75,7 +75,7 @@ export const ConfigureExperience: FC<{
             <Textarea
               row={2}
               className="bg-light-background"
-              value={greeting}
+              value={greeting || ''}
               onChange={e => onChangeGreeting(e.target.value)}
               placeholder={
                 'Write a custom greeting message. You can use {{variable}} to include dynamic content.'
@@ -96,7 +96,7 @@ export const ConfigureExperience: FC<{
               <Input
                 className="bg-light-background"
                 placeholder="Message that will be send to the user when error occured"
-                value={messageOnError}
+                value={messageOnError || ''}
                 onChange={e => onChangeMessageOnError(e.target.value)}
               />
             </FieldSet>

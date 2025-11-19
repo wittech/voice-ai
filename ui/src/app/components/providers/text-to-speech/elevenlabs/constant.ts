@@ -1,8 +1,12 @@
-import { CARTESIA_LANGUAGE, CARTESIA_MODEL, CARTESIA_VOICE } from '@/providers';
+import {
+  ELEVENLABS_LANGUAGE,
+  ELEVENLABS_MODEL,
+  ELEVENLABS_VOICE,
+} from '@/providers';
 import { SetMetadata } from '@/utils/metadata';
 import { Metadata } from '@rapidaai/react';
 
-export const GetCartesiaDefaultOptions = (current: Metadata[]): Metadata[] => {
+export const GetElevanLabDefaultOptions = (current: Metadata[]): Metadata[] => {
   const mtds: Metadata[] = [];
 
   // Define the keys we want to keep
@@ -11,9 +15,10 @@ export const GetCartesiaDefaultOptions = (current: Metadata[]): Metadata[] => {
     'speak.language',
     'speak.voice.id',
     'speak.model',
-    'speak.voice.__experimental_controls.speed',
-    'speak.voice.__experimental_controls.emotion',
+    'speak.output_format.encoding',
   ];
+
+  // Function to create or update metadata
   const addMetadata = (
     key: string,
     defaultValue?: string,
@@ -26,16 +31,19 @@ export const GetCartesiaDefaultOptions = (current: Metadata[]): Metadata[] => {
   addMetadata('rapida.credential_id');
 
   // Set language
-  addMetadata('speak.language');
+  addMetadata('speak.language', 'en', value =>
+    ELEVENLABS_LANGUAGE().some(l => l.language_id === value),
+  );
 
   // Set voice
-  addMetadata('speak.voice.id');
+  addMetadata('speak.voice.id', '3jR9BuQAOPMWUjWpi0ll', value =>
+    ELEVENLABS_VOICE().some(v => v.voice_id === value),
+  );
 
   // Set model
-  addMetadata('speak.model');
-
-  addMetadata('speak.voice.__experimental_controls.speed', '', value => true);
-  addMetadata('speak.voice.__experimental_controls.emotion', '', value => true);
+  addMetadata('speak.model', 'eleven_multilingual_v2', value =>
+    ELEVENLABS_MODEL().some(m => m.model_id === value),
+  );
 
   // Only return metadata for the keys we want to keep and non-speak metadata
   return [
@@ -44,7 +52,7 @@ export const GetCartesiaDefaultOptions = (current: Metadata[]): Metadata[] => {
   ];
 };
 
-export const ValidateCartesiaOptions = (options: Metadata[]): boolean => {
+export const ValidateElevanLabOptions = (options: Metadata[]): boolean => {
   const credentialID = options.find(
     opt => opt.getKey() === 'rapida.credential_id',
   );
@@ -56,9 +64,13 @@ export const ValidateCartesiaOptions = (options: Metadata[]): boolean => {
     return false;
   }
   const validations = [
-    { key: 'speak.language', validator: CARTESIA_LANGUAGE(), field: 'code' },
-    { key: 'speak.voice.id', validator: CARTESIA_VOICE(), field: 'id' },
-    { key: 'speak.model', validator: CARTESIA_MODEL(), field: 'id' },
+    {
+      key: 'speak.language',
+      validator: ELEVENLABS_LANGUAGE(),
+      field: 'language_id',
+    },
+    { key: 'speak.voice.id', validator: ELEVENLABS_VOICE(), field: 'voice_id' },
+    { key: 'speak.model', validator: ELEVENLABS_MODEL(), field: 'model_id' },
   ];
 
   return validations.every(({ key, validator, field }) => {

@@ -60,7 +60,7 @@ export function Dropdown(props: DropdownProps<any>) {
                 'py-2 pl-3 pr-10 text-left',
                 'outline-solid outline-transparent border-collapse',
                 'focus-within:outline-blue-600 focus:outline-blue-600 ',
-                'border-b border-gray-400 dark:border-gray-600',
+                'border-b border-gray-300 dark:border-gray-700',
                 'dark:focus:border-blue-600 focus:border-blue-600',
                 'transition-all duration-200 ease-in-out',
                 'dark:text-gray-300 text-gray-600',

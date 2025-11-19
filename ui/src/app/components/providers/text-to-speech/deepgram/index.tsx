@@ -1,11 +1,11 @@
 import { Metadata } from '@rapidaai/react';
-import { Dropdown } from '@/app/components/providers/text-to-speech/deepgram/drop';
 import { FormLabel } from '@/app/components/form-label';
 import { FieldSet } from '@/app/components/form/fieldset';
 import { DEEPGRAM_VOICE } from '@/providers';
-import { IBorderButton } from '@/app/components/form/button';
+import { ILinkBorderButton } from '@/app/components/form/button';
 import { ExternalLink } from 'lucide-react';
-import { useGlobalNavigation } from '@/hooks/use-global-navigator';
+import { useState } from 'react';
+import { CustomValueDropdown } from '@/app/components/dropdown/custom-value-dropdown';
 export { GetDeepgramDefaultOptions } from './constant';
 
 const renderOption = (c: { icon: React.ReactNode; name: string }) => (
@@ -19,10 +19,24 @@ export const ConfigureDeepgramTextToSpeech: React.FC<{
   onParameterChange: (parameters: Metadata[]) => void;
   parameters: Metadata[] | null;
 }> = ({ onParameterChange, parameters }) => {
-  const { goTo } = useGlobalNavigation();
+  /**
+   *
+   */
+  const [filteredVoices, setFilteredVoices] = useState(DEEPGRAM_VOICE());
+
+  /**
+   *
+   * @param key
+   * @returns
+   */
   const getParamValue = (key: string) =>
     parameters?.find(p => p.getKey() === key)?.getValue() ?? '';
-  //
+
+  /**
+   *
+   * @param key
+   * @param value
+   */
   const updateParameter = (key: string, value: string) => {
     const updatedParams = [...(parameters || [])];
     const existingIndex = updatedParams.findIndex(p => p.getKey() === key);
@@ -37,12 +51,15 @@ export const ConfigureDeepgramTextToSpeech: React.FC<{
     onParameterChange(updatedParams);
   };
 
+  /**
+   *
+   */
   return (
     <>
       <FieldSet className="col-span-2">
         <FormLabel>Voice</FormLabel>
         <div className="flex">
-          <Dropdown
+          <CustomValueDropdown
             searchable
             className="bg-light-background max-w-full dark:bg-gray-950"
             currentValue={DEEPGRAM_VOICE().find(
@@ -51,23 +68,40 @@ export const ConfigureDeepgramTextToSpeech: React.FC<{
             setValue={(v: { code: string }) => {
               updateParameter('speak.voice.id', v.code);
             }}
-            allValue={DEEPGRAM_VOICE()}
+            allValue={filteredVoices}
             placeholder={`Select voice`}
             option={renderOption}
             label={renderOption}
             customValue
-            onAddCustomValue={() => {}}
-          />
-          <IBorderButton
-            onClick={() => {
-              goTo(
-                `/integration/models/deepgram?params=${getParamValue('speak.voice.id')}`,
-              );
+            onSearching={t => {
+              const voices = DEEPGRAM_VOICE();
+              const v = t.target.value;
+              if (v.length > 0) {
+                setFilteredVoices(
+                  voices.filter(
+                    voice =>
+                      voice.name.toLowerCase().includes(v.toLowerCase()) ||
+                      voice.code?.toLowerCase().includes(v.toLowerCase()) ||
+                      voice.age?.toLowerCase().includes(v.toLowerCase()) ||
+                      voice.accent?.toLowerCase().includes(v.toLowerCase()) ||
+                      voice.gender?.toLowerCase().includes(v.toLowerCase()),
+                  ),
+                );
+                return;
+              }
+              setFilteredVoices(voices);
             }}
-            className="h-10 text-sm rounded-[2px] p-2 px-3"
+            onAddCustomValue={vl => {
+              updateParameter('speak.voice.id', vl);
+            }}
+          />
+          <ILinkBorderButton
+            target="_blank"
+            href={`/integration/models/deepgram?query=${getParamValue('speak.voice.id')}`}
+            className="h-10 text-sm p-2 px-3 bg-light-background max-w-full dark:bg-gray-950 border-b"
           >
             <ExternalLink className="w-4 h-4" strokeWidth={1.5} />
-          </IBorderButton>
+          </ILinkBorderButton>
         </div>
       </FieldSet>
     </>
