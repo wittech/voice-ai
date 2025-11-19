@@ -6,7 +6,7 @@ import {
   Transition,
 } from '@headlessui/react';
 import { Spinner } from '@/app/components/loader/spinner';
-import React, { ChangeEvent, Fragment, HTMLAttributes } from 'react';
+import React, { ChangeEvent, Fragment } from 'react';
 import { cn } from '@/utils';
 import { SearchIconInput } from '@/app/components/form/input/IconInput';
 import { Check, ChevronDown, Plus } from 'lucide-react';
@@ -14,31 +14,31 @@ import { Float } from '@headlessui-float/react';
 import { FormLabel } from '@/app/components/form-label';
 import { FieldSet } from '@/app/components/form/fieldset';
 import { Input } from '@/app/components/form/input';
-import { IBlueBGButton, IBorderButton } from '@/app/components/form/button';
+import { IBlueBGButton } from '@/app/components/form/button';
+import { DropdownProps } from '@/app/components/dropdown';
 /**
  *
  */
-export interface DropdownProps<T> extends HTMLAttributes<HTMLDivElement> {
-  currentValue?: T | null;
-  setValue: (value: T) => void;
-  allValue: T[];
-  option?: (value: T, isSelected: boolean) => React.ReactElement;
-  label?: (value: T) => React.ReactElement;
-  placeholder?: string;
-  multiple?: boolean;
-  disable?: boolean;
-  placement?: 'bottom' | 'top';
-  searchable?: boolean;
-  customValue?: boolean;
-  onAddCustomValue?: boolean;
+export interface CustomValueDropdownProps<T> extends DropdownProps<T> {
   onSearching?: (qry: ChangeEvent<HTMLInputElement>) => void;
+  customValue?: boolean;
+  onAddCustomValue?: (vl: string) => void;
 }
 /**
  *
  * @param props
  * @returns
  */
-export function Dropdown(props: DropdownProps<any>) {
+export function CustomValueDropdown(props: CustomValueDropdownProps<any>) {
+  const [customInput, setCustomInput] = React.useState<string>('');
+
+  const handleAddCustomValue = () => {
+    if (customInput.trim() && props.onAddCustomValue) {
+      props.onAddCustomValue(customInput);
+      setCustomInput(''); // Clear the input field after adding the custom value
+    }
+  };
+
   return (
     <div className="relative flex flex-1">
       <Listbox
@@ -66,7 +66,7 @@ export function Dropdown(props: DropdownProps<any>) {
                 'py-2 pl-3 pr-10 text-left',
                 'outline-solid outline-transparent border-collapse',
                 'focus-within:outline-blue-600 focus:outline-blue-600 ',
-                'border-b border-gray-400 dark:border-gray-600',
+                'border-b border-gray-300 dark:border-gray-700',
                 'dark:focus:border-blue-600 focus:border-blue-600',
                 'transition-all duration-200 ease-in-out',
                 'dark:text-gray-300 text-gray-600',
@@ -161,10 +161,14 @@ export function Dropdown(props: DropdownProps<any>) {
                     <FormLabel>Or enter custom voice ID</FormLabel>
                     <div className="flex">
                       <Input
-                        onChange={props.onSearching}
                         placeholder="Custom value"
+                        value={customInput}
+                        onChange={e => setCustomInput(e.target.value)}
                       />
-                      <IBlueBGButton className="h-10 text-sm rounded-[2px] p-2 px-3">
+                      <IBlueBGButton
+                        className="h-10 text-sm rounded-[2px] p-2 px-3"
+                        onClick={handleAddCustomValue}
+                      >
                         <Plus className="w-4 h-4" strokeWidth={1.5} />
                       </IBlueBGButton>
                     </div>

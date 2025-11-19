@@ -5,8 +5,6 @@ import MessageTypeSelector from './message-type-selector';
 import type { PromptRole } from '@/models/prompt';
 import { DeleteIcon } from '@/app/components/Icon/delete';
 import { IButton } from '@/app/components/form/button';
-import { CloseIcon } from '@/app/components/Icon/Close';
-import { ExpandIcon } from '@/app/components/Icon/Expand';
 import { TickIcon } from '@/app/components/Icon/Tick';
 import { CopyIcon } from '@/app/components/Icon/Copy';
 import { cn } from '@/utils';
@@ -65,7 +63,7 @@ const AdvancedPromptInput: FC<PromptEditorProps> = ({
         className={cn(
           'outline-solid outline-[1.5px] outline-transparent',
           'focus-within:outline-blue-600 focus:outline-blue-600 outline-offset-[-1.5px]',
-          'border-b border-gray-400 dark:border-gray-600',
+          'border-b border-gray-300 dark:border-gray-700',
           'dark:focus:border-blue-600 focus:border-blue-600',
           'transition-all duration-200 ease-in-out',
           'relative',

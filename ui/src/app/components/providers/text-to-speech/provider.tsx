@@ -19,7 +19,7 @@ import {
   ConfigureElevanLabTextToSpeech,
   GetElevanLabDefaultOptions,
   ValidateElevanLabOptions,
-} from '@/app/components/providers/text-to-speech/elevanlabs';
+} from '@/app/components/providers/text-to-speech/elevenlabs';
 import {
   ConfigureGoogleTextToSpeech,
   GetGoogleDefaultOptions,

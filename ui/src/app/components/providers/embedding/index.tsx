@@ -171,7 +171,7 @@ export const EmbeddingProvider: React.FC<ProviderComponentProps> = props => {
             'p-px',
             'outline-solid outline-transparent',
             'focus-within:outline-blue-600 focus:outline-blue-600 -outline-offset-1',
-            'border-b border-gray-400 dark:border-gray-600',
+            'border-b border-gray-300 dark:border-gray-700',
             'dark:focus-within:border-blue-600 focus-within:border-blue-600',
             'transition-all duration-200 ease-in-out',
             'flex relative',

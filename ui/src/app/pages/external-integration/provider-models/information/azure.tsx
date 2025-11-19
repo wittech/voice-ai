@@ -1,4 +1,4 @@
-import { FC, useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { SearchIconInput } from '@/app/components/form/input/IconInput';
 import { Helmet } from '@/app/components/helmet';
 import { BluredWrapper } from '@/app/components/wrapper/blured-wrapper';
@@ -10,13 +10,9 @@ import { cn } from '@/utils';
 import { CreateProviderCredentialDialog } from '@/app/components/base/modal/create-provider-credential-modal';
 import { ViewProviderCredentialDialog } from '@/app/components/base/modal/view-provider-credential-modal';
 import { useAllProviderCredentials } from '@/hooks/use-model';
-import { Check, Copy, Pause, Play, Plus } from 'lucide-react';
+import { Check, Plus } from 'lucide-react';
 import { Tooltip } from '@/app/components/tooltip';
-import {
-  IBlueBGButton,
-  IBlueBorderButton,
-  IButton,
-} from '@/app/components/form/button';
+import { IBlueBGButton, IButton } from '@/app/components/form/button';
 import { VoiceCard } from '@/app/pages/external-integration/provider-models/information/voice-card';
 
 /**

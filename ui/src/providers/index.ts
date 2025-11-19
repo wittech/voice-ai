@@ -1,10 +1,5 @@
 import productionProvider from './provider.production.json';
 import developmentProvider from './provider.development.json';
-import elevan_lab_voices from './elevanlabs/voices.json';
-import azure_voices from './azure/voices.json';
-import cartesia_voices from './cartesia/voices.json';
-import google_cloud_voices from './google/voices.json';
-import deepgram_voices from './deepgram/voices.json';
 
 export interface IntegrationProvider extends RapidaProvider {}
 interface EndOfSpeechProvider extends RapidaProvider {}
@@ -71,22 +66,100 @@ export const EMBEDDING_PROVIDERS = allProvider().filter(x =>
   x.featureList.includes('embedding'),
 );
 
-export const ELEVANLABS_VOICE = () => {
-  return elevan_lab_voices;
-};
+/**
+ *
+ * @returns
+ */
 
 export const AZURE_VOICE = () => {
-  return azure_voices;
+  return require('./azure/voices.json');
 };
+
+export const AZURE_LANGUAGE = () => {
+  return require('./azure/languages.json');
+};
+
+/**
+ *
+ * @returns
+ */
+export const GOOGLE_CLOUD_VOICE = () => {
+  return require('./google/interim.voice.json');
+};
+
+/**
+ *
+ * @returns
+ */
+export const DEEPGRAM_VOICE = () => {
+  return require('./deepgram/voices.json');
+};
+
+/**
+ * ElevEnlabs constants
+ * @returns
+ */
+export const ELEVENLABS_MODEL = () => {
+  return require('./elevenlabs/models.json');
+};
+
+export const ELEVENLABS_VOICE = () => {
+  return require('./elevenlabs/voices.json');
+};
+
+export const ELEVENLABS_LANGUAGE = () => {
+  return require('./elevenlabs/languages.json');
+};
+
+/**
+ * cartesia
+ */
+
+//
 
 export const CARTESIA_VOICE = () => {
-  return cartesia_voices;
+  return require('./cartesia/voices.json');
 };
 
-export const GOOGLE_CLOUD_VOICE = () => {
-  return google_cloud_voices;
+export const CARTESIA_MODEL = () => {
+  return require('./cartesia/models.json');
 };
 
-export const DEEPGRAM_VOICE = () => {
-  return deepgram_voices;
+export const CARTESIA_LANGUAGE = () => {
+  return require('./cartesia/languages.json');
 };
+
+export const CARTESIA_SPEED_OPTION = () => {
+  return [
+    { id: '', name: '' },
+    { id: 'slowest', name: 'Slowest' },
+    { id: 'slow', name: 'Slow' },
+    { id: 'normal', name: 'Normal' },
+    { id: 'fast', name: 'Fast' },
+    { id: 'fastest', name: 'Fastest' },
+  ];
+};
+
+export const CARTESIA_EMOTION_LEVEL_COMBINATION = [
+  ...[
+    { id: 'anger', name: 'Anger' },
+    { id: 'positivity', name: 'Positivity' },
+    { id: 'surprise', name: 'Surprise' },
+    { id: 'sadness', name: 'Sadness' },
+    { id: 'curiosity', name: 'Curiosity' },
+  ].flatMap(m => m.id),
+  ...[
+    { id: 'anger', name: 'Anger' },
+    { id: 'positivity', name: 'Positivity' },
+    { id: 'surprise', name: 'Surprise' },
+    { id: 'sadness', name: 'Sadness' },
+    { id: 'curiosity', name: 'Curiosity' },
+  ].flatMap(emotion =>
+    [
+      { id: 'lowest', name: 'Lowest' },
+      { id: 'low', name: 'Low' },
+      { id: 'high', name: 'High' },
+      { id: 'highest', name: 'Highest' },
+    ].map(level => `${emotion.id}:${level.id}`),
+  ),
+];
