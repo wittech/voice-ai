@@ -12,36 +12,36 @@ import (
 
 // Application config structure
 
-type OAuthConfig struct {
-	GoogleClientId     string `mapstructure:"google_client_id" validate:"required"`
-	GoogleClientSecret string `mapstructure:"google_client_secret" validate:"required"`
+type OAuth2Config struct {
+	GoogleClientId     string `mapstructure:"google_client_id"`
+	GoogleClientSecret string `mapstructure:"google_client_secret"`
 
-	LinkedinClientId     string `mapstructure:"linkedin_client_id" validate:"required"`
-	LinkedinClientSecret string `mapstructure:"linkedin_client_secret" validate:"required"`
+	LinkedinClientId     string `mapstructure:"linkedin_client_id"`
+	LinkedinClientSecret string `mapstructure:"linkedin_client_secret"`
 
-	GithubClientId     string `mapstructure:"github_client_id" validate:"required"`
-	GithubClientSecret string `mapstructure:"github_client_secret" validate:"required"`
+	GithubClientId     string `mapstructure:"github_client_id"`
+	GithubClientSecret string `mapstructure:"github_client_secret"`
 
-	NotionClientId     string `mapstructure:"notion_client_id" validate:"required"`
-	NotionClientSecret string `mapstructure:"notion_client_secret" validate:"required"`
+	MicrosoftClientId     string `mapstructure:"microsoft_client_id"`
+	MicrosoftClientSecret string `mapstructure:"microsoft_client_secret"`
 
-	MicrosoftClientId     string `mapstructure:"microsoft_client_id" validate:"required"`
-	MicrosoftClientSecret string `mapstructure:"microsoft_client_secret" validate:"required"`
+	AtlassianClientId     string `mapstructure:"atlassian_client_id"`
+	AtlassianClientSecret string `mapstructure:"atlassian_client_secret"`
 
-	AtlassianClientId     string `mapstructure:"atlassian_client_id" validate:"required"`
-	AtlassianClientSecret string `mapstructure:"atlassian_client_secret" validate:"required"`
+	GitlabClientId     string `mapstructure:"gitlab_client_id"`
+	GitlabClientSecret string `mapstructure:"gitlab_client_secret"`
 
-	GitlabClientId     string `mapstructure:"gitlab_client_id" validate:"required"`
-	GitlabClientSecret string `mapstructure:"gitlab_client_secret" validate:"required"`
+	NotionClientId     string `mapstructure:"notion_client_id"`
+	NotionClientSecret string `mapstructure:"notion_client_secret"`
 
-	SlackAppId              string `mapstructure:"slack_app_id" validate:"required"`
-	SlackClientId           string `mapstructure:"slack_client_id" validate:"required"`
-	SlackClientSecret       string `mapstructure:"slack_client_secret" validate:"required"`
-	SlackSigningSecret      string `mapstructure:"slack_signing_secret" validate:"required"`
-	SlackVerificationSecret string `mapstructure:"slack_verification_secret" validate:"required"`
+	SlackAppId              string `mapstructure:"slack_app_id"`
+	SlackClientId           string `mapstructure:"slack_client_id"`
+	SlackClientSecret       string `mapstructure:"slack_client_secret"`
+	SlackSigningSecret      string `mapstructure:"slack_signing_secret"`
+	SlackVerificationSecret string `mapstructure:"slack_verification_secret"`
 
-	HubspotClientId     string `mapstructure:"hubspot_client_id" validate:"required"`
-	HubspotClientSecret string `mapstructure:"hubspot_client_secret" validate:"required"`
+	HubspotClientId     string `mapstructure:"hubspot_client_id"`
+	HubspotClientSecret string `mapstructure:"hubspot_client_secret"`
 }
 
 type WebAppConfig struct {
@@ -49,7 +49,7 @@ type WebAppConfig struct {
 	PostgresConfig   configs.PostgresConfig   `mapstructure:"postgres" validate:"required"`
 	RedisConfig      configs.RedisConfig      `mapstructure:"redis" validate:"required"`
 	AssetStoreConfig configs.AssetStoreConfig `mapstructure:"asset_store" validate:"required"`
-	OAuthConfig      `mapstructure:",squash"`
+	OAuthConfig      OAuth2Config             `mapstructure:"oauth2" validate:"required"`
 	//
 	EmailerConfig *configs.EmailerConfig `mapstructure:"emailer"`
 }

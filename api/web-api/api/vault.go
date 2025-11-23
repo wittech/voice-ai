@@ -33,7 +33,7 @@ type webVaultGRPCApi struct {
 	webVaultApi
 }
 
-func NewVaultRPC(config *config.WebAppConfig, oauthCfg *config.OAuthConfig, logger commons.Logger, postgres connectors.PostgresConnector, redis connectors.RedisConnector) *webVaultRPCApi {
+func NewVaultRPC(config *config.WebAppConfig, oauthCfg *config.OAuth2Config, logger commons.Logger, postgres connectors.PostgresConnector, redis connectors.RedisConnector) *webVaultRPCApi {
 	return &webVaultRPCApi{
 		webVaultApi{
 			cfg:               config,
@@ -46,7 +46,7 @@ func NewVaultRPC(config *config.WebAppConfig, oauthCfg *config.OAuthConfig, logg
 	}
 }
 
-func NewVaultGRPC(config *config.WebAppConfig, oauthCfg *config.OAuthConfig, logger commons.Logger, postgres connectors.PostgresConnector, redis connectors.RedisConnector) protos.VaultServiceServer {
+func NewVaultGRPC(config *config.WebAppConfig, oauthCfg *config.OAuth2Config, logger commons.Logger, postgres connectors.PostgresConnector, redis connectors.RedisConnector) protos.VaultServiceServer {
 	return &webVaultGRPCApi{
 		webVaultApi{
 			cfg:               config,

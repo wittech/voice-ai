@@ -16,8 +16,11 @@ import (
 
 type LinkedinConnect struct {
 	ExternalConnect
-	logger              commons.Logger
-	linkedinOauthConfig oauth2.Config
+	oauthCfg    *config.OAuth2Config
+	redirectURL string
+	scopes      []string
+	endpoint    oauth2.Endpoint
+	logger      commons.Logger
 }
 
 var (
@@ -28,34 +31,29 @@ var (
 	LINKEDIN_ACTION_SCOPE   = []string{"openid", "profile", "email"}
 )
 
-func NewLinkedinAuthenticationConnect(cfg *config.WebAppConfig, oauthCfg *config.OAuthConfig, logger commons.Logger, postgres connectors.PostgresConnector) LinkedinConnect {
+func NewLinkedinAuthenticationConnect(cfg *config.WebAppConfig, oauthCfg *config.OAuth2Config, logger commons.Logger, postgres connectors.PostgresConnector) LinkedinConnect {
 	return LinkedinConnect{
 		ExternalConnect: NewExternalConnect(cfg, logger, postgres),
-		linkedinOauthConfig: oauth2.Config{
-			RedirectURL:  fmt.Sprintf("%s%s", cfg.BaseUrl(), LINKEDIN_AUTHENTICATION_URL),
-			ClientID:     oauthCfg.LinkedinClientId,
-			ClientSecret: oauthCfg.LinkedinClientSecret,
-			Scopes:       LINKEDIN_AUTHENTICATION_SCOPE,
-			Endpoint: oauth2.Endpoint{
-				AuthURL:   "https://www.linkedin.com/oauth/v2/authorization",
-				TokenURL:  "https://www.linkedin.com/oauth/v2/accessToken",
-				AuthStyle: oauth2.AuthStyleInParams,
-			},
+		redirectURL:     fmt.Sprintf("%s%s", cfg.BaseUrl(), LINKEDIN_AUTHENTICATION_URL),
+		scopes:          LINKEDIN_AUTHENTICATION_SCOPE,
+		endpoint: oauth2.Endpoint{
+			AuthURL:   "https://www.linkedin.com/oauth/v2/authorization",
+			TokenURL:  "https://www.linkedin.com/oauth/v2/accessToken",
+			AuthStyle: oauth2.AuthStyleInParams,
 		},
-		logger: logger,
+		oauthCfg: oauthCfg,
+		logger:   logger,
 	}
 }
 
-func NewLinkedinActionConnect(cfg *config.WebAppConfig, oauthCfg *config.OAuthConfig, logger commons.Logger) LinkedinConnect {
+func NewLinkedinActionConnect(cfg *config.WebAppConfig, oauthCfg *config.OAuth2Config, logger commons.Logger, postgres connectors.PostgresConnector) LinkedinConnect {
 	return LinkedinConnect{
-		linkedinOauthConfig: oauth2.Config{
-			RedirectURL:  fmt.Sprintf("%s%s", cfg.BaseUrl(), LINKEDIN_ACTION_CONNECT),
-			ClientID:     oauthCfg.LinkedinClientId,
-			ClientSecret: oauthCfg.LinkedinClientSecret,
-			Scopes:       LINKEDIN_ACTION_SCOPE,
-			Endpoint:     linkedin.Endpoint,
-		},
-		logger: logger,
+		ExternalConnect: NewExternalConnect(cfg, logger, postgres),
+		redirectURL:     fmt.Sprintf("%s%s", cfg.BaseUrl(), LINKEDIN_ACTION_CONNECT),
+		scopes:          LINKEDIN_ACTION_SCOPE,
+		endpoint:        linkedin.Endpoint,
+		oauthCfg:        oauthCfg,
+		logger:          logger,
 	}
 }
 
@@ -64,32 +62,52 @@ func NewLinkedinActionConnect(cfg *config.WebAppConfig, oauthCfg *config.OAuthCo
 Linkedin oauth
 */
 
-func (wAuthApi *LinkedinConnect) AuthCodeURL(state string) string {
-	return wAuthApi.linkedinOauthConfig.AuthCodeURL(state)
+func (liConnect *LinkedinConnect) linkedinOauthConfig() (*oauth2.Config, error) {
+	return &oauth2.Config{
+		RedirectURL:  liConnect.redirectURL,
+		ClientID:     liConnect.oauthCfg.LinkedinClientId,
+		ClientSecret: liConnect.oauthCfg.LinkedinClientSecret,
+		Scopes:       liConnect.scopes,
+		Endpoint:     liConnect.endpoint,
+	}, nil
+
 }
 
-func (wAuthApi *LinkedinConnect) LinkedinUserInfo(c context.Context, state string, code string) (*OpenID, error) {
+func (liConnect *LinkedinConnect) AuthCodeURL(state string) (string, error) {
+	cfg, err := liConnect.linkedinOauthConfig()
+	if err != nil {
+		return "", err
+	}
+	return cfg.AuthCodeURL(state), nil
+}
+
+func (liConnect *LinkedinConnect) LinkedinUserInfo(c context.Context, state string, code string) (*OpenID, error) {
 	if state != "linkedin" {
-		wAuthApi.logger.Errorf("illegal oauth request as auth state is not matching %s %s", "linkedin", state)
+		liConnect.logger.Errorf("illegal oauth request as auth state is not matching %s %s", "linkedin", state)
 		return nil, fmt.Errorf("invalid oauth state")
 	}
 
-	token, err := wAuthApi.linkedinOauthConfig.Exchange(c, code)
+	cfg, err := liConnect.linkedinOauthConfig()
 	if err != nil {
-		wAuthApi.logger.Errorf("unable to exchange the token from linkedin %v", err)
+		return nil, fmt.Errorf("invalid oauth state")
+	}
+
+	token, err := cfg.Exchange(c, code)
+	if err != nil {
+		liConnect.logger.Errorf("unable to exchange the token from linkedin %v", err)
 		return nil, err
 	}
 
-	client := wAuthApi.linkedinOauthConfig.Client(c, token)
+	client := cfg.Client(c, token)
 	req, err := http.NewRequest("GET", "https://api.linkedin.com/v2/userinfo", nil)
 	if err != nil {
-		wAuthApi.logger.Errorf("error while creating request %v", err)
+		liConnect.logger.Errorf("error while creating request %v", err)
 		return nil, err
 	}
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token.AccessToken))
 	response, err := client.Do(req)
 	if err != nil {
-		wAuthApi.logger.Errorf("error while getting user from linkedin %v", err)
+		liConnect.logger.Errorf("error while getting user from linkedin %v", err)
 		return nil, err
 	}
 
@@ -98,7 +116,7 @@ func (wAuthApi *LinkedinConnect) LinkedinUserInfo(c context.Context, state strin
 	var content map[string]interface{}
 	err = json.NewDecoder(response.Body).Decode(&content)
 	if err != nil {
-		wAuthApi.logger.Errorf("unable to decode %v", err)
+		liConnect.logger.Errorf("unable to decode %v", err)
 		return nil, err
 	}
 	email, ok := content["email"].(string)

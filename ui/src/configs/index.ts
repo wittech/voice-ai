@@ -18,7 +18,6 @@ export interface WorkspaceConfig {
   };
   authentication: {
     signIn: {
-      enable: boolean;
       providers: Record<'password' | 'google' | 'linkedin' | 'github', boolean>;
     };
     signUp: {
