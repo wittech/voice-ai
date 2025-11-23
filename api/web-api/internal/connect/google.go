@@ -53,6 +53,7 @@ func NewGoogleAuthenticationConnect(cfg *config.WebAppConfig, oauthCfg *config.O
 		redirectUrl:     fmt.Sprintf("%s%s", cfg.BaseUrl(), GOOGLE_AUTHENTICATION_URL),
 		scope:           GOOGLE_AUTHENTICATION_SCOPE,
 		logger:          logger,
+		oauthCfg:        oauthCfg,
 	}
 }
 
@@ -62,6 +63,7 @@ func NewGoogleDriveConnect(cfg *config.WebAppConfig, oauthCfg *config.OAuth2Conf
 		redirectUrl:     fmt.Sprintf("%s%s", cfg.BaseUrl(), GOOGLE_DRIVE_CONNECT_URL),
 		scope:           GOOGLE_DRIVE_SCOPE,
 		logger:          logger,
+		oauthCfg:        oauthCfg,
 	}
 }
 
@@ -71,6 +73,7 @@ func NewGmailConnect(cfg *config.WebAppConfig, oauthCfg *config.OAuth2Config, lo
 		redirectUrl:     fmt.Sprintf("%s%s", cfg.BaseUrl(), GOOGLE_GMAIL_CONNECT_URL),
 		scope:           GOOGLE_GMAIL_SCOPE,
 		logger:          logger,
+		oauthCfg:        oauthCfg,
 	}
 }
 

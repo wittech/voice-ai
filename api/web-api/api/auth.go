@@ -814,12 +814,10 @@ func (wAuthApi *webAuthRPCApi) Linkedin(c *gin.Context) {
 }
 func (wAuthApi *webAuthGRPCApi) Linkedin(c context.Context, irRequest *protos.SocialAuthenticationRequest) (*protos.AuthenticateResponse, error) {
 	inf, err := wAuthApi.linkedinConnect.LinkedinUserInfo(c, irRequest.State, irRequest.Code)
-	wAuthApi.logger.Debugf("linkedin authenticator respose %v", inf)
 	if err != nil {
-		wAuthApi.logger.Errorf("google authentication response %v", err)
+		wAuthApi.logger.Errorf("linkedin authentication response %v", err)
 		return nil, err
 	}
-
 	return wAuthApi.RegisterSocialUser(c, inf)
 }
 
