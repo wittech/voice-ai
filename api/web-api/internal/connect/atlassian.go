@@ -38,7 +38,7 @@ var (
 	JIRA_CONNECT_URL = "/connect-common/atlassian"
 )
 
-func NewConfluenceConnect(cfg *config.WebAppConfig, oauthCfg *config.OAuthConfig, logger commons.Logger, postgres connectors.PostgresConnector) AtlassianConnect {
+func NewConfluenceConnect(cfg *config.WebAppConfig, oauthCfg *config.OAuth2Config, logger commons.Logger, postgres connectors.PostgresConnector) AtlassianConnect {
 	return AtlassianConnect{
 		ExternalConnect: NewExternalConnect(cfg, logger, postgres),
 		atlassianOauthConfig: oauth2.Config{
@@ -55,7 +55,7 @@ func NewConfluenceConnect(cfg *config.WebAppConfig, oauthCfg *config.OAuthConfig
 	}
 }
 
-func NewJiraConnect(cfg *config.WebAppConfig, oauthCfg *config.OAuthConfig, logger commons.Logger, postgres connectors.PostgresConnector) AtlassianConnect {
+func NewJiraConnect(cfg *config.WebAppConfig, oauthCfg *config.OAuth2Config, logger commons.Logger, postgres connectors.PostgresConnector) AtlassianConnect {
 	return AtlassianConnect{
 		ExternalConnect: NewExternalConnect(cfg, logger, postgres),
 		atlassianOauthConfig: oauth2.Config{
@@ -74,8 +74,8 @@ func NewJiraConnect(cfg *config.WebAppConfig, oauthCfg *config.OAuthConfig, logg
 
 // https://auth.atlassian.com/authorize?audience=api.atlassian.com&client_id=Et8qcoSIpSs1h1MMoRgU0rgbU9vftbCo&scope=write%3Aconfluence-content%20write%3Aconfluence-file%20readonly%3Acontent.attachment%3Aconfluence%20write%3Aconfluence-groups%20search%3Aconfluence%20read%3Aconfluence-content.summary%20read%3Aconfluence-content.all&redirect_uri=https%3A%2F%2Frapida.ai%2Fconnect%2Fatlassian&state=${YOUR_USER_BOUND_VALUE}&response_type=code&prompt=consent
 
-func (atlassianConnect *AtlassianConnect) AuthCodeURL(state string) string {
-	return atlassianConnect.atlassianOauthConfig.AuthCodeURL(state, oauth2.AccessTypeOffline)
+func (atlassianConnect *AtlassianConnect) AuthCodeURL(state string) (string, error) {
+	return atlassianConnect.atlassianOauthConfig.AuthCodeURL(state, oauth2.AccessTypeOffline), nil
 }
 
 type AtlassianTokenResponse struct {

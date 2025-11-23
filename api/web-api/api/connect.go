@@ -132,7 +132,7 @@ func (wConnectApi *webConnectGRPCApi) GeneralConnect(ctx context.Context, kcr *p
 	}, nil
 }
 
-func NewConnectRPC(config *config.WebAppConfig, oauthCfg *config.OAuthConfig, logger commons.Logger, postgres connectors.PostgresConnector) *webConnectRPCApi {
+func NewConnectRPC(config *config.WebAppConfig, oauthCfg *config.OAuth2Config, logger commons.Logger, postgres connectors.PostgresConnector) *webConnectRPCApi {
 	return &webConnectRPCApi{
 		webConnectApi{
 			cfg:                config,
@@ -159,13 +159,15 @@ func NewConnectRPC(config *config.WebAppConfig, oauthCfg *config.OAuthConfig, lo
 }
 
 func NewConnectGRPC(config *config.WebAppConfig,
-	oauthCfg *config.OAuthConfig,
+	oauthCfg *config.OAuth2Config,
 	logger commons.Logger, postgres connectors.PostgresConnector) protos.ConnectServiceServer {
 	return &webConnectGRPCApi{
 		webConnectApi{
-			cfg:                config,
-			logger:             logger,
-			postgres:           postgres,
+			cfg:          config,
+			logger:       logger,
+			postgres:     postgres,
+			vaultService: internal_vault_service.NewVaultService(logger, postgres),
+
 			githubCodeConnect:  internal_connects.NewGithubCodeConnect(config, oauthCfg, logger, postgres),
 			gitlabCodeConnect:  internal_connects.NewGitlabCodeConnect(config, oauthCfg, logger, postgres),
 			googleDriveConnect: internal_connects.NewGoogleDriveConnect(config, oauthCfg, logger, postgres),
@@ -176,12 +178,10 @@ func NewConnectGRPC(config *config.WebAppConfig,
 			microsoftSharepointConnect: internal_connects.NewMicrosoftSharepointConnect(config, oauthCfg, logger, postgres),
 			microsoftOnedriveConnect:   internal_connects.NewMicrosoftOnedriveConnect(config, oauthCfg, logger, postgres),
 			//
-			vaultService: internal_vault_service.NewVaultService(logger, postgres),
 
-			slackConnect: internal_connects.NewSlackActionConnect(config, oauthCfg, logger, postgres),
-			jiraConnect:  internal_connects.NewJiraConnect(config, oauthCfg, logger, postgres),
-			gmailConnect: internal_connects.NewGmailConnect(config, oauthCfg, logger, postgres),
-
+			slackConnect:   internal_connects.NewSlackActionConnect(config, oauthCfg, logger, postgres),
+			jiraConnect:    internal_connects.NewJiraConnect(config, oauthCfg, logger, postgres),
+			gmailConnect:   internal_connects.NewGmailConnect(config, oauthCfg, logger, postgres),
 			hubspotConnect: internal_connects.NewHubspotConnect(config, oauthCfg, logger, postgres),
 		},
 	}
@@ -237,12 +237,16 @@ func (connectApi *webConnectRPCApi) buildConnectParameter(c *gin.Context, provid
 
 }
 func (connectApi *webConnectRPCApi) ConfluenceConnect(c *gin.Context) {
-
 	state, err := connectApi.buildConnectParameter(c, KN_CONFLUENCE)
 	if err != nil {
+		c.Error(errors.New("ConfluenceConnect oauth2 illegal state"))
 		return
 	}
-	url := connectApi.confluenceConnect.AuthCodeURL(state)
+	url, err := connectApi.confluenceConnect.AuthCodeURL(state)
+	if err != nil {
+		c.Error(errors.New("ConfluenceConnect oauth2 is not enabled"))
+		return
+	}
 	connectApi.logger.Debugf("url generated for confluence connect %v", url)
 	c.Redirect(http.StatusTemporaryRedirect, url)
 	return
@@ -251,9 +255,14 @@ func (connectApi *webConnectRPCApi) ConfluenceConnect(c *gin.Context) {
 func (connectApi *webConnectRPCApi) GoogleDriveConnect(c *gin.Context) {
 	state, err := connectApi.buildConnectParameter(c, KN_GOOGLE_DRIVE)
 	if err != nil {
+		c.Error(errors.New("GoogleDriveConnect oauth2 illgal state"))
 		return
 	}
-	url := connectApi.googleDriveConnect.AuthCodeURL(state)
+	url, err := connectApi.googleDriveConnect.AuthCodeURL(state)
+	if err != nil {
+		c.Error(errors.New("GoogleDriveConnect oauth2 is not enabled"))
+		return
+	}
 	connectApi.logger.Debugf("url generated for confluence connect %v", url)
 	c.Redirect(http.StatusTemporaryRedirect, url)
 	return
@@ -262,9 +271,14 @@ func (connectApi *webConnectRPCApi) GoogleDriveConnect(c *gin.Context) {
 func (connectApi *webConnectRPCApi) GithubCodeConnect(c *gin.Context) {
 	state, err := connectApi.buildConnectParameter(c, KN_GITHUB_CODE)
 	if err != nil {
+		c.Error(errors.New("GithubCodeConnect oauth2 illgal state"))
 		return
 	}
-	url := connectApi.githubCodeConnect.AuthCodeURL(state)
+	url, err := connectApi.githubCodeConnect.AuthCodeURL(state)
+	if err != nil {
+		c.Error(errors.New("GithubCodeConnect oauth2 is not enabled"))
+		return
+	}
 	connectApi.logger.Debugf("url generated for github connect %v", url)
 	c.Redirect(http.StatusTemporaryRedirect, url)
 	return
@@ -273,6 +287,7 @@ func (connectApi *webConnectRPCApi) GithubCodeConnect(c *gin.Context) {
 func (connectApi *webConnectRPCApi) GitlabCodeConnect(c *gin.Context) {
 	state, err := connectApi.buildConnectParameter(c, KN_GITLAB_CODE)
 	if err != nil {
+		c.Error(errors.New("GitlabCodeConnect oauth2 illgal state"))
 		return
 	}
 	url := connectApi.gitlabCodeConnect.AuthCodeURL(state)
@@ -284,6 +299,7 @@ func (connectApi *webConnectRPCApi) GitlabCodeConnect(c *gin.Context) {
 func (connectApi *webConnectRPCApi) MicrosoftSharepointConnect(c *gin.Context) {
 	state, err := connectApi.buildConnectParameter(c, KN_SHARE_POINT)
 	if err != nil {
+		c.Error(errors.New("MicrosoftSharepointConnect oauth2 illgal state"))
 		return
 	}
 	url := connectApi.microsoftSharepointConnect.AuthCodeURL(state)
@@ -295,6 +311,7 @@ func (connectApi *webConnectRPCApi) MicrosoftSharepointConnect(c *gin.Context) {
 func (connectApi *webConnectRPCApi) MicrosoftOnedriveConnect(c *gin.Context) {
 	state, err := connectApi.buildConnectParameter(c, KN_ONE_DRIVE)
 	if err != nil {
+		c.Error(errors.New("MicrosoftOnedriveConnect oauth2 illgal state"))
 		return
 	}
 	url := connectApi.microsoftOnedriveConnect.AuthCodeURL(state)
@@ -306,6 +323,7 @@ func (connectApi *webConnectRPCApi) MicrosoftOnedriveConnect(c *gin.Context) {
 func (connectApi *webConnectRPCApi) NotionConnect(c *gin.Context) {
 	state, err := connectApi.buildConnectParameter(c, KN_NOTION)
 	if err != nil {
+		c.Error(errors.New("NotionConnect oauth2 illgal state"))
 		return
 	}
 	url := connectApi.notionConnect.AuthCodeURL(state)
@@ -318,9 +336,10 @@ func (connectApi *webConnectRPCApi) NotionConnect(c *gin.Context) {
 func (connectApi *webConnectRPCApi) JiraActionConnect(c *gin.Context) {
 	state, err := connectApi.buildConnectParameter(c, AN_JIRA)
 	if err != nil {
+		c.Error(errors.New("JiraActionConnect oauth2 illgal state"))
 		return
 	}
-	url := connectApi.jiraConnect.AuthCodeURL(state)
+	url, err := connectApi.jiraConnect.AuthCodeURL(state)
 	connectApi.logger.Debugf("url generated for confluence connect %v", url)
 	c.Redirect(http.StatusTemporaryRedirect, url)
 	return
@@ -329,9 +348,14 @@ func (connectApi *webConnectRPCApi) JiraActionConnect(c *gin.Context) {
 func (connectApi *webConnectRPCApi) GmailActionConnect(c *gin.Context) {
 	state, err := connectApi.buildConnectParameter(c, AN_GOOGLE_GMAIL)
 	if err != nil {
+		c.Error(errors.New("GmailActionConnect oauth2 illgal state"))
 		return
 	}
-	url := connectApi.gmailConnect.AuthCodeURL(state)
+	url, err := connectApi.gmailConnect.AuthCodeURL(state)
+	if err != nil {
+		c.Error(errors.New("gmail oauth2 is not enabled"))
+		return
+	}
 	connectApi.logger.Debugf("url generated for confluence connect %v", url)
 	c.Redirect(http.StatusTemporaryRedirect, url)
 	return
@@ -340,6 +364,7 @@ func (connectApi *webConnectRPCApi) GmailActionConnect(c *gin.Context) {
 func (connectApi *webConnectRPCApi) HubspotCRMConnect(c *gin.Context) {
 	state, err := connectApi.buildConnectParameter(c, CRM_HUBSPOT)
 	if err != nil {
+		c.Error(errors.New("HubspotCRMConnect oauth2 illgal state"))
 		return
 	}
 	url := connectApi.hubspotConnect.AuthCodeURL(state)
@@ -351,6 +376,7 @@ func (connectApi *webConnectRPCApi) HubspotCRMConnect(c *gin.Context) {
 func (connectApi *webConnectRPCApi) SlackActionConnect(c *gin.Context) {
 	state, err := connectApi.buildConnectParameter(c, AN_SLACK)
 	if err != nil {
+		c.Error(errors.New("SlackActionConnect oauth2 illgal state"))
 		return
 	}
 	url := connectApi.slackConnect.AuthCodeURL(state)

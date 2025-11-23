@@ -7,13 +7,13 @@ export function SocialButtonGroup(props: {
   password: boolean;
 }) {
   const linkedinClick = () => {
-    window.location.replace(CONFIG.connection.web + '/oauth/linkedin');
+    window.location.assign(CONFIG.connection.web + '/oauth/linkedin');
   };
   const googleClick = () => {
-    window.location.replace(CONFIG.connection.web + '/oauth/google');
+    window.location.assign(CONFIG.connection.web + '/oauth/google');
   };
   const githubClick = () => {
-    window.location.replace(CONFIG.connection.web + '/oauth/github');
+    window.location.assign(CONFIG.connection.web + '/oauth/github');
   };
 
   return (
@@ -97,7 +97,7 @@ function SocialButton(props: {
   return (
     <button
       className={cn(
-        'flex flex-row items-center w-full space-x-3 px-4 h-10 ring-1 ring-gray-900/10 hover:ring-gray-300 focus:outline-hidden focus:ring-2 focus:ring-blue-500 shadow-xs  dark:bg-gray-800 dark:ring-0 dark:text-gray-300 dark:highlight-white/5 dark:hover:bg-gray-700 dark:hover:text-gray-300 scale-100 hover:scale-105 ease-in duration-200',
+        'flex cursor-pointer flex-row items-center w-full space-x-3 px-4 h-10 ring-1 ring-gray-900/10 hover:ring-gray-300 focus:outline-hidden focus:ring-2 focus:ring-blue-500 shadow-xs  dark:bg-gray-800 dark:ring-0 dark:text-gray-300 dark:highlight-white/5 dark:hover:bg-gray-700 dark:hover:text-gray-300 scale-100 hover:scale-105 ease-in duration-200',
       )}
       onClick={props.onClick}
     >

@@ -904,3 +904,31 @@ ALTER TABLE assistant_phone_deployments  DROP COLUMN telephony_provider_id;
 ALTER TABLE assistant_phone_deployments DROP COLUMN name;
 
 ALTER TABLE public.assistant_deployment_audios  DROP COLUMN audio_provider_id;
+
+ALTER TABLE assistant_phone_deployments
+ALTER COLUMN mistake DROP NOT NULL;
+
+ALTER TABLE assistant_phone_deployments
+ALTER COLUMN greeting DROP NOT NULL;
+
+ALTER TABLE assistant_whatsapp_deployments
+ALTER COLUMN mistake DROP NOT NULL;
+
+ALTER TABLE assistant_whatsapp_deployments
+ALTER COLUMN greeting DROP NOT NULL;
+
+
+ALTER TABLE assistant_api_deployments
+ALTER COLUMN mistake DROP NOT NULL;
+
+ALTER TABLE assistant_api_deployments
+ALTER COLUMN greeting DROP NOT NULL;
+
+
+ALTER TABLE assistant_debugger_deployments
+ALTER COLUMN mistake DROP NOT NULL;
+
+ALTER TABLE assistant_debugger_deployments
+ALTER COLUMN greeting DROP NOT NULL;
+
+

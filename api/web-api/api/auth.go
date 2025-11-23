@@ -53,7 +53,7 @@ var (
 	GOOGLE_STATE = "google"
 )
 
-func NewAuthRPC(config *config.WebAppConfig, oauthCfg *config.OAuthConfig, logger commons.Logger, postgres connectors.PostgresConnector) *webAuthRPCApi {
+func NewAuthRPC(config *config.WebAppConfig, oauthCfg *config.OAuth2Config, logger commons.Logger, postgres connectors.PostgresConnector) *webAuthRPCApi {
 	return &webAuthRPCApi{
 		webAuthApi{
 			cfg:             config,
@@ -68,7 +68,7 @@ func NewAuthRPC(config *config.WebAppConfig, oauthCfg *config.OAuthConfig, logge
 	}
 }
 
-func NewAuthGRPC(config *config.WebAppConfig, oauthCfg *config.OAuthConfig, logger commons.Logger, postgres connectors.PostgresConnector) protos.AuthenticationServiceServer {
+func NewAuthGRPC(config *config.WebAppConfig, oauthCfg *config.OAuth2Config, logger commons.Logger, postgres connectors.PostgresConnector) protos.AuthenticationServiceServer {
 	return &webAuthGRPCApi{
 		webAuthApi{
 			cfg:                 config,
@@ -782,7 +782,11 @@ Github
 */
 
 func (wAuthApi *webAuthRPCApi) Github(c *gin.Context) {
-	url := wAuthApi.githubConnect.AuthCodeURL("github")
+	url, err := wAuthApi.githubConnect.AuthCodeURL("github")
+	if err != nil {
+		c.Error(errors.New("github oauth2 is not enabled"))
+		return
+	}
 	wAuthApi.logger.Debugf("url generated %v", url)
 	c.Redirect(http.StatusTemporaryRedirect, url)
 	return
@@ -799,7 +803,11 @@ func (wAuthApi *webAuthGRPCApi) Github(c context.Context, irRequest *protos.Soci
 }
 
 func (wAuthApi *webAuthRPCApi) Linkedin(c *gin.Context) {
-	url := wAuthApi.linkedinConnect.AuthCodeURL("linkedin")
+	url, err := wAuthApi.linkedinConnect.AuthCodeURL("linkedin")
+	if err != nil {
+		c.Error(errors.New("linkedin oauth2 is not enabled"))
+		return
+	}
 	wAuthApi.logger.Debugf("generated redirect url for linkedin %v", url)
 	c.Redirect(http.StatusTemporaryRedirect, url)
 	return
@@ -817,7 +825,11 @@ func (wAuthApi *webAuthGRPCApi) Linkedin(c context.Context, irRequest *protos.So
 
 // Google
 func (wAuthApi *webAuthRPCApi) Google(c *gin.Context) {
-	url := wAuthApi.googleConnect.AuthCodeURL(GOOGLE_STATE)
+	url, err := wAuthApi.googleConnect.AuthCodeURL(GOOGLE_STATE)
+	if err != nil {
+		c.Error(errors.New("google oauth2 is not enabled"))
+		return
+	}
 	c.Redirect(http.StatusTemporaryRedirect, url)
 	return
 }

@@ -2,7 +2,10 @@ import { useCallback, useContext, useEffect, useState } from 'react';
 import { FormActionHeading } from '@/app/components/heading/action-heading/form-action-heading';
 import { Helmet } from '@/app/components/helmet';
 import { SocialButtonGroup } from '@/app/components/form/button-group/SocialButtonGroup';
-import { IBlueBGArrowButton } from '@/app/components/form/button';
+import {
+  IBlueBGArrowButton,
+  IBlueBGButton,
+} from '@/app/components/form/button';
 import { Input } from '@/app/components/form/input';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { RegisterUser } from '@rapidaai/react';
@@ -17,6 +20,9 @@ import { FieldSet } from '@/app/components/form/fieldset';
 import { FormLabel } from '@/app/components/form-label';
 import { useWorkspace } from '@/workspace';
 import { connectionConfig } from '@/configs';
+import { ErrorContainer } from '@/app/components/error-container';
+import { useGlobalNavigation } from '@/hooks/use-global-navigator';
+import { ChevronLeft } from 'lucide-react';
 
 /**
  * External state get passed
@@ -33,6 +39,7 @@ export function SignUpPage() {
   const { setAuthentication } = useContext(AuthContext);
   const location = useLocation();
   const locationState = location?.state as CustomizedState;
+  const navigator = useGlobalNavigation();
   /**
    * loading context
    */
@@ -99,6 +106,32 @@ export function SignUpPage() {
   /**
    * element
    */
+
+  if (!workspace.authentication.signUp.enable) {
+    return (
+      <div className="flex flex-1">
+        <div className="max-w-md">
+          <div className="text-5xl font-dark font-semibold">403</div>
+          <p className="text-3xl md:text-3xl leading-normal mt-4">
+            Sign-up not enabled
+          </p>
+          <p className="mb-8 mt-2 text-muted">
+            Sign-up is currently disabled for this workspace. Please contact
+            your administrator for assistance.
+          </p>
+
+          <IBlueBGArrowButton
+            className="w-full justify-between h-11"
+            onClick={() => {
+              navigator.goTo('/');
+            }}
+          >
+            Go to signin
+          </IBlueBGArrowButton>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>

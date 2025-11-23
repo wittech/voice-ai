@@ -637,9 +637,6 @@
   .mx-auto {
     margin-inline: auto;
   }
-  .-my-6 {
-    margin-block: calc(var(--spacing) * -6);
-  }
   .my-0 {
     margin-block: calc(var(--spacing) * 0);
   }

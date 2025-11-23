@@ -19,8 +19,10 @@ import (
 
 type GoogleConnect struct {
 	ExternalConnect
-	logger            commons.Logger
-	googleOauthConfig oauth2.Config
+	logger      commons.Logger
+	oauthCfg    *config.OAuth2Config
+	scope       []string
+	redirectUrl string
 }
 
 var (
@@ -45,46 +47,44 @@ var (
 	GOOGLE_GMAIL_CONNECT_URL = "/connect-action/gmail"
 )
 
-func NewGoogleAuthenticationConnect(cfg *config.WebAppConfig, oauthCfg *config.OAuthConfig, logger commons.Logger, postgres connectors.PostgresConnector) GoogleConnect {
+func NewGoogleAuthenticationConnect(cfg *config.WebAppConfig, oauthCfg *config.OAuth2Config, logger commons.Logger, postgres connectors.PostgresConnector) GoogleConnect {
 	return GoogleConnect{
 		ExternalConnect: NewExternalConnect(cfg, logger, postgres),
-		googleOauthConfig: oauth2.Config{
-			RedirectURL:  fmt.Sprintf("%s%s", cfg.BaseUrl(), GOOGLE_AUTHENTICATION_URL),
-			ClientID:     oauthCfg.GoogleClientId,
-			ClientSecret: oauthCfg.GoogleClientSecret,
-			Scopes:       GOOGLE_AUTHENTICATION_SCOPE,
-			Endpoint:     google.Endpoint,
-		},
-		logger: logger,
+		redirectUrl:     fmt.Sprintf("%s%s", cfg.BaseUrl(), GOOGLE_AUTHENTICATION_URL),
+		scope:           GOOGLE_AUTHENTICATION_SCOPE,
+		logger:          logger,
 	}
 }
 
-func NewGoogleDriveConnect(cfg *config.WebAppConfig, oauthCfg *config.OAuthConfig, logger commons.Logger, postgres connectors.PostgresConnector) GoogleConnect {
+func NewGoogleDriveConnect(cfg *config.WebAppConfig, oauthCfg *config.OAuth2Config, logger commons.Logger, postgres connectors.PostgresConnector) GoogleConnect {
 	return GoogleConnect{
 		ExternalConnect: NewExternalConnect(cfg, logger, postgres),
-		googleOauthConfig: oauth2.Config{
-			RedirectURL:  fmt.Sprintf("%s%s", cfg.BaseUrl(), GOOGLE_DRIVE_CONNECT_URL),
-			ClientID:     oauthCfg.GoogleClientId,
-			ClientSecret: oauthCfg.GoogleClientSecret,
-			Scopes:       GOOGLE_DRIVE_SCOPE,
-			Endpoint:     google.Endpoint,
-		},
-		logger: logger,
+		redirectUrl:     fmt.Sprintf("%s%s", cfg.BaseUrl(), GOOGLE_DRIVE_CONNECT_URL),
+		scope:           GOOGLE_DRIVE_SCOPE,
+		logger:          logger,
 	}
 }
 
-func NewGmailConnect(cfg *config.WebAppConfig, oauthCfg *config.OAuthConfig, logger commons.Logger, postgres connectors.PostgresConnector) GoogleConnect {
+func NewGmailConnect(cfg *config.WebAppConfig, oauthCfg *config.OAuth2Config, logger commons.Logger, postgres connectors.PostgresConnector) GoogleConnect {
 	return GoogleConnect{
 		ExternalConnect: NewExternalConnect(cfg, logger, postgres),
-		googleOauthConfig: oauth2.Config{
-			RedirectURL:  fmt.Sprintf("%s%s", cfg.BaseUrl(), GOOGLE_GMAIL_CONNECT_URL),
-			ClientID:     oauthCfg.GoogleClientId,
-			ClientSecret: oauthCfg.GoogleClientSecret,
-			Scopes:       GOOGLE_GMAIL_SCOPE,
-			Endpoint:     google.Endpoint,
-		},
-		logger: logger,
+		redirectUrl:     fmt.Sprintf("%s%s", cfg.BaseUrl(), GOOGLE_GMAIL_CONNECT_URL),
+		scope:           GOOGLE_GMAIL_SCOPE,
+		logger:          logger,
 	}
+}
+
+func (gConnect *GoogleConnect) googleOauthConfig() (*oauth2.Config, error) {
+	if gConnect.oauthCfg != nil {
+		return &oauth2.Config{
+			RedirectURL:  gConnect.redirectUrl,
+			ClientID:     gConnect.oauthCfg.GoogleClientId,
+			ClientSecret: gConnect.oauthCfg.GoogleClientSecret,
+			Scopes:       gConnect.scope,
+			Endpoint:     google.Endpoint,
+		}, nil
+	}
+	return nil, fmt.Errorf("oauth2-github is not enabled")
 }
 
 /*
@@ -121,24 +121,32 @@ func (gtr *GoogleTokenResponse) Map() map[string]interface{} {
 }
 
 // "google"
-func (wAuthApi *GoogleConnect) AuthCodeURL(state string) string {
-	return wAuthApi.googleOauthConfig.AuthCodeURL(state)
+func (gConnect *GoogleConnect) AuthCodeURL(state string) (string, error) {
+	cfg, err := gConnect.googleOauthConfig()
+	if err != nil {
+		return "", err
+	}
+	return cfg.AuthCodeURL(state), nil
 }
 
-func (wAuthApi *GoogleConnect) Token(c context.Context, code string) (ExternalConnectToken, error) {
-	tokenEndpoint := wAuthApi.googleOauthConfig.Endpoint.TokenURL
+func (gConnect *GoogleConnect) Token(c context.Context, code string) (ExternalConnectToken, error) {
+	cfg, err := gConnect.googleOauthConfig()
+	if err != nil {
+		return nil, fmt.Errorf("oauth2-github is not enabled")
+	}
+	tokenEndpoint := cfg.Endpoint.TokenURL
 
 	// Prepare the data for the request
 	data := map[string]string{
 		"code":          code,
-		"client_id":     wAuthApi.googleOauthConfig.ClientID,
-		"client_secret": wAuthApi.googleOauthConfig.ClientSecret,
-		"redirect_uri":  wAuthApi.googleOauthConfig.RedirectURL,
+		"client_id":     cfg.ClientID,
+		"client_secret": cfg.ClientSecret,
+		"redirect_uri":  cfg.RedirectURL,
 		"grant_type":    "authorization_code",
 	}
 
 	// Make the request
-	resp, err := wAuthApi.NewHttpClient().R().
+	resp, err := gConnect.NewHttpClient().R().
 		SetContext(c).
 		SetHeader("Content-Type", "application/x-www-form-urlencoded").
 		SetFormData(data).
@@ -159,16 +167,16 @@ func (wAuthApi *GoogleConnect) Token(c context.Context, code string) (ExternalCo
 	}
 	return &tokenResponse, nil
 }
-func (wAuthApi *GoogleConnect) GoogleUserInfo(c context.Context, code string) (*OpenID, error) {
-	externalToken, err := wAuthApi.Token(c, code)
+func (gConnect *GoogleConnect) GoogleUserInfo(c context.Context, code string) (*OpenID, error) {
+	externalToken, err := gConnect.Token(c, code)
 	if err != nil {
-		wAuthApi.logger.Errorf("google authentication exchange failed %v", err)
+		gConnect.logger.Errorf("google authentication exchange failed %v", err)
 		return nil, fmt.Errorf("code exchange failed: %s", err.Error())
 	}
 	token := externalToken.Token()
 	response, err := http.Get("https://www.googleapis.com/oauth2/v2/userinfo?access_token=" + token.AccessToken)
 	if err != nil {
-		wAuthApi.logger.Errorf("unable to get userinfo using the access token %v", err)
+		gConnect.logger.Errorf("unable to get userinfo using the access token %v", err)
 		return nil, fmt.Errorf("failed getting user info: %s", err.Error())
 	}
 	defer response.Body.Close()
@@ -178,7 +186,7 @@ func (wAuthApi *GoogleConnect) GoogleUserInfo(c context.Context, code string) (*
 	content.Source = "google"
 	content.Token = token.AccessToken
 	if err != nil {
-		wAuthApi.logger.Errorf("unable to decode the response body of the user info %v", err)
+		gConnect.logger.Errorf("unable to decode the response body of the user info %v", err)
 		return nil, fmt.Errorf("failed reading response body: %s", err.Error())
 	}
 	return &content, nil
@@ -197,14 +205,18 @@ type GoogleDriveFiles struct {
 }
 
 // "google"
-func (wAuthApi *GoogleConnect) GoogleDriveFiles(ctx context.Context,
+func (gConnect *GoogleConnect) GoogleDriveFiles(ctx context.Context,
 	token *oauth2.Token,
 	q *string,
 	pageToken *string) (*GoogleDriveFiles, error) {
-	driveClient := wAuthApi.googleOauthConfig.Client(ctx, token)
+	cfg, err := gConnect.googleOauthConfig()
+	if err != nil {
+		return nil, err
+	}
+	driveClient := cfg.Client(ctx, token)
 	googleDrive, err := drive.NewService(ctx, option.WithHTTPClient(driveClient))
 	if err != nil {
-		wAuthApi.logger.Errorf("google connect with drive files %+v", err)
+		gConnect.logger.Errorf("google connect with drive files %+v", err)
 		return nil, err
 	}
 
@@ -222,7 +234,7 @@ func (wAuthApi *GoogleConnect) GoogleDriveFiles(ctx context.Context,
 
 	fls, err := driveRequest.Do()
 	if err != nil {
-		wAuthApi.logger.Errorf("google connect with drive files %+v", err)
+		gConnect.logger.Errorf("google connect with drive files %+v", err)
 		return nil, err
 	}
 
@@ -231,7 +243,7 @@ func (wAuthApi *GoogleConnect) GoogleDriveFiles(ctx context.Context,
 		gdf.Items = append(gdf.Items, &GoogleFile{
 			Id:       fl.Id,
 			Title:    fl.Title,
-			Folder:   wAuthApi.GetFolderName(googleDrive, fl.Parents),
+			Folder:   gConnect.GetFolderName(googleDrive, fl.Parents),
 			FileSize: fl.FileSize,
 			MimeType: fl.MimeType,
 		})
@@ -240,7 +252,7 @@ func (wAuthApi *GoogleConnect) GoogleDriveFiles(ctx context.Context,
 	return &gdf, nil
 }
 
-func (wAuthApi *GoogleConnect) GetFolderName(srv *drive.Service, parents []*drive.ParentReference) string {
+func (gConnect *GoogleConnect) GetFolderName(srv *drive.Service, parents []*drive.ParentReference) string {
 	if len(parents) == 0 {
 		return "Root"
 	}
