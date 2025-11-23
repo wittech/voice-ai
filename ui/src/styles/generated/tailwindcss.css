@@ -2103,6 +2103,9 @@
   .min-h-\[45vw\] {
     min-height: 45vw;
   }
+  .min-h-\[100dvh\] {
+    min-height: 100dvh;
+  }
   .min-h-\[200px\] {
     min-height: 200px;
   }
