@@ -33,12 +33,6 @@ internal_service:
 storage:
   storage_type: "local"
   storage_path_prefix: "/opt/apps/assets"
-  # storage_type: "s3"
-  # storage_path_prefix: "development-assets-01"
-  # auth:
-  #   region: "ap-south-1"
-  #   access_key_id: "AKIAWFZCROPHVZP62OX6"
-  #   secret_access_key: "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"
 
 knowledge_extractor_config:
   chunking_technique:
