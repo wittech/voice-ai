@@ -14915,7 +14915,7 @@ range-parser@^1.2.1, range-parser@~1.2.1:
   resolved "https://registry.yarnpkg.com/range-parser/-/range-parser-1.2.1.tgz#3cf37023d199e1c24d1a55b84800c2f3e6468031"
   integrity sha512-Hrgsx+orqoygnmhFbKaHE6c296J+HTAQXoxEF6gNupROmmGJRoyzfG3ccAveqCBrwr/2yxQ5BVd/GTl5agOwSg==
 
-rapida-react@^1.1.22:
+rapida-react@1.1.25, rapida-react@^1.1.22:
   version "1.1.25"
   resolved "https://registry.yarnpkg.com/rapida-react/-/rapida-react-1.1.25.tgz#a564107780466919b2ee7a8f93d407868e3d12d0"
   integrity sha512-4k7dT0yF3MLmwJrZj5MgIPi3j2cw8P9AkVE1HUU6SSobJd8iKky0wrJf+NyLS04Tj0Lkkk1xTG76JVVcLPUiPw==

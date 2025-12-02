@@ -1,4 +1,4 @@
-import { useCredential } from '@/hooks';
+import { useCredential } from '@/hooks/use-credential';
 import {
   AssistantConversation,
   AssistantConversationMessage,

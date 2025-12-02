@@ -12,7 +12,8 @@ import { ModalFooter } from '@/app/components/base/modal/modal-footer';
 import { ManualFile } from '@/app/pages/knowledge-base/action/components/datasource-uploader/manual-file';
 import { KnowledgeDocument } from '@rapidaai/react';
 import { useCreateKnowledgeDocumentPageStore } from '@/hooks/use-create-knowledge-document-page-store';
-import { useCredential, useRapidaStore } from '@/hooks';
+import { useCredential } from '@/hooks/use-credential';
+import { useRapidaStore } from '@/hooks/use-rapida-store';
 
 interface CreateKnowledgeDocumentDialogProps extends ModalProps {
   knowledgeId: string;

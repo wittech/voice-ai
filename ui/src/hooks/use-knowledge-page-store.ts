@@ -10,7 +10,6 @@ import { create } from 'zustand';
 import { Knowledge } from '@rapidaai/react';
 import { ServiceError } from '@rapidaai/react';
 import { connectionConfig } from '@/configs';
-
 /**
  *
  */

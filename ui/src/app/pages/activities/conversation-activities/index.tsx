@@ -1,6 +1,7 @@
 import { FC, useEffect, useState } from 'react';
 import { ScrollableResizableTable } from '@/app/components/data-table';
-import { useCredential, useRapidaStore } from '@/hooks';
+import { useCredential } from '@/hooks/use-credential';
+import { useRapidaStore } from '@/hooks/use-rapida-store';
 import toast from 'react-hot-toast/headless';
 import { BluredWrapper } from '@/app/components/wrapper/blured-wrapper';
 import { SearchIconInput } from '@/app/components/form/input/IconInput';
