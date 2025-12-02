@@ -5,14 +5,14 @@
     "author": "Prashant Srivastav<prashant@rapida.ai>",
     "repository": {
         "type": "git",
-        "url": "https://github.com/rapidaai/web-api.git"
+        "url": "https://github.com/rapidaai/voice-ai.git"
     },
     "license": "MIT",
     "engines": {
         "node": ">=14.x"
     },
     "bugs": {
-        "url": "https://github.com/rapidaai/web-api/issues"
+        "url": "https://github.com/rapidaai/voice-ai/issues"
     },
     "mac": {
         "icon": "public/favicon_io/original-icon.png"
@@ -124,6 +124,7 @@
         "protoc-gen-js": "3.21.4",
         "protoc-gen-ts": "0.8.7",
         "random-words": "2.0.1",
+        "rapida-react": "1.1.25",
         "react": "18.2.0",
         "react-app-polyfill": "3.0.0",
         "react-cookie": "6.1.1",

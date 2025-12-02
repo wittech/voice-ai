@@ -10,6 +10,7 @@ interface InputGroupProps extends HTMLAttributes<HTMLDivElement> {
 }
 export const InputGroup: FC<InputGroupProps> = ({
   initiallyExpanded = true,
+  childClass,
   ...props
 }) => {
   const [isExpanded, setIsExpanded] = useState(initiallyExpanded);
@@ -48,7 +49,7 @@ export const InputGroup: FC<InputGroupProps> = ({
       </div>
       <AnimatePresence>
         <motion.div
-          className={cn('p-6', props.childClass)}
+          className={cn('p-6', childClass)}
           initial={{ opacity: 0, height: 0 }}
           animate={{ opacity: 1, height: 'auto' }}
           exit={{ opacity: 0, height: 0 }}

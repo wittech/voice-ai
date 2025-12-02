@@ -3,7 +3,7 @@ import {
   GeneralConnect,
   GeneralConnectResponse,
 } from '@rapidaai/react';
-import { useCredential } from '@/hooks';
+import { useCredential } from '@/hooks/use-credential';
 import { FC, useCallback, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ServiceError } from '@rapidaai/react';

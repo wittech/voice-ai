@@ -1,7 +1,8 @@
 import type { FC } from 'react';
 import React, { useCallback, useEffect, useState } from 'react';
 import { IBlueBGButton, ICancelButton } from '@/app/components/form/button';
-import { useCredential, useRapidaStore } from '@/hooks';
+import { useCredential } from '@/hooks/use-credential';
+import { useRapidaStore } from '@/hooks/use-rapida-store';
 import toast from 'react-hot-toast/headless';
 import CheckboxCard from '@/app/components/form/checkbox-card';
 import { SearchIconInput } from '@/app/components/form/input/IconInput';

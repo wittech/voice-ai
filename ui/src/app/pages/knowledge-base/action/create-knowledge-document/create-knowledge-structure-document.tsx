@@ -1,6 +1,7 @@
 import { useParams } from 'react-router-dom';
 import { useCallback, useEffect, useState } from 'react';
-import { useCredential, useRapidaStore } from '@/hooks';
+import { useCredential } from '@/hooks/use-credential';
+import { useRapidaStore } from '@/hooks/use-rapida-store';
 import { KnowledgeDocument } from '@rapidaai/react';
 import { useCreateKnowledgeDocumentPageStore } from '@/hooks/use-create-knowledge-document-page-store';
 import { HoverButton, OutlineButton } from '@/app/components/form/button';

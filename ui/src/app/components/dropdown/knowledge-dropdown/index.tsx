@@ -3,7 +3,7 @@ import { Dropdown } from '@/app/components/dropdown';
 import { FormLabel } from '@/app/components/form-label';
 import { IButton, ILinkBorderButton } from '@/app/components/form/button';
 import { FieldSet } from '@/app/components/form/fieldset';
-import { useCredential } from '@/hooks';
+import { useCredential } from '@/hooks/use-credential';
 import { useKnowledgePageStore } from '@/hooks/use-knowledge-page-store';
 import { cn } from '@/utils';
 

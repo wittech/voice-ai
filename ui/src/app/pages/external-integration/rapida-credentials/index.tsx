@@ -314,7 +314,7 @@ export function PersonalCredentialPage() {
           Learn more in the documentation
         </a>
       </YellowNoticeBlock>
-      <div className="grid grid-cols-3 gap-3 px-4 py-4 overflow-auto">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 px-4 py-4 overflow-auto">
         <Card className="h-auto flex-none!">
           <CardTitle>
             <div className="flex items-center gap-2 justify-between">

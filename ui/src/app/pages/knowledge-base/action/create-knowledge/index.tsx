@@ -4,7 +4,8 @@ import { Input } from '@/app/components/form/input';
 import { TagInput } from '@/app/components/form/tag-input';
 import { useCreateKnowledgePageStore } from '@/hooks/use-create-knowledge-page-store';
 import { useCallback, useEffect, useState } from 'react';
-import { useCredential, useRapidaStore } from '@/hooks';
+import { useCredential } from '@/hooks/use-credential';
+import { useRapidaStore } from '@/hooks/use-rapida-store';
 import {
   IBlueBGArrowButton,
   ICancelButton,

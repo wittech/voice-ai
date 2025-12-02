@@ -1,7 +1,8 @@
 import type { FC } from 'react';
 import React, { useCallback, useEffect, useState } from 'react';
 import { IBlueButton, ICancelButton } from '@/app/components/form/button';
-import { useCredential, useRapidaStore } from '@/hooks';
+import { useCredential } from '@/hooks/use-credential';
+import { useRapidaStore } from '@/hooks/use-rapida-store';
 import { useKnowledgePageStore } from '@/hooks/use-knowledge-page-store';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast/headless';
