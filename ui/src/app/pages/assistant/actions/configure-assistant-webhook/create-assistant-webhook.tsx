@@ -224,7 +224,7 @@ export const CreateAssistantWebhook: FC<{ assistantId: string }> = ({
     <form
       onSubmit={onSubmit}
       method="POST"
-      className="relative flex flex-col flex-1"
+      className="relative flex flex-col flex-1 bg-white dark:bg-gray-900"
     >
       <ConfirmDialogComponent />
       <div className="overflow-auto flex flex-col flex-1 pb-20">

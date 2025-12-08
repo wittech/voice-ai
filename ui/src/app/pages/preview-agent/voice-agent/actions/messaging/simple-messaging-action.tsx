@@ -1,9 +1,10 @@
 import {
+  Assistant,
   useConnectAgent,
   useInputModeToggleAgent,
   VoiceAgent,
 } from '@rapidaai/react';
-import { Send } from 'lucide-react';
+import { AudioLines, Send } from 'lucide-react';
 import { FC, HTMLAttributes, useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { cn } from '@/utils';
@@ -14,10 +15,12 @@ import { ScalableTextarea } from '@/app/components/form/textarea';
 interface SimpleMessagingAcitonProps extends HTMLAttributes<HTMLDivElement> {
   placeholder?: string;
   voiceAgent: VoiceAgent;
+  assistant: Assistant | null;
 }
 export const SimpleMessagingAction: FC<SimpleMessagingAcitonProps> = ({
   className,
   voiceAgent,
+  assistant,
   placeholder,
 }) => {
   //   const ctx = useEnsureVoiceAgent();
@@ -113,15 +116,15 @@ export const SimpleMessagingAction: FC<SimpleMessagingAcitonProps> = ({
               handleSubmit(onSubmitForm)(e);
             }
           }}
-        ></ScalableTextarea>
+        />
 
         <div className="absolute rounded-b-lg right-2 bottom-2 my-auto w-fit">
-          {isValid ? (
+          {isValid || !assistant?.getDebuggerdeployment()?.hasInputaudio() ? (
             <button
               type="submit"
-              className="inline-flex shrink-0 justify-center items-center h-8 w-8 rounded-[2px] text-white bg-primary hover:bg-primary focus:z-10 focus:outline-hidden focus:bg-primary"
+              className="inline-flex shrink-0 justify-center items-center h-8 w-8 text-white bg-primary hover:bg-primary focus:z-10 focus:outline-hidden focus:bg-primary"
             >
-              <Send className="shrink-0 w-5 h-5" strokeWidth="1.5" />
+              <Send className="shrink-0 w-4 h-4" strokeWidth="1.5" />
             </button>
           ) : (
             <button
@@ -129,35 +132,12 @@ export const SimpleMessagingAction: FC<SimpleMessagingAcitonProps> = ({
                 await handleVoiceToggle();
                 !isConnected && (await handleConnectAgent());
               }}
-              className="voice-action relative flex h-9 items-center justify-center rounded-[2px] bg-primary text-white transition-colors focus-visible:outline-hidden focus-visible:outline-black disabled:text-gray-50 disabled:opacity-30 can-hover:hover:opacity-70 min-w-8 p-2"
+              className="voice-action relative flex h-8 px-3 items-center justify-center bg-primary text-white transition-colors focus-visible:outline-hidden focus-visible:outline-black disabled:text-gray-50 disabled:opacity-30 can-hover:hover:opacity-70 min-w-8 p-2"
             >
-              <div className="flex items-center justify-center">
-                <svg
-                  viewBox="0 0 24 24"
-                  className="w-5 h-5"
-                  strokeWidth={1.5}
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    d="M9.5 4C8.67157 4 8 4.67157 8 5.5V18.5C8 19.3284 8.67157 20 9.5 20C10.3284 20 11 19.3284 11 18.5V5.5C11 4.67157 10.3284 4 9.5 4Z"
-                    fill="currentColor"
-                  ></path>
-                  <path
-                    d="M13 8.5C13 7.67157 13.6716 7 14.5 7C15.3284 7 16 7.67157 16 8.5V15.5C16 16.3284 15.3284 17 14.5 17C13.6716 17 13 16.3284 13 15.5V8.5Z"
-                    fill="currentColor"
-                  ></path>
-                  <path
-                    d="M4.5 9C3.67157 9 3 9.67157 3 10.5V13.5C3 14.3284 3.67157 15 4.5 15C5.32843 15 6 14.3284 6 13.5V10.5C6 9.67157 5.32843 9 4.5 9Z"
-                    fill="currentColor"
-                  ></path>
-                  <path
-                    d="M19.5 9C18.6716 9 18 9.67157 18 10.5V13.5C18 14.3284 18.6716 15 19.5 15C20.3284 15 21 14.3284 21 13.5V10.5C21 9.67157 20.3284 9 19.5 9Z"
-                    fill="currentColor"
-                  ></path>
-                </svg>
+              <div className="flex items-center justify-center mr-1">
+                <AudioLines className="shrink-0 w-4 h-4" strokeWidth="1.5" />
               </div>
-              <span className="whitespace-nowrap pl-1 pr-1 text-[13px] font-semibold [display:var(--force-hide-label)]">
+              <span className="whitespace-nowrap pl-1 pr-1 text-[13px] font-medium">
                 Voice
               </span>
             </button>

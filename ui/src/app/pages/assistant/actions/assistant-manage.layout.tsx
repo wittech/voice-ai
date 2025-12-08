@@ -12,12 +12,12 @@ export const AssistantManageLayout: FC<HTMLAttributes<HTMLDivElement>> = () => {
   const { goToAssistant } = useGlobalNavigation();
   return (
     <>
-      <PageHeaderBlock className="border-b">
+      <PageHeaderBlock className="border-b bg-light-background dark:bg-gray-900">
         <div
           onClick={() => {
             goToAssistant(assistantId!);
           }}
-          className="flex items-center gap-3 hover:text-red-600 hover:cursor-pointer"
+          className="flex items-center hover:text-red-600 hover:cursor-pointer"
         >
           <ChevronLeft className="w-5 h-5 mr-1" strokeWidth={1.5} />
           <PageTitleBlock>Back to Assistant</PageTitleBlock>
@@ -61,6 +61,7 @@ export const AssistantManageLayout: FC<HTMLAttributes<HTMLDivElement>> = () => {
             </li>
           </ul>
         </aside>
+
         <Outlet />
       </div>
     </>

@@ -1,5 +1,10 @@
 import { FC, HTMLAttributes } from 'react';
-import { Channel, useInputModeToggleAgent, VoiceAgent } from '@rapidaai/react';
+import {
+  Assistant,
+  Channel,
+  useInputModeToggleAgent,
+  VoiceAgent,
+} from '@rapidaai/react';
 import { cn } from '@/utils';
 import { AudioMessagingAction } from './audio-messsaging-action';
 import { SimpleMessagingAction } from './simple-messaging-action';
@@ -9,6 +14,7 @@ import { SimpleMessagingAction } from './simple-messaging-action';
  */
 interface MessageActionProps extends HTMLAttributes<HTMLDivElement> {
   voiceAgent: VoiceAgent;
+  assistant: Assistant | null;
   suggestions?: string[];
   placeholder?: string;
 }
@@ -26,7 +32,7 @@ export const MessagingAction: FC<MessageActionProps> = ({
   const { channel } = useInputModeToggleAgent(attr.voiceAgent);
 
   return (
-    <div className={cn('', className)}>
+    <div className={cn(className)}>
       {channel === Channel.Audio ? (
         <AudioMessagingAction {...attr} />
       ) : (

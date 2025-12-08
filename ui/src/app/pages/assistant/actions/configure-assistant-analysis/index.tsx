@@ -101,7 +101,7 @@ const ConfigureAssistantAnalysis: FC<{ assistantId: string }> = ({
     );
   }
   return (
-    <div className="h-full flex flex-col flex-1">
+    <div className="h-full flex flex-col flex-1 bg-white dark:bg-gray-900">
       <BluredWrapper className="border-t-0 p-0">
         <div className="flex space-x-2">
           <SearchIconInput className="bg-light-background" />
