@@ -671,7 +671,7 @@ class AzureService(object):
             _registered_method=True)
 
 
-class GoogleServiceStub(object):
+class GeminiServiceStub(object):
     """Missing associated documentation comment in .proto file."""
 
     def __init__(self, channel):
@@ -681,28 +681,28 @@ class GoogleServiceStub(object):
             channel: A grpc.Channel.
         """
         self.Embedding = channel.unary_unary(
-                '/integration_api.GoogleService/Embedding',
+                '/integration_api.GeminiService/Embedding',
                 request_serializer=integration__api__pb2.EmbeddingRequest.SerializeToString,
                 response_deserializer=integration__api__pb2.EmbeddingResponse.FromString,
                 _registered_method=True)
         self.Chat = channel.unary_unary(
-                '/integration_api.GoogleService/Chat',
+                '/integration_api.GeminiService/Chat',
                 request_serializer=integration__api__pb2.ChatRequest.SerializeToString,
                 response_deserializer=integration__api__pb2.ChatResponse.FromString,
                 _registered_method=True)
         self.StreamChat = channel.unary_stream(
-                '/integration_api.GoogleService/StreamChat',
+                '/integration_api.GeminiService/StreamChat',
                 request_serializer=integration__api__pb2.ChatRequest.SerializeToString,
                 response_deserializer=integration__api__pb2.ChatResponse.FromString,
                 _registered_method=True)
         self.VerifyCredential = channel.unary_unary(
-                '/integration_api.GoogleService/VerifyCredential',
+                '/integration_api.GeminiService/VerifyCredential',
                 request_serializer=integration__api__pb2.VerifyCredentialRequest.SerializeToString,
                 response_deserializer=integration__api__pb2.VerifyCredentialResponse.FromString,
                 _registered_method=True)
 
 
-class GoogleServiceServicer(object):
+class GeminiServiceServicer(object):
     """Missing associated documentation comment in .proto file."""
 
     def Embedding(self, request, context):
@@ -730,7 +730,7 @@ class GoogleServiceServicer(object):
         raise NotImplementedError('Method not implemented!')
 
 
-def add_GoogleServiceServicer_to_server(servicer, server):
+def add_GeminiServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
             'Embedding': grpc.unary_unary_rpc_method_handler(
                     servicer.Embedding,
@@ -754,13 +754,13 @@ def add_GoogleServiceServicer_to_server(servicer, server):
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
-            'integration_api.GoogleService', rpc_method_handlers)
+            'integration_api.GeminiService', rpc_method_handlers)
     server.add_generic_rpc_handlers((generic_handler,))
-    server.add_registered_method_handlers('integration_api.GoogleService', rpc_method_handlers)
+    server.add_registered_method_handlers('integration_api.GeminiService', rpc_method_handlers)
 
 
  # This class is part of an EXPERIMENTAL API.
-class GoogleService(object):
+class GeminiService(object):
     """Missing associated documentation comment in .proto file."""
 
     @staticmethod
@@ -777,7 +777,7 @@ class GoogleService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/integration_api.GoogleService/Embedding',
+            '/integration_api.GeminiService/Embedding',
             integration__api__pb2.EmbeddingRequest.SerializeToString,
             integration__api__pb2.EmbeddingResponse.FromString,
             options,
@@ -804,7 +804,7 @@ class GoogleService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/integration_api.GoogleService/Chat',
+            '/integration_api.GeminiService/Chat',
             integration__api__pb2.ChatRequest.SerializeToString,
             integration__api__pb2.ChatResponse.FromString,
             options,
@@ -831,7 +831,7 @@ class GoogleService(object):
         return grpc.experimental.unary_stream(
             request,
             target,
-            '/integration_api.GoogleService/StreamChat',
+            '/integration_api.GeminiService/StreamChat',
             integration__api__pb2.ChatRequest.SerializeToString,
             integration__api__pb2.ChatResponse.FromString,
             options,
@@ -858,7 +858,208 @@ class GoogleService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/integration_api.GoogleService/VerifyCredential',
+            '/integration_api.GeminiService/VerifyCredential',
+            integration__api__pb2.VerifyCredentialRequest.SerializeToString,
+            integration__api__pb2.VerifyCredentialResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+
+class VertexAiServiceStub(object):
+    """Missing associated documentation comment in .proto file."""
+
+    def __init__(self, channel):
+        """Constructor.
+
+        Args:
+            channel: A grpc.Channel.
+        """
+        self.Embedding = channel.unary_unary(
+                '/integration_api.VertexAiService/Embedding',
+                request_serializer=integration__api__pb2.EmbeddingRequest.SerializeToString,
+                response_deserializer=integration__api__pb2.EmbeddingResponse.FromString,
+                _registered_method=True)
+        self.Chat = channel.unary_unary(
+                '/integration_api.VertexAiService/Chat',
+                request_serializer=integration__api__pb2.ChatRequest.SerializeToString,
+                response_deserializer=integration__api__pb2.ChatResponse.FromString,
+                _registered_method=True)
+        self.StreamChat = channel.unary_stream(
+                '/integration_api.VertexAiService/StreamChat',
+                request_serializer=integration__api__pb2.ChatRequest.SerializeToString,
+                response_deserializer=integration__api__pb2.ChatResponse.FromString,
+                _registered_method=True)
+        self.VerifyCredential = channel.unary_unary(
+                '/integration_api.VertexAiService/VerifyCredential',
+                request_serializer=integration__api__pb2.VerifyCredentialRequest.SerializeToString,
+                response_deserializer=integration__api__pb2.VerifyCredentialResponse.FromString,
+                _registered_method=True)
+
+
+class VertexAiServiceServicer(object):
+    """Missing associated documentation comment in .proto file."""
+
+    def Embedding(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def Chat(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def StreamChat(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def VerifyCredential(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+
+def add_VertexAiServiceServicer_to_server(servicer, server):
+    rpc_method_handlers = {
+            'Embedding': grpc.unary_unary_rpc_method_handler(
+                    servicer.Embedding,
+                    request_deserializer=integration__api__pb2.EmbeddingRequest.FromString,
+                    response_serializer=integration__api__pb2.EmbeddingResponse.SerializeToString,
+            ),
+            'Chat': grpc.unary_unary_rpc_method_handler(
+                    servicer.Chat,
+                    request_deserializer=integration__api__pb2.ChatRequest.FromString,
+                    response_serializer=integration__api__pb2.ChatResponse.SerializeToString,
+            ),
+            'StreamChat': grpc.unary_stream_rpc_method_handler(
+                    servicer.StreamChat,
+                    request_deserializer=integration__api__pb2.ChatRequest.FromString,
+                    response_serializer=integration__api__pb2.ChatResponse.SerializeToString,
+            ),
+            'VerifyCredential': grpc.unary_unary_rpc_method_handler(
+                    servicer.VerifyCredential,
+                    request_deserializer=integration__api__pb2.VerifyCredentialRequest.FromString,
+                    response_serializer=integration__api__pb2.VerifyCredentialResponse.SerializeToString,
+            ),
+    }
+    generic_handler = grpc.method_handlers_generic_handler(
+            'integration_api.VertexAiService', rpc_method_handlers)
+    server.add_generic_rpc_handlers((generic_handler,))
+    server.add_registered_method_handlers('integration_api.VertexAiService', rpc_method_handlers)
+
+
+ # This class is part of an EXPERIMENTAL API.
+class VertexAiService(object):
+    """Missing associated documentation comment in .proto file."""
+
+    @staticmethod
+    def Embedding(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/integration_api.VertexAiService/Embedding',
+            integration__api__pb2.EmbeddingRequest.SerializeToString,
+            integration__api__pb2.EmbeddingResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def Chat(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/integration_api.VertexAiService/Chat',
+            integration__api__pb2.ChatRequest.SerializeToString,
+            integration__api__pb2.ChatResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def StreamChat(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_stream(
+            request,
+            target,
+            '/integration_api.VertexAiService/StreamChat',
+            integration__api__pb2.ChatRequest.SerializeToString,
+            integration__api__pb2.ChatResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def VerifyCredential(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/integration_api.VertexAiService/VerifyCredential',
             integration__api__pb2.VerifyCredentialRequest.SerializeToString,
             integration__api__pb2.VerifyCredentialResponse.FromString,
             options,

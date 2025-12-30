@@ -2,7 +2,7 @@
  * Copyright (C) 2023-2025 Prashant Srivastav <prashant@rapida.ai>
  * Licensed under a modified GPL-2.0. See LICENSE file for details.
  */
-import { AZURE_LANGUAGE } from '@/providers';
+import { AZURE_TEXT_TO_SPEECH_LANGUAGE } from '@/providers';
 import { SetMetadata } from '@/utils/metadata';
 import { Metadata } from '@rapidaai/react';
 
@@ -23,7 +23,7 @@ export const GetAzureDefaultOptions = (current: Metadata[]): Metadata[] => {
   };
   addMetadata('rapida.credential_id');
   addMetadata('speak.language', 'en-US', value =>
-    AZURE_LANGUAGE().some(l => l.code === value),
+    AZURE_TEXT_TO_SPEECH_LANGUAGE().some(l => l.code === value),
   );
   addMetadata('speak.voice.id');
   return [
@@ -53,7 +53,9 @@ export const ValidateAzureOptions = (
   const languageOption = options.find(opt => opt.getKey() === 'speak.language');
   if (
     !languageOption ||
-    !AZURE_LANGUAGE().some(lang => lang.code === languageOption.getValue())
+    !AZURE_TEXT_TO_SPEECH_LANGUAGE().some(
+      lang => lang.code === languageOption.getValue(),
+    )
   ) {
     return 'Please select valid language for text to speech.';
   }

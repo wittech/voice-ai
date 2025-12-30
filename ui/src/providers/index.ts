@@ -1,10 +1,10 @@
 import productionProvider from './provider.production.json';
 import developmentProvider from './provider.development.json';
 
-export interface IntegrationProvider extends RapidaProvider {}
-interface EndOfSpeechProvider extends RapidaProvider {}
-interface VADProvider extends RapidaProvider {}
-interface NoiseCancellationProvider extends RapidaProvider {}
+export interface IntegrationProvider extends RapidaProvider { }
+interface EndOfSpeechProvider extends RapidaProvider { }
+interface VADProvider extends RapidaProvider { }
+interface NoiseCancellationProvider extends RapidaProvider { }
 export interface RapidaProvider {
   code: string;
   name: string;
@@ -138,20 +138,28 @@ export const EMBEDDING_PROVIDERS = allProvider().filter(x =>
 
 /**
  *
+ * Azure speech service constants
  * @returns
  */
 
-export const AZURE_VOICE = () => {
-  return require('./azure/voices.json');
+export const AZURE_TEXT_TO_SPEECH_VOICE = () => {
+  return require('./azure-speech-service/voices.json');
 };
 
-export const AZURE_LANGUAGE = () => {
-  return require('./azure/languages.json');
+export const AZURE_TEXT_TO_SPEECH_LANGUAGE = () => {
+  return require('./azure-speech-service/text-to-speech-language.json');
 };
 
-export const AZURE_TEXT_MODEL = () => {
-  return require('./azure/text-models.json');
+export const AZURE_SPEECH_TO_TEXT_LANGUAGE = () => {
+  return require('./azure-speech-service/speech-to-text-language.json');
+}
+
+export const AZURE_FOUNDRY_TEXT_MODEL = () => {
+  return require('./azure-foundry/text-models.json');
 };
+
+
+
 
 /**
  *
@@ -263,6 +271,15 @@ export const CARTESIA_EMOTION_LEVEL_COMBINATION = [
 export const GEMINI_MODEL = () => {
   return require('./gemini/models.json');
 };
+
+
+/**
+ * 
+ */
+export const VERTEXAI_MODEL = () => {
+  return require('./vertexai/models.json');
+};
+
 
 /**
  * sarvam

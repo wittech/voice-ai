@@ -1,4 +1,7 @@
-package internal_google_callers
+// Rapida – Open Source Voice AI Orchestration Platform
+// Copyright (C) 2023-2025 Prashant Srivastav <prashant@rapida.ai>
+// Licensed under a modified GPL-2.0. See the LICENSE file for details.
+package internal_vertexai_callers
 
 import (
 	"context"
@@ -12,17 +15,17 @@ import (
 	"github.com/rapidaai/pkg/commons"
 	"github.com/rapidaai/pkg/types"
 	"github.com/rapidaai/pkg/utils"
-	protos "github.com/rapidaai/protos"
+	"github.com/rapidaai/protos"
 	"google.golang.org/genai"
 )
 
 type largeLanguageCaller struct {
-	Google
+	VertexAi
 }
 
 func NewLargeLanguageCaller(logger commons.Logger, credential *protos.Credential) internal_callers.LargeLanguageCaller {
 	return &largeLanguageCaller{
-		Google: google(logger, credential),
+		VertexAi: vertexai(logger, credential),
 	}
 }
 

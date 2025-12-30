@@ -20,8 +20,8 @@ import { useLocation } from 'react-router-dom';
  *
  * @returns
  */
-export function GoogleCloudModelInformationPage() {
-  const [provider] = useState(TEXT_TO_SPEECH('google-cloud'));
+export function GoogleSpeechServiceModelInformationPage() {
+  const [provider] = useState(TEXT_TO_SPEECH('google-speech-service'));
   const [filteredVoices, setFilteredVoices] = useState(GOOGLE_CLOUD_VOICE());
   const { providerCredentials } = useAllProviderCredentials();
   const [createProviderModalOpen, setCreateProviderModalOpen] = useState(false);

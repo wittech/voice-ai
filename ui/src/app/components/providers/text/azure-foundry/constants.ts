@@ -1,6 +1,6 @@
 import { Metadata } from '@rapidaai/react';
 import { SetMetadata } from '@/utils/metadata';
-import { AZURE_TEXT_MODEL } from '@/providers';
+import { AZURE_FOUNDRY_TEXT_MODEL } from '@/providers';
 
 export const GetAzureTextProviderDefaultOptions = (
   current: Metadata[],
@@ -31,13 +31,13 @@ export const GetAzureTextProviderDefaultOptions = (
     if (metadata) mtds.push(metadata);
   };
 
-  addMetadata('model.id', AZURE_TEXT_MODEL()[0].id, value =>
-    AZURE_TEXT_MODEL().some(model => model.id === value),
+  addMetadata('model.id', AZURE_FOUNDRY_TEXT_MODEL()[0].id, value =>
+    AZURE_FOUNDRY_TEXT_MODEL().some(model => model.id === value),
   );
 
   // Add validation for model.name
-  addMetadata('model.name', AZURE_TEXT_MODEL()[0].name, value =>
-    AZURE_TEXT_MODEL().some(model => model.name === value),
+  addMetadata('model.name', AZURE_FOUNDRY_TEXT_MODEL()[0].name, value =>
+    AZURE_FOUNDRY_TEXT_MODEL().some(model => model.name === value),
   );
   addMetadata('model.frequency_penalty');
   addMetadata('model.temperature');
@@ -68,7 +68,9 @@ export const ValidateAzureTextProviderDefaultOptions = (
   const modelIdOption = options.find(opt => opt.getKey() === 'model.id');
   if (
     !modelIdOption ||
-    !AZURE_TEXT_MODEL().some(model => model.id === modelIdOption.getValue())
+    !AZURE_FOUNDRY_TEXT_MODEL().some(
+      model => model.id === modelIdOption.getValue(),
+    )
   ) {
     return 'Please check and select valid model from dropdown.';
   }

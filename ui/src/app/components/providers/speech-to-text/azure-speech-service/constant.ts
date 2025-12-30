@@ -1,14 +1,7 @@
 import { SetMetadata } from '@/utils/metadata';
 import { Metadata } from '@rapidaai/react';
-export const AZURE_LANGUAGE = [
-  { code: 'en-US', name: 'English (United States)' },
-  { code: 'es-ES', name: 'Spanish (Spain)' },
-  { code: 'fr-FR', name: 'French (France)' },
-  { code: 'de-DE', name: 'German (Germany)' },
-  { code: 'zh-CN', name: 'Chinese (Mandarin, Simplified)' },
-  { code: 'hi-IN', name: 'Hindi (India)' },
-  { code: 'ar-SA', name: 'Arabic (Saudi Arabia)' },
-];
+import { AZURE_SPEECH_TO_TEXT_LANGUAGE } from '@/providers';
+
 
 export const GetAzureDefaultOptions = (current: Metadata[]): Metadata[] => {
   const mtds: Metadata[] = [];
@@ -28,7 +21,7 @@ export const GetAzureDefaultOptions = (current: Metadata[]): Metadata[] => {
   addMetadata('rapida.credential_id');
   // Set language
   addMetadata('listen.language', 'en', value =>
-    AZURE_LANGUAGE.some(l => l.code === value),
+    AZURE_SPEECH_TO_TEXT_LANGUAGE().some(l => l.code === value),
   );
 
   // Only return metadata for the keys we want to keep
@@ -57,7 +50,7 @@ export const ValidateAzureOptions = (
   );
   if (
     !languageOption ||
-    !AZURE_LANGUAGE.some(lang => lang.code === languageOption.getValue())
+    !AZURE_SPEECH_TO_TEXT_LANGUAGE().some(lang => lang.code === languageOption.getValue())
   ) {
     return 'Please provide a valid azure language for speech to text.';
   }

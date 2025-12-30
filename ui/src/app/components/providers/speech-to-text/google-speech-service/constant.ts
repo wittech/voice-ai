@@ -1,7 +1,4 @@
-import {
-  GOOGLE_SPEECH_TO_TEXT_LANGUGAE,
-  GOOGLE_SPEECH_TO_TEXT_MODEL,
-} from '@/providers';
+
 import { SetMetadata } from '@/utils/metadata';
 import { Metadata } from '@rapidaai/react';
 
@@ -52,26 +49,6 @@ export const ValidateGoogleOptions = (
   ) {
     return 'Please provide a valid credential for google speech to text.';
   }
-  // Validate language
-  const languageOption = options.find(
-    opt => opt.getKey() === 'listen.language',
-  );
-  // if (
-  //   !languageOption ||
-  //   !GOOGLE_SPEECH_TO_TEXT_LANGUGAE().some(
-  //     lang => lang.code === languageOption.getValue(),
-  //   )
-  // ) {
-  //   return 'Please provide a valid language options for google speech to text.';
-  // }
 
-  // Validate model
-  // const modelOption = options.find(opt => opt.getKey() === 'listen.model');
-  // if (
-  //   !modelOption ||
-  //   !GOOGLE_SPEECH_TO_TEXT_MODEL().some(m => m.id === modelOption.getValue())
-  // ) {
-  //   return 'Please provide a valid model for google speech to text.';
-  // }
   return undefined;
 };
