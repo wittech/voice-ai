@@ -4,7 +4,7 @@ import { Helmet } from '@/app/components/helmet';
 import { BluredWrapper } from '@/app/components/wrapper/blured-wrapper';
 import { PageHeaderBlock } from '@/app/components/blocks/page-header-block';
 import { PageTitleBlock } from '@/app/components/blocks/page-title-block';
-import { TEXT_TO_SPEECH, AZURE_VOICE } from '@/providers';
+import { TEXT_TO_SPEECH, AZURE_TEXT_TO_SPEECH_VOICE } from '@/providers';
 import { PaginationButtonBlock } from '@/app/components/blocks/pagination-button-block';
 import { cn } from '@/utils';
 import { CreateProviderCredentialDialog } from '@/app/components/base/modal/create-provider-credential-modal';
@@ -20,9 +20,11 @@ import { useLocation } from 'react-router-dom';
  *
  * @returns
  */
-export function ProviderAzureModelInformationPage() {
-  const [provider] = useState(TEXT_TO_SPEECH('azure'));
-  const [filteredVoices, setFilteredVoices] = useState(AZURE_VOICE());
+export function ProviderAzureSpeechServiceModelInformationPage() {
+  const [provider] = useState(TEXT_TO_SPEECH('azure-speech-service'));
+  const [filteredVoices, setFilteredVoices] = useState(
+    AZURE_TEXT_TO_SPEECH_VOICE(),
+  );
   const { providerCredentials } = useAllProviderCredentials();
   const [createProviderModalOpen, setCreateProviderModalOpen] = useState(false);
   const [viewProviderModalOpen, setViewProviderModalOpen] = useState(false);
@@ -38,7 +40,7 @@ export function ProviderAzureModelInformationPage() {
   }, [location.search]);
 
   const searchVoice = (v: string) => {
-    const voices = AZURE_VOICE();
+    const voices = AZURE_TEXT_TO_SPEECH_VOICE();
     if (v.length > 0) {
       setFilteredVoices(
         voices.filter(
@@ -63,20 +65,24 @@ export function ProviderAzureModelInformationPage() {
 
   return (
     <div className="flex flex-1 overflow-auto flex-col">
-      <CreateProviderCredentialDialog
-        modalOpen={createProviderModalOpen}
-        setModalOpen={setCreateProviderModalOpen}
-        currentProvider={provider?.code}
-      ></CreateProviderCredentialDialog>
-      <ViewProviderCredentialDialog
-        modalOpen={viewProviderModalOpen}
-        setModalOpen={setViewProviderModalOpen}
-        currentProvider={provider!}
-        onSetupCredential={() => {
-          setViewProviderModalOpen(!viewProviderModalOpen);
-          setCreateProviderModalOpen(!createProviderModalOpen);
-        }}
-      />
+      {provider && (
+        <CreateProviderCredentialDialog
+          modalOpen={createProviderModalOpen}
+          setModalOpen={setCreateProviderModalOpen}
+          currentProvider={provider?.code}
+        ></CreateProviderCredentialDialog>
+      )}
+      {provider && (
+        <ViewProviderCredentialDialog
+          modalOpen={viewProviderModalOpen}
+          setModalOpen={setViewProviderModalOpen}
+          currentProvider={provider}
+          onSetupCredential={() => {
+            setViewProviderModalOpen(!viewProviderModalOpen);
+            setCreateProviderModalOpen(!createProviderModalOpen);
+          }}
+        />
+      )}
       <Helmet title="Provider information" />
       <PageHeaderBlock>
         <div className="flex items-center gap-3 py-4">

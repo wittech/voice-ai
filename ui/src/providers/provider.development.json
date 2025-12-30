@@ -113,12 +113,11 @@
         ]
     },
     {
-        "code": "aws-cloud",
-        "name": "AWS",
+        "code": "aws-bedrock",
+        "name": "AWS Bedrock",
         "description": "Amazon Web Services (AWS) offers a broad set of global cloud-based products including compute, storage, databases, analytics, and AI services.",
         "image": "https://rapida-assets-01.s3.ap-south-1.amazonaws.com/providers/1254821443460603620.png",
         "featureList": [
-            "storage",
             "external"
         ],
         "configurations": [
@@ -141,39 +140,12 @@
         "website": "https://aws.amazon.com/bedrock/"
     },
     {
-        "code": "google-cloud",
-        "name": "Google Cloud",
-        "description": "Google Cloud offers a suite of cloud computing services that runs on the same infrastructure that Google uses internally for its end-user products.",
-        "image": "https://rapida-assets-01.s3.ap-south-1.amazonaws.com/providers/198796716894742118.jpg",
-        "featureList": [
-            "storage",
-            "stt",
-            "tts",
-            "external"
-        ],
-        "url": "/integration/models/google-cloud",
-        "configurations": [
-            {
-                "name": "project_id",
-                "type": "string",
-                "label": "Project ID"
-            },
-            {
-                "name": "service_account_key",
-                "type": "text",
-                "label": "Service Account Key (JSON)"
-            }
-        ],
-        "website": "https://cloud.google.com/"
-    },
-    {
-        "code": "azure",
-        "name": "Azure",
-        "description": "Azure AI Foundry Service enables to access all the cognitive apis like openai, stt, tts",
+        "code": "azure-speech-service",
+        "name": "Azure Speech Services",
+        "description": "Azure Congnitive Service enables to access all the cognitive apis like stt, tts",
         "image": "https://rapida-assets-01.s3.ap-south-1.amazonaws.com/providers/198796716894742122.png",
-        "url": "/integration/models/azure",
+        "url": "/integration/models/azure-speech-service",
         "featureList": [
-            "text",
             "stt",
             "tts",
             "external"
@@ -190,8 +162,32 @@
                 "label": "Endpoint"
             }
         ],
-        "humanname": "Azure OpenAI Service",
+        "humanname": "Azure Speech Services",
         "website": "https://azure.microsoft.com/en-us/products/ai-services/openai-service"
+    },
+    {
+        "code": "azure-foundry",
+        "name": "Azure Microsoft Foundry",
+        "description": "Microsoft Foundry is a unified Azure platform-as-a-service offering for enterprise AI operations, model builders.",
+        "image": "https://cdn-dynmedia-1.microsoft.com/is/content/microsoftcorp/product-icon-Microsoft-Foundry-48x48?resMode=sharp2&op_usm=1.5,0.65,15,0&wid=47&hei=47&qlt=100&fit=constrain",
+        "featureList": [
+            "text",
+            "external"
+        ],
+        "configurations": [
+            {
+                "name": "subscription_key",
+                "type": "string",
+                "label": "Subscription Key"
+            },
+            {
+                "name": "endpoint",
+                "type": "string",
+                "label": "Endpoint"
+            }
+        ],
+        "humanname": "Azure Microsoft Foundry",
+        "website": "https://azure.microsoft.com/en-us/products/ai-foundry"
     },
     {
         "code": "anthropic",
@@ -290,8 +286,33 @@
         "website": "https://huggingface.co"
     },
     {
+        "code": "google-speech-service",
+        "name": "Google Speech Service",
+        "description": "Google Speech service offers state-of-the-art speech-to-text and text-to-speech capabilities with high accuracy and support for multiple languages.",
+        "image": "https://rapida-assets-01.s3.ap-south-1.amazonaws.com/providers/198796716894742118.jpg",
+        "featureList": [
+            "stt",
+            "tts",
+            "external"
+        ],
+        "url": "/integration/models/google-speech-service",
+        "configurations": [
+            {
+                "name": "project_id",
+                "type": "string",
+                "label": "Project ID"
+            },
+            {
+                "name": "service_account_key",
+                "type": "text",
+                "label": "Service Account Key (JSON)"
+            }
+        ],
+        "website": "https://cloud.google.com/"
+    },
+    {
         "code": "gemini",
-        "name": "Gemini",
+        "name": "Gemini / Google AI Studio",
         "description": "Gemini is Google latest family of large language models.",
         "image": "https://static.vecteezy.com/system/resources/previews/055/687/055/non_2x/rectangle-gemini-google-icon-symbol-logo-free-png.png",
         "featureList": [
@@ -307,6 +328,34 @@
             }
         ],
         "website": "https://ai.google.dev/"
+    },
+    {
+        "code": "vertexai",
+        "name": "Google Vertex AI",
+        "description": "Google Vertex AI is a fully-managed, unified AI development platform.",
+        "image": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRKrTg_Ygs_SNsALOCO1-s6-KYS2CKFd0LvfA&s",
+        "featureList": [
+            "text",
+            "external"
+        ],
+        "configurations": [
+            {
+                "name": "project_id",
+                "type": "string",
+                "label": "Project ID"
+            },
+            {
+                "name": "region",
+                "type": "string",
+                "label": "Region"
+            },
+            {
+                "name": "service_account_key",
+                "type": "text",
+                "label": "Service Account Key (JSON)"
+            }
+        ],
+        "website": "https://cloud.google.com/vertex-ai"
     },
     {
         "code": "deepgram",

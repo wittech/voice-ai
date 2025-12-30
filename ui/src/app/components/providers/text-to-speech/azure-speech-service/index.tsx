@@ -3,7 +3,10 @@ import { Dropdown } from '@/app/components/dropdown';
 import { FormLabel } from '@/app/components/form-label';
 import { FieldSet } from '@/app/components/form/fieldset';
 import { CustomValueDropdown } from '@/app/components/dropdown/custom-value-dropdown';
-import { AZURE_LANGUAGE, AZURE_VOICE } from '@/providers';
+import {
+  AZURE_TEXT_TO_SPEECH_LANGUAGE,
+  AZURE_TEXT_TO_SPEECH_VOICE,
+} from '@/providers';
 import { useState } from 'react';
 import { ILinkBorderButton } from '@/app/components/form/button';
 import { ExternalLink } from 'lucide-react';
@@ -30,12 +33,16 @@ export const ConfigureAzureTextToSpeech: React.FC<{
   /**
    *
    */
-  const [filteredVoices, setFilteredVoices] = useState(AZURE_VOICE());
+  const [filteredVoices, setFilteredVoices] = useState(
+    AZURE_TEXT_TO_SPEECH_VOICE(),
+  );
 
   /**
    *
    */
-  const [filterLanguages, setFilterLanguages] = useState(AZURE_LANGUAGE());
+  const [filterLanguages, setFilterLanguages] = useState(
+    AZURE_TEXT_TO_SPEECH_LANGUAGE(),
+  );
   /**
    *
    * @param key
@@ -67,7 +74,7 @@ export const ConfigureAzureTextToSpeech: React.FC<{
           <CustomValueDropdown
             searchable
             className="bg-light-background max-w-full dark:bg-gray-950"
-            currentValue={AZURE_VOICE().find(
+            currentValue={AZURE_TEXT_TO_SPEECH_VOICE().find(
               x => x.shortName === getParamValue('speak.voice.id'),
             )}
             setValue={(v: { shortName: string }) => {
@@ -79,7 +86,7 @@ export const ConfigureAzureTextToSpeech: React.FC<{
             label={renderVoiceOption}
             customValue
             onSearching={t => {
-              const voices = AZURE_VOICE();
+              const voices = AZURE_TEXT_TO_SPEECH_VOICE();
               const v = t.target.value;
               if (v.length > 0) {
                 setFilteredVoices(
@@ -115,7 +122,7 @@ export const ConfigureAzureTextToSpeech: React.FC<{
         <Dropdown
           searchable
           className="bg-light-background max-w-full dark:bg-gray-950"
-          currentValue={AZURE_LANGUAGE().find(
+          currentValue={AZURE_TEXT_TO_SPEECH_LANGUAGE().find(
             x => x.code === getParamValue('speak.language'),
           )}
           setValue={v => {
@@ -126,7 +133,7 @@ export const ConfigureAzureTextToSpeech: React.FC<{
           option={renderLanguageOption}
           label={renderLanguageOption}
           onSearching={t => {
-            const lanaguages = AZURE_LANGUAGE();
+            const lanaguages = AZURE_TEXT_TO_SPEECH_LANGUAGE();
             const v = t.target.value;
             if (v.length > 0) {
               setFilterLanguages(

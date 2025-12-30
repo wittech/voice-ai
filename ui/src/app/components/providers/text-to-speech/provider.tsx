@@ -9,7 +9,7 @@ import {
   ConfigureAzureTextToSpeech,
   GetAzureDefaultOptions,
   ValidateAzureOptions,
-} from '@/app/components/providers/text-to-speech/azure';
+} from '@/app/components/providers/text-to-speech/azure-speech-service';
 import {
   ConfigureCartesiaTextToSpeech,
   GetCartesiaDefaultOptions,
@@ -29,7 +29,7 @@ import {
   ConfigureGoogleTextToSpeech,
   GetGoogleDefaultOptions,
   ValidateGoogleOptions,
-} from '@/app/components/providers/text-to-speech/google';
+} from '@/app/components/providers/text-to-speech/google-speech-service';
 import {
   ConfigureOpenAITextToSpeech,
   GetOpenAIDefaultOptions,
@@ -91,8 +91,7 @@ export const GetDefaultTextToSpeechIfInvalid = (
   parameters: Metadata[],
 ): Metadata[] => {
   switch (provider) {
-    case 'google':
-    case 'google-cloud':
+    case 'google-speech-service':
       return GetGoogleDefaultOptions(parameters);
     case 'elevenlabs':
       return GetElevanLabDefaultOptions(parameters);
@@ -102,7 +101,7 @@ export const GetDefaultTextToSpeechIfInvalid = (
       return GetDeepgramDefaultOptions(parameters);
     case 'openai':
       return GetOpenAIDefaultOptions(parameters);
-    case 'azure':
+    case 'azure-speech-service':
       return GetAzureDefaultOptions(parameters);
     case 'cartesia':
       return GetCartesiaDefaultOptions(parameters);
@@ -118,8 +117,7 @@ export const ValidateTextToSpeechIfInvalid = (
   parameters: Metadata[],
 ): string | undefined => {
   switch (provider) {
-    case 'google':
-    case 'google-cloud':
+    case 'google-speech-service':
       return ValidateGoogleOptions(parameters);
     case 'elevenlabs':
       return ValidateElevanLabOptions(parameters);
@@ -129,7 +127,7 @@ export const ValidateTextToSpeechIfInvalid = (
       return ValidateDeepgramOptions(parameters);
     case 'openai':
       return ValidateOpenAIOptions(parameters);
-    case 'azure':
+    case 'azure-speech-service':
       return ValidateAzureOptions(parameters);
     case 'cartesia':
       return ValidateCartesiaOptions(parameters);
@@ -146,8 +144,7 @@ export const TextToSpeechConfigComponent: FC<ProviderComponentProps> = ({
   onChangeParameter,
 }) => {
   switch (provider) {
-    case 'google':
-    case 'google-cloud':
+    case 'google-speech-service':
       return (
         <ConfigureGoogleTextToSpeech
           parameters={parameters}
@@ -182,7 +179,7 @@ export const TextToSpeechConfigComponent: FC<ProviderComponentProps> = ({
           onParameterChange={onChangeParameter}
         />
       );
-    case 'azure':
+    case 'azure-speech-service':
       return (
         <ConfigureAzureTextToSpeech
           parameters={parameters}

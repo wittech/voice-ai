@@ -30,7 +30,7 @@ func (az *azureIntegrationGRPCApi) StreamChat(irRequest *integration_api.ChatReq
 	return az.integrationApi.StreamChat(
 		irRequest,
 		stream.Context(),
-		"AZURE",
+		"AZURE-FOUNDRY",
 		internal_azure_callers.NewLargeLanguageCaller(az.logger, irRequest.GetCredential()),
 		func(cr *integration_api.ChatResponse) error {
 			return stream.Send(cr)
@@ -56,13 +56,13 @@ func NewAzureGRPC(config *config.IntegrationConfig, logger commons.Logger, postg
 
 // Embedding implements protos.AzureServiceServer.
 func (oiGRPC *azureIntegrationGRPCApi) Embedding(c context.Context, irRequest *integration_api.EmbeddingRequest) (*integration_api.EmbeddingResponse, error) {
-	return oiGRPC.integrationApi.Embedding(c, irRequest, "AZURE", internal_azure_callers.NewEmbeddingCaller(oiGRPC.logger, irRequest.GetCredential()))
+	return oiGRPC.integrationApi.Embedding(c, irRequest, "AZURE-FOUNDRY", internal_azure_callers.NewEmbeddingCaller(oiGRPC.logger, irRequest.GetCredential()))
 }
 
 // all grpc handler
 func (oiGRPC *azureIntegrationGRPCApi) Chat(c context.Context, irRequest *integration_api.ChatRequest) (*integration_api.ChatResponse, error) {
 	oiGRPC.logger.Debugf("request for chat azure with request %+v", irRequest)
-	return oiGRPC.integrationApi.Chat(c, irRequest, "AZURE", internal_azure_callers.NewLargeLanguageCaller(oiGRPC.logger, irRequest.GetCredential()))
+	return oiGRPC.integrationApi.Chat(c, irRequest, "AZURE-FOUNDRY", internal_azure_callers.NewLargeLanguageCaller(oiGRPC.logger, irRequest.GetCredential()))
 }
 
 func (dgGRPC *azureIntegrationGRPCApi) VerifyCredential(c context.Context, irRequest *integration_api.VerifyCredentialRequest) (*integration_api.VerifyCredentialResponse, error) {

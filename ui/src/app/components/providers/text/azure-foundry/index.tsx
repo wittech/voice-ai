@@ -12,7 +12,7 @@ import { Slider } from '@/app/components/form/slider';
 import { InputHelper } from '@/app/components/input-helper';
 import { Textarea } from '@/app/components/form/textarea';
 import { Select } from '@/app/components/form/select';
-import { AZURE_TEXT_MODEL } from '@/providers';
+import { AZURE_FOUNDRY_TEXT_MODEL } from '@/providers';
 export {
   GetAzureTextProviderDefaultOptions,
   ValidateAzureTextProviderDefaultOptions,
@@ -56,8 +56,8 @@ export const ConfigureAzureTextProviderModel: React.FC<{
   return (
     <div className="flex-1 flex items-center divide-x">
       <Dropdown
-        className="max-w-full  focus-within:border-none! focus-within:outline-hidden! border-none!"
-        currentValue={AZURE_TEXT_MODEL().find(
+        className="max-w-full focus-within:border-none! focus-within:outline-hidden! border-none!"
+        currentValue={AZURE_FOUNDRY_TEXT_MODEL().find(
           x =>
             x.id === getParamValue('model.id') &&
             x.name === getParamValue('model.name'),
@@ -79,7 +79,7 @@ export const ConfigureAzureTextProviderModel: React.FC<{
           filteredParams.push(newIdParam, newNameParam);
           onParameterChange(filteredParams);
         }}
-        allValue={AZURE_TEXT_MODEL()}
+        allValue={AZURE_FOUNDRY_TEXT_MODEL()}
         placeholder="Select model"
         option={c => {
           return (

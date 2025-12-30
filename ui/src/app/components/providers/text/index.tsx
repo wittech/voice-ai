@@ -10,7 +10,7 @@ import {
   ConfigureAzureTextProviderModel,
   GetAzureTextProviderDefaultOptions,
   ValidateAzureTextProviderDefaultOptions,
-} from '@/app/components/providers/text/azure';
+} from '@/app/components/providers/text/azure-foundry';
 import { ConfigureCohereTextProviderModel } from '@/app/components/providers/text/cohere';
 import {
   GetCohereTextProviderDefaultOptions,
@@ -32,6 +32,11 @@ import { FieldSet } from '@/app/components/form/fieldset';
 import { FormLabel } from '@/app/components/form-label';
 import { CredentialDropdown } from '@/app/components/dropdown/credential-dropdown';
 import { TEXT_PROVIDERS } from '@/providers';
+import {
+  GetVertexAiTextProviderDefaultOptions,
+  ValidateVertexAiTextProviderDefaultOptions,
+} from './vertexai/constants';
+import { ConfigureVertexAiTextProviderModel } from './vertexai';
 
 /**
  *
@@ -46,11 +51,12 @@ export const GetDefaultTextProviderConfigIfInvalid = (
   switch (provider) {
     case 'openai':
       return GetOpenaiTextProviderDefaultOptions(parameters);
-    case 'azure-openai':
-    case 'azure':
+    case 'azure-foundry':
       return GetAzureTextProviderDefaultOptions(parameters);
     case 'gemini':
       return GetGeminiTextProviderDefaultOptions(parameters);
+    case 'vertexai':
+      return GetVertexAiTextProviderDefaultOptions(parameters);
     case 'anthropic':
       return GetAnthropicTextProviderDefaultOptions(parameters);
     case 'cohere':
@@ -73,11 +79,12 @@ export const ValidateTextProviderDefaultOptions = (
   switch (provider) {
     case 'openai':
       return ValidateOpenaiTextProviderDefaultOptions(parameters);
-    case 'azure-openai':
-    case 'azure':
+    case 'azure-foundry':
       return ValidateAzureTextProviderDefaultOptions(parameters);
     case 'gemini':
       return ValidateGeminiTextProviderDefaultOptions(parameters);
+    case 'vertexai':
+      return ValidateVertexAiTextProviderDefaultOptions(parameters);
     case 'anthropic':
       return ValidateAnthropicTextProviderDefaultOptions(parameters);
     case 'cohere':
@@ -105,8 +112,7 @@ const TextProviderConfigComponent: FC<ProviderComponentProps> = ({
           onParameterChange={onChangeParameter}
         />
       );
-    case 'azure':
-    case 'azure-openai':
+    case 'azure-foundry':
       return (
         <ConfigureAzureTextProviderModel
           parameters={parameters}
@@ -116,6 +122,13 @@ const TextProviderConfigComponent: FC<ProviderComponentProps> = ({
     case 'gemini':
       return (
         <ConfigureGeminiTextProviderModel
+          parameters={parameters}
+          onParameterChange={onChangeParameter}
+        />
+      );
+    case 'vertexai':
+      return (
+        <ConfigureVertexAiTextProviderModel
           parameters={parameters}
           onParameterChange={onChangeParameter}
         />

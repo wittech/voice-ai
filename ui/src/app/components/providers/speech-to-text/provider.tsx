@@ -9,7 +9,7 @@ import {
   ConfigureAzureSpeechToText,
   GetAzureDefaultOptions,
   ValidateAzureOptions,
-} from '@/app/components/providers/speech-to-text/azure';
+} from '@/app/components/providers/speech-to-text/azure-speech-service';
 import {
   ConfigureCartesiaSpeechToText,
   GetCartesiaDefaultOptions,
@@ -24,7 +24,7 @@ import {
   ConfigureGoogleSpeechToText,
   GetGoogleDefaultOptions,
   ValidateGoogleOptions,
-} from '@/app/components/providers/speech-to-text/google';
+} from '@/app/components/providers/speech-to-text/google-speech-service';
 import { ConfigureOpenAISpeechToText } from '@/app/components/providers/speech-to-text/openai';
 import { FC } from 'react';
 import {
@@ -38,13 +38,11 @@ export const GetDefaultSpeechToTextIfInvalid = (
   parameters: Metadata[],
 ) => {
   switch (provider) {
-    case 'google':
-    case 'google-cloud':
+    case 'google-speech-service':
       return GetGoogleDefaultOptions(parameters);
     case 'deepgram':
       return GetDeepgramDefaultOptions(parameters);
-    case 'azure':
-    case 'azure-cloud':
+    case 'azure-speech-service':
       return GetAzureDefaultOptions(parameters);
     case 'assemblyai':
       return GetAssemblyAIDefaultOptions(parameters);
@@ -62,13 +60,11 @@ export const ValidateSpeechToTextIfInvalid = (
   parameters: Metadata[],
 ): string | undefined => {
   switch (provider) {
-    case 'google-cloud':
-    case 'google':
+    case 'google-speech-service':
       return ValidateGoogleOptions(parameters);
     case 'deepgram':
       return ValidateDeepgramOptions(parameters);
-    case 'azure':
-    case 'azure-cloud':
+    case 'azure-speech-service':
       return ValidateAzureOptions(parameters);
     case 'assemblyai':
       return ValidateAssemblyAIOptions(parameters);
@@ -117,8 +113,7 @@ export const SpeechToTextConfigComponent: FC<ProviderComponentProps> = ({
   onChangeParameter,
 }) => {
   switch (provider) {
-    case 'google':
-    case 'google-cloud':
+    case 'google-speech-service':
       return (
         <ConfigureGoogleSpeechToText
           parameters={parameters}
@@ -140,8 +135,7 @@ export const SpeechToTextConfigComponent: FC<ProviderComponentProps> = ({
           onParameterChange={onChangeParameter}
         />
       );
-    case 'azure':
-    case 'azure-cloud':
+    case 'azure-speech-service':
       return (
         <ConfigureAzureSpeechToText
           parameters={parameters}

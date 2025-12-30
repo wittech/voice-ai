@@ -10,7 +10,7 @@ import { GOOGLE_SPEECH_TO_TEXT_MODEL } from '@/providers/index';
 export {
   GetGoogleDefaultOptions,
   ValidateGoogleOptions,
-} from '@/app/components/providers/speech-to-text/google/constant';
+} from '@/app/components/providers/speech-to-text/google-speech-service/constant';
 
 export const ConfigureGoogleSpeechToText: React.FC<{
   onParameterChange: (parameters: Metadata[]) => void;

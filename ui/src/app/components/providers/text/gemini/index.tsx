@@ -66,7 +66,7 @@ export const ConfigureGeminiTextProviderModel: React.FC<{
           onParameterChange(filteredParams);
         }}
         allValue={GEMINI_MODEL()}
-        placeholder="Select voice ouput provider"
+        placeholder="Select gemini model"
         option={c => {
           return (
             <span className="inline-flex items-center gap-2 sm:gap-2.5 max-w-full text-sm font-medium">

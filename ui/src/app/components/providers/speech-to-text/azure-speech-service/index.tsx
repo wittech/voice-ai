@@ -2,11 +2,11 @@ import { Metadata } from '@rapidaai/react';
 import { Dropdown } from '@/app/components/dropdown';
 import { FormLabel } from '@/app/components/form-label';
 import { FieldSet } from '@/app/components/form/fieldset';
-import { AZURE_LANGUAGE } from '@/app/components/providers/speech-to-text/azure/constant';
+import { AZURE_SPEECH_TO_TEXT_LANGUAGE } from '@/providers';
 export {
   GetAzureDefaultOptions,
   ValidateAzureOptions,
-} from '@/app/components/providers/speech-to-text/azure/constant';
+} from '@/app/components/providers/speech-to-text/azure-speech-service/constant';
 
 const renderOption = (c: { icon: React.ReactNode; name: string }) => (
   <span className="inline-flex items-center gap-2 sm:gap-2.5 max-w-full text-sm font-medium">
@@ -41,8 +41,9 @@ export const ConfigureAzureSpeechToText: React.FC<{
     {
       label: 'Language',
       key: 'listen.language',
-      options: AZURE_LANGUAGE,
-      findMatch: (val: string) => AZURE_LANGUAGE.find(x => x.code === val),
+      options: AZURE_SPEECH_TO_TEXT_LANGUAGE(),
+      findMatch: (val: string) =>
+        AZURE_SPEECH_TO_TEXT_LANGUAGE().find(x => x.code === val),
       onChange: (v: { code: string }) => {
         updateParameter('listen.language', v.code);
       },

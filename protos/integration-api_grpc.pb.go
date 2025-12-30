@@ -707,53 +707,53 @@ var AzureService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	GoogleService_Embedding_FullMethodName        = "/integration_api.GoogleService/Embedding"
-	GoogleService_Chat_FullMethodName             = "/integration_api.GoogleService/Chat"
-	GoogleService_StreamChat_FullMethodName       = "/integration_api.GoogleService/StreamChat"
-	GoogleService_VerifyCredential_FullMethodName = "/integration_api.GoogleService/VerifyCredential"
+	GeminiService_Embedding_FullMethodName        = "/integration_api.GeminiService/Embedding"
+	GeminiService_Chat_FullMethodName             = "/integration_api.GeminiService/Chat"
+	GeminiService_StreamChat_FullMethodName       = "/integration_api.GeminiService/StreamChat"
+	GeminiService_VerifyCredential_FullMethodName = "/integration_api.GeminiService/VerifyCredential"
 )
 
-// GoogleServiceClient is the client API for GoogleService service.
+// GeminiServiceClient is the client API for GeminiService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-type GoogleServiceClient interface {
+type GeminiServiceClient interface {
 	Embedding(ctx context.Context, in *EmbeddingRequest, opts ...grpc.CallOption) (*EmbeddingResponse, error)
 	Chat(ctx context.Context, in *ChatRequest, opts ...grpc.CallOption) (*ChatResponse, error)
 	StreamChat(ctx context.Context, in *ChatRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ChatResponse], error)
 	VerifyCredential(ctx context.Context, in *VerifyCredentialRequest, opts ...grpc.CallOption) (*VerifyCredentialResponse, error)
 }
 
-type googleServiceClient struct {
+type geminiServiceClient struct {
 	cc grpc.ClientConnInterface
 }
 
-func NewGoogleServiceClient(cc grpc.ClientConnInterface) GoogleServiceClient {
-	return &googleServiceClient{cc}
+func NewGeminiServiceClient(cc grpc.ClientConnInterface) GeminiServiceClient {
+	return &geminiServiceClient{cc}
 }
 
-func (c *googleServiceClient) Embedding(ctx context.Context, in *EmbeddingRequest, opts ...grpc.CallOption) (*EmbeddingResponse, error) {
+func (c *geminiServiceClient) Embedding(ctx context.Context, in *EmbeddingRequest, opts ...grpc.CallOption) (*EmbeddingResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(EmbeddingResponse)
-	err := c.cc.Invoke(ctx, GoogleService_Embedding_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, GeminiService_Embedding_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *googleServiceClient) Chat(ctx context.Context, in *ChatRequest, opts ...grpc.CallOption) (*ChatResponse, error) {
+func (c *geminiServiceClient) Chat(ctx context.Context, in *ChatRequest, opts ...grpc.CallOption) (*ChatResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ChatResponse)
-	err := c.cc.Invoke(ctx, GoogleService_Chat_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, GeminiService_Chat_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *googleServiceClient) StreamChat(ctx context.Context, in *ChatRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ChatResponse], error) {
+func (c *geminiServiceClient) StreamChat(ctx context.Context, in *ChatRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ChatResponse], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &GoogleService_ServiceDesc.Streams[0], GoogleService_StreamChat_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &GeminiService_ServiceDesc.Streams[0], GeminiService_StreamChat_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -768,156 +768,374 @@ func (c *googleServiceClient) StreamChat(ctx context.Context, in *ChatRequest, o
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type GoogleService_StreamChatClient = grpc.ServerStreamingClient[ChatResponse]
+type GeminiService_StreamChatClient = grpc.ServerStreamingClient[ChatResponse]
 
-func (c *googleServiceClient) VerifyCredential(ctx context.Context, in *VerifyCredentialRequest, opts ...grpc.CallOption) (*VerifyCredentialResponse, error) {
+func (c *geminiServiceClient) VerifyCredential(ctx context.Context, in *VerifyCredentialRequest, opts ...grpc.CallOption) (*VerifyCredentialResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(VerifyCredentialResponse)
-	err := c.cc.Invoke(ctx, GoogleService_VerifyCredential_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, GeminiService_VerifyCredential_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-// GoogleServiceServer is the server API for GoogleService service.
-// All implementations should embed UnimplementedGoogleServiceServer
+// GeminiServiceServer is the server API for GeminiService service.
+// All implementations should embed UnimplementedGeminiServiceServer
 // for forward compatibility.
-type GoogleServiceServer interface {
+type GeminiServiceServer interface {
 	Embedding(context.Context, *EmbeddingRequest) (*EmbeddingResponse, error)
 	Chat(context.Context, *ChatRequest) (*ChatResponse, error)
 	StreamChat(*ChatRequest, grpc.ServerStreamingServer[ChatResponse]) error
 	VerifyCredential(context.Context, *VerifyCredentialRequest) (*VerifyCredentialResponse, error)
 }
 
-// UnimplementedGoogleServiceServer should be embedded to have
+// UnimplementedGeminiServiceServer should be embedded to have
 // forward compatible implementations.
 //
 // NOTE: this should be embedded by value instead of pointer to avoid a nil
 // pointer dereference when methods are called.
-type UnimplementedGoogleServiceServer struct{}
+type UnimplementedGeminiServiceServer struct{}
 
-func (UnimplementedGoogleServiceServer) Embedding(context.Context, *EmbeddingRequest) (*EmbeddingResponse, error) {
+func (UnimplementedGeminiServiceServer) Embedding(context.Context, *EmbeddingRequest) (*EmbeddingResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Embedding not implemented")
 }
-func (UnimplementedGoogleServiceServer) Chat(context.Context, *ChatRequest) (*ChatResponse, error) {
+func (UnimplementedGeminiServiceServer) Chat(context.Context, *ChatRequest) (*ChatResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Chat not implemented")
 }
-func (UnimplementedGoogleServiceServer) StreamChat(*ChatRequest, grpc.ServerStreamingServer[ChatResponse]) error {
+func (UnimplementedGeminiServiceServer) StreamChat(*ChatRequest, grpc.ServerStreamingServer[ChatResponse]) error {
 	return status.Errorf(codes.Unimplemented, "method StreamChat not implemented")
 }
-func (UnimplementedGoogleServiceServer) VerifyCredential(context.Context, *VerifyCredentialRequest) (*VerifyCredentialResponse, error) {
+func (UnimplementedGeminiServiceServer) VerifyCredential(context.Context, *VerifyCredentialRequest) (*VerifyCredentialResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method VerifyCredential not implemented")
 }
-func (UnimplementedGoogleServiceServer) testEmbeddedByValue() {}
+func (UnimplementedGeminiServiceServer) testEmbeddedByValue() {}
 
-// UnsafeGoogleServiceServer may be embedded to opt out of forward compatibility for this service.
-// Use of this interface is not recommended, as added methods to GoogleServiceServer will
+// UnsafeGeminiServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to GeminiServiceServer will
 // result in compilation errors.
-type UnsafeGoogleServiceServer interface {
-	mustEmbedUnimplementedGoogleServiceServer()
+type UnsafeGeminiServiceServer interface {
+	mustEmbedUnimplementedGeminiServiceServer()
 }
 
-func RegisterGoogleServiceServer(s grpc.ServiceRegistrar, srv GoogleServiceServer) {
-	// If the following call pancis, it indicates UnimplementedGoogleServiceServer was
+func RegisterGeminiServiceServer(s grpc.ServiceRegistrar, srv GeminiServiceServer) {
+	// If the following call pancis, it indicates UnimplementedGeminiServiceServer was
 	// embedded by pointer and is nil.  This will cause panics if an
 	// unimplemented method is ever invoked, so we test this at initialization
 	// time to prevent it from happening at runtime later due to I/O.
 	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
 		t.testEmbeddedByValue()
 	}
-	s.RegisterService(&GoogleService_ServiceDesc, srv)
+	s.RegisterService(&GeminiService_ServiceDesc, srv)
 }
 
-func _GoogleService_Embedding_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _GeminiService_Embedding_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(EmbeddingRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(GoogleServiceServer).Embedding(ctx, in)
+		return srv.(GeminiServiceServer).Embedding(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: GoogleService_Embedding_FullMethodName,
+		FullMethod: GeminiService_Embedding_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(GoogleServiceServer).Embedding(ctx, req.(*EmbeddingRequest))
+		return srv.(GeminiServiceServer).Embedding(ctx, req.(*EmbeddingRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _GoogleService_Chat_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _GeminiService_Chat_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ChatRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(GoogleServiceServer).Chat(ctx, in)
+		return srv.(GeminiServiceServer).Chat(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: GoogleService_Chat_FullMethodName,
+		FullMethod: GeminiService_Chat_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(GoogleServiceServer).Chat(ctx, req.(*ChatRequest))
+		return srv.(GeminiServiceServer).Chat(ctx, req.(*ChatRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _GoogleService_StreamChat_Handler(srv interface{}, stream grpc.ServerStream) error {
+func _GeminiService_StreamChat_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(ChatRequest)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
-	return srv.(GoogleServiceServer).StreamChat(m, &grpc.GenericServerStream[ChatRequest, ChatResponse]{ServerStream: stream})
+	return srv.(GeminiServiceServer).StreamChat(m, &grpc.GenericServerStream[ChatRequest, ChatResponse]{ServerStream: stream})
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type GoogleService_StreamChatServer = grpc.ServerStreamingServer[ChatResponse]
+type GeminiService_StreamChatServer = grpc.ServerStreamingServer[ChatResponse]
 
-func _GoogleService_VerifyCredential_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _GeminiService_VerifyCredential_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(VerifyCredentialRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(GoogleServiceServer).VerifyCredential(ctx, in)
+		return srv.(GeminiServiceServer).VerifyCredential(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: GoogleService_VerifyCredential_FullMethodName,
+		FullMethod: GeminiService_VerifyCredential_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(GoogleServiceServer).VerifyCredential(ctx, req.(*VerifyCredentialRequest))
+		return srv.(GeminiServiceServer).VerifyCredential(ctx, req.(*VerifyCredentialRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-// GoogleService_ServiceDesc is the grpc.ServiceDesc for GoogleService service.
+// GeminiService_ServiceDesc is the grpc.ServiceDesc for GeminiService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
-var GoogleService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "integration_api.GoogleService",
-	HandlerType: (*GoogleServiceServer)(nil),
+var GeminiService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "integration_api.GeminiService",
+	HandlerType: (*GeminiServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
 			MethodName: "Embedding",
-			Handler:    _GoogleService_Embedding_Handler,
+			Handler:    _GeminiService_Embedding_Handler,
 		},
 		{
 			MethodName: "Chat",
-			Handler:    _GoogleService_Chat_Handler,
+			Handler:    _GeminiService_Chat_Handler,
 		},
 		{
 			MethodName: "VerifyCredential",
-			Handler:    _GoogleService_VerifyCredential_Handler,
+			Handler:    _GeminiService_VerifyCredential_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
 		{
 			StreamName:    "StreamChat",
-			Handler:       _GoogleService_StreamChat_Handler,
+			Handler:       _GeminiService_StreamChat_Handler,
+			ServerStreams: true,
+		},
+	},
+	Metadata: "integration-api.proto",
+}
+
+const (
+	VertexAiService_Embedding_FullMethodName        = "/integration_api.VertexAiService/Embedding"
+	VertexAiService_Chat_FullMethodName             = "/integration_api.VertexAiService/Chat"
+	VertexAiService_StreamChat_FullMethodName       = "/integration_api.VertexAiService/StreamChat"
+	VertexAiService_VerifyCredential_FullMethodName = "/integration_api.VertexAiService/VerifyCredential"
+)
+
+// VertexAiServiceClient is the client API for VertexAiService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+type VertexAiServiceClient interface {
+	Embedding(ctx context.Context, in *EmbeddingRequest, opts ...grpc.CallOption) (*EmbeddingResponse, error)
+	Chat(ctx context.Context, in *ChatRequest, opts ...grpc.CallOption) (*ChatResponse, error)
+	StreamChat(ctx context.Context, in *ChatRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ChatResponse], error)
+	VerifyCredential(ctx context.Context, in *VerifyCredentialRequest, opts ...grpc.CallOption) (*VerifyCredentialResponse, error)
+}
+
+type vertexAiServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewVertexAiServiceClient(cc grpc.ClientConnInterface) VertexAiServiceClient {
+	return &vertexAiServiceClient{cc}
+}
+
+func (c *vertexAiServiceClient) Embedding(ctx context.Context, in *EmbeddingRequest, opts ...grpc.CallOption) (*EmbeddingResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(EmbeddingResponse)
+	err := c.cc.Invoke(ctx, VertexAiService_Embedding_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vertexAiServiceClient) Chat(ctx context.Context, in *ChatRequest, opts ...grpc.CallOption) (*ChatResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ChatResponse)
+	err := c.cc.Invoke(ctx, VertexAiService_Chat_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vertexAiServiceClient) StreamChat(ctx context.Context, in *ChatRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ChatResponse], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &VertexAiService_ServiceDesc.Streams[0], VertexAiService_StreamChat_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[ChatRequest, ChatResponse]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type VertexAiService_StreamChatClient = grpc.ServerStreamingClient[ChatResponse]
+
+func (c *vertexAiServiceClient) VerifyCredential(ctx context.Context, in *VerifyCredentialRequest, opts ...grpc.CallOption) (*VerifyCredentialResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(VerifyCredentialResponse)
+	err := c.cc.Invoke(ctx, VertexAiService_VerifyCredential_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// VertexAiServiceServer is the server API for VertexAiService service.
+// All implementations should embed UnimplementedVertexAiServiceServer
+// for forward compatibility.
+type VertexAiServiceServer interface {
+	Embedding(context.Context, *EmbeddingRequest) (*EmbeddingResponse, error)
+	Chat(context.Context, *ChatRequest) (*ChatResponse, error)
+	StreamChat(*ChatRequest, grpc.ServerStreamingServer[ChatResponse]) error
+	VerifyCredential(context.Context, *VerifyCredentialRequest) (*VerifyCredentialResponse, error)
+}
+
+// UnimplementedVertexAiServiceServer should be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedVertexAiServiceServer struct{}
+
+func (UnimplementedVertexAiServiceServer) Embedding(context.Context, *EmbeddingRequest) (*EmbeddingResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Embedding not implemented")
+}
+func (UnimplementedVertexAiServiceServer) Chat(context.Context, *ChatRequest) (*ChatResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Chat not implemented")
+}
+func (UnimplementedVertexAiServiceServer) StreamChat(*ChatRequest, grpc.ServerStreamingServer[ChatResponse]) error {
+	return status.Errorf(codes.Unimplemented, "method StreamChat not implemented")
+}
+func (UnimplementedVertexAiServiceServer) VerifyCredential(context.Context, *VerifyCredentialRequest) (*VerifyCredentialResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method VerifyCredential not implemented")
+}
+func (UnimplementedVertexAiServiceServer) testEmbeddedByValue() {}
+
+// UnsafeVertexAiServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to VertexAiServiceServer will
+// result in compilation errors.
+type UnsafeVertexAiServiceServer interface {
+	mustEmbedUnimplementedVertexAiServiceServer()
+}
+
+func RegisterVertexAiServiceServer(s grpc.ServiceRegistrar, srv VertexAiServiceServer) {
+	// If the following call pancis, it indicates UnimplementedVertexAiServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&VertexAiService_ServiceDesc, srv)
+}
+
+func _VertexAiService_Embedding_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(EmbeddingRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VertexAiServiceServer).Embedding(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: VertexAiService_Embedding_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VertexAiServiceServer).Embedding(ctx, req.(*EmbeddingRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _VertexAiService_Chat_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ChatRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VertexAiServiceServer).Chat(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: VertexAiService_Chat_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VertexAiServiceServer).Chat(ctx, req.(*ChatRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _VertexAiService_StreamChat_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(ChatRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(VertexAiServiceServer).StreamChat(m, &grpc.GenericServerStream[ChatRequest, ChatResponse]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type VertexAiService_StreamChatServer = grpc.ServerStreamingServer[ChatResponse]
+
+func _VertexAiService_VerifyCredential_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(VerifyCredentialRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VertexAiServiceServer).VerifyCredential(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: VertexAiService_VerifyCredential_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VertexAiServiceServer).VerifyCredential(ctx, req.(*VerifyCredentialRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// VertexAiService_ServiceDesc is the grpc.ServiceDesc for VertexAiService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var VertexAiService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "integration_api.VertexAiService",
+	HandlerType: (*VertexAiServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "Embedding",
+			Handler:    _VertexAiService_Embedding_Handler,
+		},
+		{
+			MethodName: "Chat",
+			Handler:    _VertexAiService_Chat_Handler,
+		},
+		{
+			MethodName: "VerifyCredential",
+			Handler:    _VertexAiService_VerifyCredential_Handler,
+		},
+	},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "StreamChat",
+			Handler:       _VertexAiService_StreamChat_Handler,
 			ServerStreams: true,
 		},
 	},
