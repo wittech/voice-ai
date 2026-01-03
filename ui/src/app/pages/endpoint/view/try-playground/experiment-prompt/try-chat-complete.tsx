@@ -119,7 +119,7 @@ export function TryChatComplete(props: {
         setError('Unable to execute the endpoint, please try again.');
       })
       .catch(error => {
-        showLoader();
+        hideLoader();
         setError('Unable to execute the endpoint, please try again.');
       });
   };
