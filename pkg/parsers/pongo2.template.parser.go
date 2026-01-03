@@ -31,6 +31,7 @@ func NewPongo2MessageTemplateParser(logger commons.Logger) MessageTemplateParser
 }
 
 func (stp *pongo2StringTemplateParser) Parse(template string, argument map[string]interface{}) string {
+	stp.logger.Debugf("parsing %+v and %+v", template, argument)
 	tpl, err := pongo2.FromString(template)
 	if err != nil {
 		stp.logger.Errorf("error while parsing the template with pongo2: %v", err)

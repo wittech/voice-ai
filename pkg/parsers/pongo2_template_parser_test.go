@@ -9,7 +9,8 @@ import (
 )
 
 func TestPongo2MessageTemplateParser_Parse(t *testing.T) {
-	parser := NewPongo2MessageTemplateParser(commons.NewApplicationLogger())
+	logger, _ := commons.NewApplicationLogger()
+	parser := NewPongo2MessageTemplateParser(logger)
 	tests := []struct {
 		name     string
 		template *types.Message
@@ -109,8 +110,8 @@ func TestPongo2StringTemplateParser_Parse(t *testing.T) {
 			expected: "Hi Alice! You are 30 years old.",
 		},
 	}
-
-	parser := NewPongo2StringTemplateParser(commons.NewApplicationLogger())
+	logger, _ := commons.NewApplicationLogger()
+	parser := NewPongo2StringTemplateParser(logger)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := parser.Parse(tt.template, tt.argument)
@@ -209,8 +210,8 @@ Take care of yourself, and remember that recognizing your worth is the first ste
 </COACHING_SESSION>`,
 		},
 	}
-
-	parser := NewPongo2StringTemplateParser(commons.NewApplicationLogger())
+	logger, _ := commons.NewApplicationLogger()
+	parser := NewPongo2StringTemplateParser(logger)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := parser.Parse(tt.template, tt.argument)
