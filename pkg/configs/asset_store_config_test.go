@@ -20,7 +20,7 @@ func TestAssetStoreConfig_Type(t *testing.T) {
 	}{
 		{"S3", AssetStoreConfig{StorageType: "s3"}, S3},
 		{"Local", AssetStoreConfig{StorageType: "local"}, LOCAL},
-		{"CDN", AssetStoreConfig{StorageType: "cdn"}, LOCAL},
+		{"CDN", AssetStoreConfig{StorageType: "cdn"}, CDN},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
