@@ -20,7 +20,6 @@ type rnnoiseDenoiser struct {
 	logger         commons.Logger
 	denoiserConfig *protos.AudioConfig
 	inputConfig    *protos.AudioConfig
-	outputConfig   *protos.AudioConfig
 	audioSampler   *internal_audio.AudioResampler
 }
 
@@ -40,22 +39,18 @@ func NewRnnoiseDenoiser(
 			SampleRate:  48000,
 			AudioFormat: protos.AudioConfig_LINEAR16,
 		},
-		inputConfig:  inputConfig,
-		outputConfig: inputConfig,
-		logger:       logger}, nil
+		inputConfig: inputConfig,
+		logger:      logger}, nil
 }
 
 // ProcessStream processes a continuous audio stream
 func (rnd *rnnoiseDenoiser) Denoise(ctx context.Context, input []byte) ([]byte, float64, error) {
 	idi, err := rnd.audioSampler.Resample(input, rnd.inputConfig, rnd.denoiserConfig)
 	if err != nil {
-		rnd.logger.Debugf("geto %+v", err)
 		return nil, 0, err
 	}
-	//
 	floatSample, err := rnd.audioSampler.ConvertToFloat32Samples(idi, rnd.denoiserConfig)
 	if err != nil {
-		rnd.logger.Debugf("geto %+v", err)
 		return nil, 0, err
 	}
 
@@ -72,13 +67,11 @@ func (rnd *rnnoiseDenoiser) Denoise(ctx context.Context, input []byte) ([]byte, 
 		chunk := floatSample[i:end]
 		if len(chunk) < 480 {
 			padding := make([]float32, 480-len(chunk))
-			chunk = append(chunk, padding...) // Pad with zeros
+			chunk = append(chunk, padding...)
 		}
 
-		// Process chunk
 		cnf, cleanedAudio, err := rnd.rnNoise.SuppressNoise(chunk)
 		if err != nil {
-			rnd.logger.Debugf("geto %+v", err)
 			return nil, 0, err
 		}
 
@@ -92,21 +85,13 @@ func (rnd *rnnoiseDenoiser) Denoise(ctx context.Context, input []byte) ([]byte, 
 		combinedCnf /= float64((len(floatSample)-1)/480 + 1)
 	}
 
-	//
 	ido, err := rnd.audioSampler.ConvertToByteSamples(combinedCleanedAudio, rnd.denoiserConfig)
 	if err != nil {
-		rnd.logger.Debugf("geto %+v", err)
 		return nil, 0, err
 	}
 
-	//
-	idm, err := rnd.audioSampler.Resample(ido, &protos.AudioConfig{
-		SampleRate:  48000,
-		AudioFormat: protos.AudioConfig_LINEAR16,
-	}, rnd.outputConfig)
-
+	idm, err := rnd.audioSampler.Resample(ido, rnd.denoiserConfig, rnd.inputConfig)
 	if err != nil {
-		rnd.logger.Debugf("geto %+v", err)
 		return nil, 0, err
 	}
 	return idm, combinedCnf, err

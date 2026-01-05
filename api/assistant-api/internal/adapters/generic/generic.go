@@ -11,6 +11,7 @@ import (
 
 	"github.com/rapidaai/api/assistant-api/config"
 	internal_adapter_request_customizers "github.com/rapidaai/api/assistant-api/internal/adapters/customizers"
+	internal_recorder "github.com/rapidaai/api/assistant-api/internal/recorder"
 	internal_streamers "github.com/rapidaai/api/assistant-api/internal/streamers"
 	internal_assistant_telemetry "github.com/rapidaai/api/assistant-api/internal/telemetry/assistant"
 	internal_assistant_telemetry_exporters "github.com/rapidaai/api/assistant-api/internal/telemetry/assistant/exporters"
@@ -91,7 +92,7 @@ type GenericRequestor struct {
 	tokenizer    internal_tokenizer.Tokenizer
 	synthesizers []internal_synthesizers.SentenceSynthesizer
 
-	recorder       internal_adapter_request_customizers.Recorder
+	recorder       internal_recorder.Recorder
 	templateParser parsers.StringTemplateParser
 
 	// executor
@@ -151,7 +152,7 @@ func NewGenericRequestor(
 				&config.AppConfig, opensearch,
 			)),
 
-		recorder:          internal_adapter_request_customizers.NewRecorder(logger),
+		recorder:          internal_recorder.NewRecorder(logger),
 		messaging:         internal_adapter_request_customizers.NewMessaging(logger),
 		assistantExecutor: internal_assistant_executors.NewAssistantExecutor(logger),
 
@@ -417,7 +418,7 @@ func (gr *GenericRequestor) CreateConversationRecording(
 	return nil
 }
 
-func (gr *GenericRequestor) Recorder() internal_adapter_request_customizers.Recorder {
+func (gr *GenericRequestor) Recorder() internal_recorder.Recorder {
 	return gr.recorder
 }
 

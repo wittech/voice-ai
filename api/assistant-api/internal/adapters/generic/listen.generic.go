@@ -356,28 +356,29 @@ func (listening *GenericRequestor) ListenAudio(
 	ctx context.Context,
 	in []byte,
 ) ([]byte, error) {
-	out := in
-
 	if listening.denoiser != nil {
 		dnOut, _, err := listening.denoiser.Denoise(ctx, in)
 		if err != nil {
 			listening.logger.Warnf("error while denoising process | will process actual audio byte")
+		} else {
+			in = dnOut
 		}
-		out = dnOut
 	}
 	if listening.vad != nil {
 		utils.Go(ctx, func() {
-			listening.vad.Process(out)
+			if err := listening.vad.Process(in); err != nil {
+				listening.logger.Warnf("error while processing with vad")
+			}
 		})
 	}
 	if listening.speechToTextTransformer != nil {
 		utils.Go(ctx, func() {
-			if err := listening.speechToTextTransformer.Transform(ctx, out, nil); err != nil {
+			if err := listening.speechToTextTransformer.Transform(ctx, in, nil); err != nil {
 				if !errors.Is(err, io.EOF) {
 					listening.logger.Tracef(ctx, "error while transforming input %s and error %v", listening.speechToTextTransformer.Name(), err)
 				}
 			}
 		})
 	}
-	return out, nil
+	return in, nil
 }

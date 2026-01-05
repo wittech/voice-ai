@@ -1,3 +1,8 @@
+// Copyright (c) 2023-2025 RapidaAI
+// Author: Prashant Srivastav <prashant@rapida.ai>
+//
+// Licensed under GPL-2.0 with Rapida Additional Terms.
+// See LICENSE.md or contact sales@rapida.ai for commercial usage.
 package internal_twilio_telephony
 
 import (
@@ -32,10 +37,10 @@ func NewTwilioTelephony(
 	}, nil
 }
 
-func (tpc *twilioTelephony) CatchAllCallback(ctx *gin.Context) (*string, []*types.Metric, []*types.Event, error) {
+func (tpc *twilioTelephony) CatchAllStatusCallback(ctx *gin.Context) (*string, []*types.Metric, []*types.Event, error) {
 	return nil, nil, nil, nil
 }
-func (tpc *twilioTelephony) Callback(c *gin.Context, auth types.SimplePrinciple, assistantId uint64, assistantConversationId uint64) ([]*types.Metric, []*types.Event, error) {
+func (tpc *twilioTelephony) StatusCallback(c *gin.Context, auth types.SimplePrinciple, assistantId uint64, assistantConversationId uint64) ([]*types.Metric, []*types.Event, error) {
 	body, err := c.GetRawData() // Extract raw request body
 	if err != nil {
 		tpc.logger.Errorf("failed to read event body with error %+v", err)
@@ -101,7 +106,7 @@ func (tpc *twilioTelephony) MakeCall(
 ) ([]*types.Metadata, []*types.Metric, []*types.Event, error) {
 	mtds := []*types.Metadata{
 		types.NewMetadata("telephony.toPhone", toPhone),
-		types.NewMetadata("telephony.fromPhone", toPhone),
+		types.NewMetadata("telephony.fromPhone", fromPhone),
 		types.NewMetadata("telephony.provider", "twilio"),
 	}
 	event := []*types.Event{
@@ -166,7 +171,7 @@ func (tpc *twilioTelephony) CreateTwinML(mediaServer string, name, path string, 
 	)
 }
 
-func (tpc *twilioTelephony) ReceiveCall(c *gin.Context, auth types.SimplePrinciple, assistantId uint64, clientNumber string, assistantConversationId uint64) error {
+func (tpc *twilioTelephony) IncomingCall(c *gin.Context, auth types.SimplePrinciple, assistantId uint64, clientNumber string, assistantConversationId uint64) error {
 	c.Data(http.StatusOK, "text/xml", []byte(
 		tpc.CreateTwinML(
 			tpc.appCfg.PublicAssistantHost,
@@ -186,7 +191,7 @@ func (tpc *twilioTelephony) Streamer(c *gin.Context, connection *websocket.Conn,
 		assistantConversationID)
 }
 
-func (tpc *twilioTelephony) GetCaller(c *gin.Context) (string, bool) {
+func (tpc *twilioTelephony) AcceptCall(c *gin.Context) (*string, *string, error) {
 	queryParams := make(map[string]string)
 	for key, values := range c.Request.URL.Query() {
 		if len(values) > 0 {
@@ -195,6 +200,15 @@ func (tpc *twilioTelephony) GetCaller(c *gin.Context) (string, bool) {
 	}
 
 	clientNumber, ok := queryParams["from"]
-	return clientNumber, ok
+	if !ok || clientNumber == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid assistant ID"})
+		return nil, nil, fmt.Errorf("missing or empty 'from' query parameter")
+	}
 
+	assistantID := c.Param("assistantId")
+	if assistantID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid assistant ID"})
+		return nil, nil, fmt.Errorf("missing assistantId path parameter")
+	}
+	return utils.Ptr(clientNumber), utils.Ptr(assistantID), nil
 }
