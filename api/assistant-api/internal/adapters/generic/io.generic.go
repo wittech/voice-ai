@@ -130,11 +130,12 @@ func (io *GenericRequestor) Input(message *protos.AssistantConversationUserMessa
 }
 
 func (io *GenericRequestor) InputAudio(ctx context.Context, in []byte) error {
-	if v, err := io.ListenAudio(ctx, in); err != nil {
+	if v, err := io.ListenAudio(ctx, in); err == nil {
 		utils.Go(context.Background(), func() {
 			io.recorder.User(v)
 		})
 	}
+
 	return nil
 }
 

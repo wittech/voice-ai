@@ -60,7 +60,7 @@ func (cApi *ConversationApi) Callback(c *gin.Context) {
 		return
 	}
 
-	mtr, evts, err := _telephony.Callback(c, iAuth, assistantId, conversationId)
+	mtr, evts, err := _telephony.StatusCallback(c, iAuth, assistantId, conversationId)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid event to process"})
 		return
@@ -93,25 +93,22 @@ func (cApi *ConversationApi) CallReciever(c *gin.Context) {
 		return
 	}
 
-	assistantIdStr := c.Param("assistantId")
-	assistantId, err := strconv.ParseUint(assistantIdStr, 10, 64)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid assistant ID"})
-		return
-	}
-
 	tlp := c.Param("telephony")
 	_telephony, err := telephony.GetTelephony(telephony.Telephony(tlp), cApi.cfg, cApi.logger)
-
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Telephony is not connected"})
 		return
 	}
 
-	clientNumber, ok := _telephony.GetCaller(c)
-	if !ok {
-		cApi.logger.Debugf("Missing 'Caller' OR 'from' number in Phone request")
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing 'Caller' number"})
+	clientNumber, assistantIdStr, err := _telephony.AcceptCall(c)
+	if err != nil {
+		cApi.logger.Errorf(err.Error())
+		return
+	}
+
+	assistantId, err := strconv.ParseUint(*assistantIdStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid assistant ID"})
 		return
 	}
 
@@ -122,16 +119,18 @@ func (cApi *ConversationApi) CallReciever(c *gin.Context) {
 		return
 	}
 
-	conversation, err := cApi.assistantConversationService.CreateConversation(c, iAuth, internal_factory.Identifier(utils.PhoneCall, c, iAuth, clientNumber), assistant.Id, assistant.AssistantProviderId, type_enums.DIRECTION_INBOUND, utils.PhoneCall)
+	conversation, err := cApi.assistantConversationService.CreateConversation(c, iAuth, internal_factory.Identifier(utils.PhoneCall, c, iAuth, *clientNumber), assistant.Id, assistant.AssistantProviderId, type_enums.DIRECTION_INBOUND, utils.PhoneCall)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "unable to initiate talker"})
 		return
 	}
+
+	//
 	if _, err := cApi.assistantConversationService.ApplyConversationMetrics(c, iAuth, assistantId, conversation.Id, []*types.Metric{types.NewStatusMetric(type_enums.RECORD_CONNECTED)}); err != nil {
 		cApi.logger.Errorf("error while applying metrics %v", err)
 	}
 
-	if err := _telephony.ReceiveCall(c, iAuth, assistant.Id, clientNumber, conversation.Id); err != nil {
+	if err := _telephony.IncomingCall(c, iAuth, assistant.Id, *clientNumber, conversation.Id); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "unable to initiate talker"})
 		return
 	}

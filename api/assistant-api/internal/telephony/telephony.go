@@ -22,26 +22,19 @@ type Telephony interface {
 	Streamer(c *gin.Context, connection *websocket.Conn, assistantID uint64, assistantVersion string, assistantConversationID uint64) internal_streamers.Streamer
 
 	// for creating call throght telephony
-	MakeCall(
-		auth types.SimplePrinciple,
-		toPhone string,
-		fromPhone string,
-		assistantId, assistantConversationId uint64,
-		vaultCredential *protos.VaultCredential,
-		opts utils.Option,
-	) ([]*types.Metadata, []*types.Metric, []*types.Event, error)
+	MakeCall(auth types.SimplePrinciple, toPhone string, fromPhone string, assistantId, assistantConversationId uint64, vaultCredential *protos.VaultCredential, opts utils.Option) ([]*types.Metadata, []*types.Metric, []*types.Event, error)
 
-	//  callback for a conversation
-	Callback(ctx *gin.Context, auth types.SimplePrinciple, assistantId, assistantConversationId uint64) ([]*types.Metric, []*types.Event, error)
+	//  event callback for a conversation
+	StatusCallback(ctx *gin.Context, auth types.SimplePrinciple, assistantId, assistantConversationId uint64) ([]*types.Metric, []*types.Event, error)
 
-	// conversation reference, metrics, events
-	CatchAllCallback(ctx *gin.Context) (*string, []*types.Metric, []*types.Event, error)
+	// catch all event callback
+	CatchAllStatusCallback(ctx *gin.Context) (*string, []*types.Metric, []*types.Event, error)
 
 	//
-	ReceiveCall(c *gin.Context, auth types.SimplePrinciple, assistantId uint64, clientNumber string, assistantConversationId uint64) error
+	IncomingCall(c *gin.Context, auth types.SimplePrinciple, assistantId uint64, clientNumber string, assistantConversationId uint64) error
 
 	//
-	GetCaller(c *gin.Context) (string, bool)
+	AcceptCall(c *gin.Context) (client *string, assistantId *string, err error)
 }
 
 func GetAnswerPath(provider string, auth types.SimplePrinciple, assistantId uint64, assistantConversationId uint64, toPhone string) string {

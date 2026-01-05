@@ -1,3 +1,8 @@
+// Copyright (c) 2023-2025 RapidaAI
+// Author: Prashant Srivastav <prashant@rapida.ai>
+//
+// Licensed under GPL-2.0 with Rapida Additional Terms.
+// See LICENSE.md or contact sales@rapida.ai for commercial usage.
 package internal_vonage_telephony
 
 import (
@@ -30,10 +35,10 @@ func NewVonageTelephony(config *config.AssistantConfig, logger commons.Logger) (
 	}, nil
 }
 
-func (tpc *vonageTelephony) CatchAllCallback(ctx *gin.Context) (*string, []*types.Metric, []*types.Event, error) {
+func (tpc *vonageTelephony) CatchAllStatusCallback(ctx *gin.Context) (*string, []*types.Metric, []*types.Event, error) {
 	return nil, nil, nil, nil
 }
-func (tpc *vonageTelephony) Callback(c *gin.Context, auth types.SimplePrinciple, assistantId uint64, assistantConversationId uint64) ([]*types.Metric, []*types.Event, error) {
+func (tpc *vonageTelephony) StatusCallback(c *gin.Context, auth types.SimplePrinciple, assistantId uint64, assistantConversationId uint64) ([]*types.Metric, []*types.Event, error) {
 	body, err := c.GetRawData() // Extract raw request body
 	if err != nil {
 		tpc.logger.Errorf("failed to read request body with error %+v", err)
@@ -85,7 +90,7 @@ func (vt *vonageTelephony) MakeCall(
 ) ([]*types.Metadata, []*types.Metric, []*types.Event, error) {
 	mtds := []*types.Metadata{
 		types.NewMetadata("telephony.toPhone", toPhone),
-		types.NewMetadata("telephony.fromPhone", toPhone),
+		types.NewMetadata("telephony.fromPhone", fromPhone),
 		types.NewMetadata("telephony.provider", "vonage"),
 	}
 	event := []*types.Event{
@@ -133,7 +138,7 @@ func (vt *vonageTelephony) MakeCall(
 	return mtds, []*types.Metric{types.NewMetric("STATUS", "SUCCESS", utils.Ptr("Status of telephony api"))}, event, nil
 }
 
-func (vt *vonageTelephony) ReceiveCall(c *gin.Context, auth types.SimplePrinciple, assistantId uint64, clientNumber string, assistantConversationId uint64) error {
+func (vt *vonageTelephony) IncomingCall(c *gin.Context, auth types.SimplePrinciple, assistantId uint64, clientNumber string, assistantConversationId uint64) error {
 	c.JSON(http.StatusOK, []gin.H{
 		{
 			"action":    "connect",
@@ -159,7 +164,7 @@ func (tpc *vonageTelephony) Streamer(c *gin.Context, connection *websocket.Conn,
 		assistantConversationID)
 }
 
-func (tpc *vonageTelephony) GetCaller(c *gin.Context) (string, bool) {
+func (tpc *vonageTelephony) AcceptCall(c *gin.Context) (*string, *string, error) {
 	queryParams := make(map[string]string)
 	for key, values := range c.Request.URL.Query() {
 		if len(values) > 0 {
@@ -168,6 +173,15 @@ func (tpc *vonageTelephony) GetCaller(c *gin.Context) (string, bool) {
 	}
 
 	clientNumber, ok := queryParams["from"]
-	return clientNumber, ok
+	if !ok || clientNumber == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid assistant ID"})
+		return nil, nil, fmt.Errorf("missing or empty 'from' query parameter")
+	}
 
+	assistantID := c.Param("assistantId")
+	if assistantID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid assistant ID"})
+		return nil, nil, fmt.Errorf("missing assistantId path parameter")
+	}
+	return utils.Ptr(clientNumber), utils.Ptr(assistantID), nil
 }

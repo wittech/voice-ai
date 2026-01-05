@@ -1,3 +1,8 @@
+// Copyright (c) 2023-2025 RapidaAI
+// Author: Prashant Srivastav <prashant@rapida.ai>
+//
+// Licensed under GPL-2.0 with Rapida Additional Terms.
+// See LICENSE.md or contact sales@rapida.ai for commercial usage.
 package internal_exotel_telephony
 
 import (
@@ -25,12 +30,12 @@ type exotelTelephony struct {
 	appCfg *config.AssistantConfig
 }
 
-func (tpc *exotelTelephony) CatchAllCallback(ctx *gin.Context) (*string, []*types.Metric, []*types.Event, error) {
+func (tpc *exotelTelephony) CatchAllStatusCallback(ctx *gin.Context) (*string, []*types.Metric, []*types.Event, error) {
 	return nil, nil, nil, nil
 }
 
 // EventCallback implements [Telephony].
-func (tpc *exotelTelephony) Callback(c *gin.Context, auth types.SimplePrinciple, assistantId uint64, assistantConversationId uint64) ([]*types.Metric, []*types.Event, error) {
+func (tpc *exotelTelephony) StatusCallback(c *gin.Context, auth types.SimplePrinciple, assistantId uint64, assistantConversationId uint64) ([]*types.Metric, []*types.Event, error) {
 	form, err := c.MultipartForm()
 	if err != nil {
 		tpc.logger.Errorf("failed to parse multipart form-data with error %+v", err)
@@ -100,12 +105,12 @@ func (tpc *exotelTelephony) MakeCall(
 	toPhone string,
 	// exo number
 	fromPhone string,
-	assistantId, sessionId uint64,
+	assistantId, assistantConversationId uint64,
 	vaultCredential *protos.VaultCredential,
 	opts utils.Option) ([]*types.Metadata, []*types.Metric, []*types.Event, error) {
 	mtds := []*types.Metadata{
 		types.NewMetadata("telephony.toPhone", toPhone),
-		types.NewMetadata("telephony.fromPhone", toPhone),
+		types.NewMetadata("telephony.fromPhone", fromPhone),
 		types.NewMetadata("telephony.provider", "exotel"),
 	}
 	event := []*types.Event{
@@ -128,8 +133,14 @@ func (tpc *exotelTelephony) MakeCall(
 	formData.Set("CallerId", fromPhone)
 	formData.Set("To", fromPhone)
 	formData.Set("Url", *appUrl)
-	formData.Set("StatusCallback", fmt.Sprintf("https://%s/%s", tpc.appCfg.PublicAssistantHost, internal_telephony.GetEventPath("exotel", auth, assistantId, sessionId)))
-	tpc.logger.Debugf("Caller %+v and url %s", formData, *clientUrl)
+	formData.Set("StatusCallback", fmt.Sprintf("https://%s/%s", tpc.appCfg.PublicAssistantHost, internal_telephony.GetEventPath("exotel", auth, assistantId, assistantConversationId)))
+	// for exotel there is no way to set dynamic path so pass it as custom filed
+	formData.Set("CustomField",
+		internal_telephony.GetAnswerPath("exotel", auth, assistantId,
+			assistantConversationId,
+			toPhone,
+		))
+
 	client := &http.Client{Timeout: 60 * time.Second}
 	req, err := http.NewRequest("POST", *clientUrl, strings.NewReader(formData.Encode()))
 	if err != nil {
@@ -172,7 +183,7 @@ func (tpc *exotelTelephony) MakeCall(
 	return mtds, []*types.Metric{types.NewMetric("STATUS", "SUCCESS", utils.Ptr("Status of telephony api"))}, event, nil
 }
 
-func (tpc *exotelTelephony) ReceiveCall(c *gin.Context, auth types.SimplePrinciple, assistantId uint64, clientNumber string, assistantConversationId uint64) error {
+func (tpc *exotelTelephony) IncomingCall(c *gin.Context, auth types.SimplePrinciple, assistantId uint64, clientNumber string, assistantConversationId uint64) error {
 	response := map[string]string{
 		"url": fmt.Sprintf("wss://%s/%s",
 			tpc.appCfg.PublicAssistantHost,
@@ -189,8 +200,7 @@ func (tpc *exotelTelephony) Streamer(c *gin.Context, connection *websocket.Conn,
 		assistantConversationID)
 }
 
-func (tpc *exotelTelephony) GetCaller(c *gin.Context) (string, bool) {
-	// Extract query parameters
+func (tpc *exotelTelephony) AcceptCall(c *gin.Context) (*string, *string, error) {
 	queryParams := make(map[string]string)
 	for key, values := range c.Request.URL.Query() {
 		if len(values) > 0 {
@@ -198,6 +208,27 @@ func (tpc *exotelTelephony) GetCaller(c *gin.Context) (string, bool) {
 		}
 	}
 
+	socketUrl, ok := queryParams["CustomField"]
+	if ok {
+		response := map[string]string{
+			"url": fmt.Sprintf("wss://%s/%s",
+				tpc.appCfg.PublicAssistantHost,
+				socketUrl),
+		}
+		c.JSON(http.StatusOK, response)
+		return nil, nil, fmt.Errorf("outbound call triggered")
+	}
+
 	clientNumber, ok := queryParams["CallFrom"]
-	return clientNumber, ok
+	if !ok || clientNumber == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid caller"})
+		return nil, nil, fmt.Errorf("missing or empty 'from' query parameter")
+	}
+
+	assistantID := c.Param("assistantId")
+	if assistantID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid assistant ID"})
+		return nil, nil, fmt.Errorf("missing assistantId path parameter")
+	}
+	return utils.Ptr(clientNumber), utils.Ptr(assistantID), nil
 }
