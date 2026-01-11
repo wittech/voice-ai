@@ -1,3 +1,9 @@
+// Copyright (c) 2023-2025 RapidaAI
+// Author: Prashant Srivastav <prashant@rapida.ai>
+//
+// Licensed under GPL-2.0 with Rapida Additional Terms.
+// See LICENSE.md or contact sales@rapida.ai for commercial usage.
+
 package internal_transformer_factory
 
 import (
@@ -33,12 +39,7 @@ const (
 func (at AudioTransformer) String() string {
 	return string(at)
 }
-func GetTextToSpeechTransformer(
-	at AudioTransformer,
-	ctx context.Context,
-	logger commons.Logger,
-	credential *protos.VaultCredential,
-	opts *internal_transformer.TextToSpeechInitializeOptions) (internal_transformer.TextToSpeechTransformer, error) {
+func GetTextToSpeechTransformer(at AudioTransformer, ctx context.Context, logger commons.Logger, credential *protos.VaultCredential, opts *internal_transformer.TextToSpeechInitializeOptions) (internal_transformer.TextToSpeechTransformer, error) {
 
 	switch at {
 	case DEEPGRAM:
@@ -60,11 +61,7 @@ func GetTextToSpeechTransformer(
 	}
 }
 
-func GetSpeechToTextTransformer(at AudioTransformer,
-	ctx context.Context,
-	logger commons.Logger,
-	credential *protos.VaultCredential,
-	opts *internal_transformer.SpeechToTextInitializeOptions) (internal_transformer.SpeechToTextTransformer, error) {
+func GetSpeechToTextTransformer(at AudioTransformer, ctx context.Context, logger commons.Logger, credential *protos.VaultCredential, opts *internal_transformer.SpeechToTextInitializeOptions) (internal_transformer.SpeechToTextTransformer, error) {
 
 	switch at {
 	case DEEPGRAM:

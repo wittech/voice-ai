@@ -23,18 +23,21 @@ Use this checklist when adding support for a new speech-to-text or text-to-speec
 ## Configuration Implementation (`myprovider.go`)
 
 - [ ] Created `myproviderOption` struct with required fields:
+
   - [ ] `logger commons.Logger`
   - [ ] `audioConfig *protos.AudioConfig`
   - [ ] `mdlOpts utils.Option`
   - [ ] Provider-specific fields (API key, endpoints, etc.)
 
 - [ ] Implemented `NewMyproviderOption()` constructor:
+
   - [ ] Extract credentials from vault using `vaultCredential.GetValue().AsMap()`
   - [ ] Validate all required credentials are present
   - [ ] Return error with descriptive message if validation fails
   - [ ] Return configured option struct
 
 - [ ] Implemented `GetEncoding()` helper method:
+
   - [ ] Map `protos.AudioConfig_LINEAR16` to provider's format
   - [ ] Map `protos.AudioConfig_MuLaw8` to provider's format
   - [ ] Handle unknown formats with sensible default
@@ -48,6 +51,7 @@ Use this checklist when adding support for a new speech-to-text or text-to-speec
 ## Speech-to-Text Implementation (`stt.go`)
 
 ### Structure Definition
+
 - [ ] Created `myproviderSpeechToText` struct with:
   - [ ] `*myproviderOption` (embedded)
   - [ ] `mu sync.Mutex` for thread safety
@@ -57,6 +61,7 @@ Use this checklist when adding support for a new speech-to-text or text-to-speec
   - [ ] Provider client/connection field
 
 ### Constructor Function
+
 - [ ] `NewMyproviderSpeechToText()` function signature matches interface
 - [ ] Calls `NewMyproviderOption()` to initialize configuration
 - [ ] Creates child context with `context.WithCancel(parentCtx)`
@@ -65,6 +70,7 @@ Use this checklist when adding support for a new speech-to-text or text-to-speec
 ### Required Methods
 
 #### `Initialize() error`
+
 - [ ] Establishes connection to provider
 - [ ] Sets up any necessary event handlers/callbacks
 - [ ] Starts listening goroutine(s) if needed
@@ -72,6 +78,7 @@ Use this checklist when adding support for a new speech-to-text or text-to-speec
 - [ ] Returns error with context on failure
 
 #### `Transform(ctx, audioData, opts) error`
+
 - [ ] Locks mutex before accessing shared state
 - [ ] Checks if properly initialized (client != nil)
 - [ ] Sends audio data to provider
@@ -80,6 +87,7 @@ Use this checklist when adding support for a new speech-to-text or text-to-speec
 - [ ] Unlocks mutex before returning
 
 #### `Close(ctx context.Context) error`
+
 - [ ] Cancels context: `m.ctxCancel()`
 - [ ] Locks mutex
 - [ ] Closes provider connection
@@ -89,10 +97,12 @@ Use this checklist when adding support for a new speech-to-text or text-to-speec
 - [ ] Returns any cleanup errors
 
 #### `Name() string`
+
 - [ ] Returns unique identifier (e.g., "myprovider-speech-to-text")
 - [ ] Must match service discovery/registration name
 
 ### Callback Handling
+
 - [ ] Checks if `m.options` is not nil before calling
 - [ ] Checks if specific callback function is not nil
 - [ ] Passes correct parameters to callback:
@@ -103,12 +113,14 @@ Use this checklist when adding support for a new speech-to-text or text-to-speec
 - [ ] Handles callback errors (logs and returns appropriately)
 
 ### Goroutine Management
+
 - [ ] Listening goroutine monitors `ctx.Done()` channel
 - [ ] Exits cleanly when context is cancelled
 - [ ] Properly handles connection drops/errors
 - [ ] No goroutine leaks on Close()
 
 ### Error Handling
+
 - [ ] All errors logged with provider prefix (e.g., "myprovider-stt:")
 - [ ] Errors wrapped with context: `fmt.Errorf("message: %w", err)`
 - [ ] Descriptive error messages
@@ -119,16 +131,19 @@ Use this checklist when adding support for a new speech-to-text or text-to-speec
 Follow same structure as STT, but:
 
 ### Transform Method
+
 - [ ] Takes `text string` input instead of `[]byte`
 - [ ] Sends synthesis request to provider
 - [ ] Manages `contextId` for tracking synthesis sessions
 
 ### Callback Handling
+
 - [ ] Calls `OnSpeech(contextId, audioData)` when audio chunks arrive
 - [ ] Calls `OnComplete(contextId)` when synthesis finishes
 - [ ] Handles callback errors appropriately
 
 ### Additional Considerations
+
 - [ ] Manages multiple concurrent synthesis requests (if needed)
 - [ ] Properly tracks context IDs for each request
 - [ ] Handles incomplete synthesis gracefully
@@ -136,38 +151,45 @@ Follow same structure as STT, but:
 ## Testing Implementation
 
 ### Unit Test File (`stt_test.go` or `tts_test.go`)
+
 - [ ] Created test file in provider directory
 - [ ] Tests follow Go testing conventions
 
 ### Test Coverage
 
 #### Initialization Tests
+
 - [ ] `TestNewMyproviderOption_Success`: Valid credentials
 - [ ] `TestNewMyproviderOption_MissingCredential`: Missing required credential
 - [ ] `TestNewMyproviderOption_InvalidCredential`: Wrong credential type
 
 #### Transformer Creation Tests
+
 - [ ] `TestNewMyproviderSpeechToText_Success`: Successful creation
 - [ ] `TestNewMyproviderSpeechToText_InvalidConfig`: Invalid configuration
 
 #### Lifecycle Tests
+
 - [ ] `TestInitialize_Success`: Connection established
 - [ ] `TestInitialize_Failure`: Handle connection errors
 - [ ] `TestClose_Cleanup`: Proper resource cleanup
 - [ ] `TestClose_GoroutineCleanup`: No goroutine leaks
 
 #### Functionality Tests
+
 - [ ] `TestTransform_NotInitialized`: Error when not initialized
 - [ ] `TestTransform_Success`: Audio sent successfully
 - [ ] `TestTransform_WithCallback`: Callback invoked correctly
 - [ ] `TestTransform_CallbackError`: Errors handled
 
 #### Concurrency Tests
+
 - [ ] `TestConcurrentTransform`: Multiple simultaneous calls
 - [ ] `TestConcurrentTransformAndClose`: Close during Transform
 - [ ] Run with `go test -race` to detect race conditions
 
 ### Mock/Integration Tests
+
 - [ ] Mock provider client for unit tests (if needed)
 - [ ] Integration tests with real provider (optional, mark as skippable)
 - [ ] Test with actual audio samples (if possible)
@@ -175,6 +197,7 @@ Follow same structure as STT, but:
 ## Code Quality
 
 ### Naming Conventions
+
 - [ ] Package name: `internal_transformer_myprovider`
 - [ ] Internal subpackage: `myprovider_internal`
 - [ ] Function names are descriptive: `NewMyprovider...`
@@ -182,6 +205,7 @@ Follow same structure as STT, but:
 - [ ] Private struct fields are unexported (lowercase)
 
 ### Documentation
+
 - [ ] Copyright header on all files:
   ```go
   // Copyright (c) 2023-2025 RapidaAI
@@ -196,6 +220,7 @@ Follow same structure as STT, but:
 - [ ] No commented-out code (unless explaining implementation)
 
 ### Code Standards
+
 - [ ] Consistent indentation (4 spaces or tabs - check existing code)
 - [ ] Error messages start with lowercase (unless constant)
 - [ ] No unused imports
@@ -203,6 +228,7 @@ Follow same structure as STT, but:
 - [ ] Proper interface satisfaction (compile check)
 
 ### Concurrency Safety
+
 - [ ] Mutex protects all shared state
 - [ ] No double-locking
 - [ ] Lock held for minimal duration
@@ -243,6 +269,7 @@ Follow same structure as STT, but:
 ## Documentation
 
 - [ ] Created `myprovider/README.md` with:
+
   - [ ] Provider name and link
   - [ ] Supported features (STT/TTS)
   - [ ] Audio formats supported
@@ -309,8 +336,8 @@ Follow same structure as STT, but:
 
 ---
 
-**Date Created:** ___________  
-**Provider Name:** ___________  
-**Implemented By:** ___________  
-**Reviewed By:** ___________  
-**Approved For Production:** ___________
+**Date Created:** ****\_\_\_****  
+**Provider Name:** ****\_\_\_****  
+**Implemented By:** ****\_\_\_****  
+**Reviewed By:** ****\_\_\_****  
+**Approved For Production:** ****\_\_\_****

@@ -9,15 +9,16 @@
 [Rapida](https://rapida.ai) is an open-source platform for designing, building, and deploying voice agents at scale.  
 It’s built around three core principles:
 
-- **Reliable** — designed for production workloads, real-time audio, and fault-tolerant execution  
-- **Observable** — deep visibility into calls, latency, metrics, and tool usage  
-- **Customizable** — flexible architecture that adapts to any LLM, workflow, or enterprise stack  
+- **Reliable** — designed for production workloads, real-time audio, and fault-tolerant execution
+- **Observable** — deep visibility into calls, latency, metrics, and tool usage
+- **Customizable** — flexible architecture that adapts to any LLM, workflow, or enterprise stack
 
 Rapida provides both a **platform** and a **framework** for building real-world voice agents—from low-latency audio streaming to orchestration, monitoring, and integrations.
 
 Rapida is written in **Go**, using the highly optimized [gRPC](https://github.com/grpc/grpc-go) protocol for fast, efficient, bidirectional communication.
 
 ---
+
 ## Features
 
 - **Real-time Voice Orchestration**  
@@ -42,7 +43,6 @@ Rapida is written in **Go**, using the highly optimized [gRPC](https://github.co
   Scalable design, efficient protocol, and predictable performance.
 
 ## Architecture Overview
-
 
     ┌──────────────────────────────────────────────────────────────┐
     │                           CHANNELS                           │
@@ -81,7 +81,6 @@ Rapida is written in **Go**, using the highly optimized [gRPC](https://github.co
                                     │         Audio Stream Response      │
                                     └────────────────────────────────────┘
 
-
 ## Documentation & Guides
 
 https://doc.rapida.ai
@@ -90,18 +89,18 @@ https://doc.rapida.ai
 
 ## Services
 
-| Service         | Description                          | Port           |
-|------------------|--------------------------------------|----------------|
-| PostgreSQL       | Database for persistent storage      | `5432`         |
-| Redis            | In-memory caching                   | `6379`         |
-| OpenSearch       | Search engine for document indexing | `9200`, `9600` |
-| Web API          | Backend service                     | `9001`         |
-| Assistant API    | Intelligence and assistance API      | `9007`         |
-| Integration API  | Third-party integrations API         | `9004`         |
-| Endpoint API     | Endpoint management API             | `9005`         |
-| Document API     | Document handling API               | `9010`         |
-| UI               | React front-end                     | `3000`         |
-| NGINX            | Reverse proxy and static server     | `8080`         |
+| Service         | Description                         | Port           |
+| --------------- | ----------------------------------- | -------------- |
+| PostgreSQL      | Database for persistent storage     | `5432`         |
+| Redis           | In-memory caching                   | `6379`         |
+| OpenSearch      | Search engine for document indexing | `9200`, `9600` |
+| Web API         | Backend service                     | `9001`         |
+| Assistant API   | Intelligence and assistance API     | `9007`         |
+| Integration API | Third-party integrations API        | `9004`         |
+| Endpoint API    | Endpoint management API             | `9005`         |
+| Document API    | Document handling API               | `9010`         |
+| UI              | React front-end                     | `3000`         |
+| NGINX           | Reverse proxy and static server     | `8080`         |
 
 ---
 
@@ -128,6 +127,7 @@ Ensure the following directories (along with proper permissions) exist for conta
 ```bash
 make setup-local
 ```
+
 For more about how the data is structured for services https://doc.rapida.ai
 
 ### 3. Build the Services
@@ -168,15 +168,15 @@ make down-web
 
 ## Accessing Services
 
-| Service            | URL                                |
-|---------------------|------------------------------------|
-| UI                 | [http://localhost:3000](http://localhost:3000) |
-| Web-API            | [http://localhost:9001](http://localhost:9001) |
-| Assistant-API      | [http://localhost:9007](http://localhost:9007) |
-| Integration-API    | [http://localhost:9004](http://localhost:9004) |
-| Endpoint-API       | [http://localhost:9005](http://localhost:9005) |
-| Document-API       | [http://localhost:9010](http://localhost:9010) |
-| OpenSearch         | [http://localhost:9200](http://localhost:9200) |
+| Service         | URL                                            |
+| --------------- | ---------------------------------------------- |
+| UI              | [http://localhost:3000](http://localhost:3000) |
+| Web-API         | [http://localhost:9001](http://localhost:9001) |
+| Assistant-API   | [http://localhost:9007](http://localhost:9007) |
+| Integration-API | [http://localhost:9004](http://localhost:9004) |
+| Endpoint-API    | [http://localhost:9005](http://localhost:9005) |
+| Document-API    | [http://localhost:9010](http://localhost:9010) |
+| OpenSearch      | [http://localhost:9200](http://localhost:9200) |
 
 ---
 
@@ -187,29 +187,33 @@ The `Makefile` simplifies operations using Docker Compose:
 ### Common Commands
 
 - **Build all images:**
-    ```bash
-    make build-all
-    ```
+
+  ```bash
+  make build-all
+  ```
 
 - **Start all services:**
-    ```bash
-    make up-all
-    ```
+
+  ```bash
+  make up-all
+  ```
 
 - **Stop all services:**
-    ```bash
-    make down-all
-    ```
+
+  ```bash
+  make down-all
+  ```
 
 - **Check service logs (e.g., Web API):**
-    ```bash
-    make logs-web
-    ```
+
+  ```bash
+  make logs-web
+  ```
 
 - **Restart specific services (e.g., Redis):**
-    ```bash
-    make restart-redis
-    ```
+  ```bash
+  make restart-redis
+  ```
 
 ### View All Commands
 
@@ -223,31 +227,31 @@ Run `make help` to see a full list of available `Makefile` commands.
 - Custom configurations for NGINX and other services are mounted and should be adjusted as per your requirements.
 
 ---
+
 ## SDKs & Tools
 
 ### Client SDKs
 
 Client SDKs enable your frontend to include interactive, multi-user experiences.
 
-| Language                | Repo                                                                                    | Docs                                                        |
-| :---------------------- | :-------------------------------------------------------------------------------------- | :---------------------------------------------------------- |
-| Web (React)                     | [rapida-react](https://github.com/rapidaai/rapida-react)                               | [docs](https://doc.rapida.ai/api-reference/installation) |
-| Web Widget (react)                    | [react-widget](https://github.com/rapidaai/react-widget)                           |                                                             |
+| Language           | Repo                                                     | Docs                                                     |
+| :----------------- | :------------------------------------------------------- | :------------------------------------------------------- |
+| Web (React)        | [rapida-react](https://github.com/rapidaai/rapida-react) | [docs](https://doc.rapida.ai/api-reference/installation) |
+| Web Widget (react) | [react-widget](https://github.com/rapidaai/react-widget) |                                                          |
 
 ### Server SDKs
 
 Server SDKs enable your backend to build and manage agents.
 
-| Language                | Repo                                                                                    | Docs                                                        |
-| :---------------------- | :-------------------------------------------------------------------------------------- | :---------------------------------------------------------- |
-| Go                      | [rapida-go](https://github.com/rapidaai/rapida-go)                               | [docs](https://doc.rapida.ai/api-reference/installation) |
-| Python| [rapida-python](https://github.com/rapidaai/rapida-python)                               | [docs](https://doc.rapida.ai/api-reference/installation/)              |
+| Language | Repo                                                       | Docs                                                      |
+| :------- | :--------------------------------------------------------- | :-------------------------------------------------------- |
+| Go       | [rapida-go](https://github.com/rapidaai/rapida-go)         | [docs](https://doc.rapida.ai/api-reference/installation)  |
+| Python   | [rapida-python](https://github.com/rapidaai/rapida-python) | [docs](https://doc.rapida.ai/api-reference/installation/) |
 
 ## Contributing
 
 For those who'd like to contribute code, see our [Contribution Guide](https://github.com/rapidaai/voice-ai/blob/main/CONTRIBUTING.md).
 At the same time, please consider supporting RapidaAi by sharing it on social media and at events and conferences.
-
 
 ## Security disclosure
 
@@ -256,15 +260,13 @@ To protect your privacy, please avoid posting security issues on GitHub. Instead
 ## License
 
 Rapida is open-source under the GPL-2.0 license, with additional conditions:
+
 - Open-source users must keep the Rapida logo visible in UI components.
 - Future license terms may change; this does not affect released versions.
 
 A commercial license is available for enterprise use, which allows:
+
 - Removal of branding
 - Closed-source usage
 - Private modifications
-Contact sales@rapida.ai for details.
-
-## Star History
-
-[![Star History Chart](https://api.star-history.com/svg?repos=rapidaai/voice-ai&type=Date)](https://star-history.com/#rapidaai/voice-ai&Date)
+  Contact sales@rapida.ai for details.
