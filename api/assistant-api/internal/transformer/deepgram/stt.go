@@ -18,7 +18,7 @@ import (
 	interfaces "github.com/deepgram/deepgram-go-sdk/v3/pkg/client/interfaces/v1"
 	client "github.com/deepgram/deepgram-go-sdk/v3/pkg/client/listen"
 	internal_transformer "github.com/rapidaai/api/assistant-api/internal/transformer"
-	internal_transformer_deepgram_internal "github.com/rapidaai/api/assistant-api/internal/transformer/deepgram/internal"
+	deepgram_internal "github.com/rapidaai/api/assistant-api/internal/transformer/deepgram/internal"
 	"github.com/rapidaai/pkg/commons"
 	"github.com/rapidaai/protos"
 )
@@ -62,7 +62,7 @@ func NewDeepgramSpeechToText(ctx context.Context, logger commons.Logger, vaultCr
 // Deepgram service using the WebSocket client `dg.client`.
 func (dg *deepgramSTT) Initialize() error {
 
-	dgClient, err := client.NewWSUsingCallback(dg.ctx, dg.GetKey(), &interfaces.ClientOptions{APIKey: dg.GetKey(), EnableKeepAlive: true}, dg.SpeechToTextOptions(), internal_transformer_deepgram_internal.
+	dgClient, err := client.NewWSUsingCallback(dg.ctx, dg.GetKey(), &interfaces.ClientOptions{APIKey: dg.GetKey(), EnableKeepAlive: true}, dg.SpeechToTextOptions(), deepgram_internal.
 		NewDeepgramSttCallback(dg.logger, dg.options.OnTranscript))
 
 	if err != nil {

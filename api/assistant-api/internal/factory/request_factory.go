@@ -20,25 +20,11 @@ import (
 	"github.com/rapidaai/pkg/utils"
 )
 
-func GetTalker(source utils.RapidaSource,
-	ctx context.Context,
-	cfg *config.AssistantConfig,
-	logger commons.Logger,
-	postgres connectors.PostgresConnector,
-	opensearch connectors.OpenSearchConnector,
-	redis connectors.RedisConnector,
-	storage storages.Storage,
-	streamer internal_streamers.Streamer,
+func GetTalker(source utils.RapidaSource, ctx context.Context, cfg *config.AssistantConfig, logger commons.Logger, postgres connectors.PostgresConnector, opensearch connectors.OpenSearchConnector, redis connectors.RedisConnector, storage storages.Storage, streamer internal_streamers.Streamer,
 ) (internal_adapter_requests.Talking, error) {
 	switch source {
 	case utils.SDK:
-		talker, err := internal_adapter_request_talking_sdk.NewSDKTalking(
-			ctx,
-			cfg, logger,
-			postgres,
-			opensearch,
-			redis,
-			storage, streamer)
+		talker, err := internal_adapter_request_talking_sdk.NewSDKTalking(ctx, cfg, logger, postgres, opensearch, redis, storage, streamer)
 		if err != nil {
 			logger.Errorf("assistant call talker failed with err %+v", err)
 			return nil, err
@@ -46,14 +32,7 @@ func GetTalker(source utils.RapidaSource,
 		return talker, nil
 
 	case utils.Debugger:
-		talker, err := internal_adapter_request_talking_debugger.NewTalking(
-			ctx,
-			cfg,
-			logger,
-			postgres,
-			opensearch,
-			redis,
-			storage, streamer)
+		talker, err := internal_adapter_request_talking_debugger.NewTalking(ctx, cfg, logger, postgres, opensearch, redis, storage, streamer)
 		if err != nil {
 			logger.Errorf("assistant call talker failed with err %+v", err)
 			return nil, err
@@ -61,42 +40,19 @@ func GetTalker(source utils.RapidaSource,
 		return talker, nil
 
 	case utils.PhoneCall:
-		talker, err := internal_adapter_request_talking_phone.NewTalking(
-			ctx,
-			cfg,
-			logger,
-			postgres,
-			opensearch,
-			redis,
-			storage,
-			streamer,
-		)
+		talker, err := internal_adapter_request_talking_phone.NewTalking(ctx, cfg, logger, postgres, opensearch, redis, storage, streamer)
 		if err != nil {
 			logger.Errorf("assistant call talker failed with err %+v", err)
 		}
 		return talker, nil
 	case utils.WebPlugin:
-		talker, err := internal_adapter_request_talking_web_plugin.NewTalking(
-			ctx,
-			cfg,
-			logger,
-			postgres,
-			opensearch,
-			redis,
-			storage, streamer)
+		talker, err := internal_adapter_request_talking_web_plugin.NewTalking(ctx, cfg, logger, postgres, opensearch, redis, storage, streamer)
 		if err != nil {
 			logger.Errorf("assistant call talker failed with err %+v", err)
 		}
 		return talker, nil
 	default:
-		talker, err := internal_adapter_request_talking_debugger.NewTalking(
-			ctx,
-			cfg,
-			logger,
-			postgres,
-			opensearch,
-			redis,
-			storage, streamer)
+		talker, err := internal_adapter_request_talking_debugger.NewTalking(ctx, cfg, logger, postgres, opensearch, redis, storage, streamer)
 		if err != nil {
 			logger.Errorf("assistant call talker failed with err %+v", err)
 			return nil, err

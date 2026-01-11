@@ -7,11 +7,13 @@ A Transformer is a provider-agnostic adapter that converts audio between differe
 ## Quick Start: Adding a New Provider (5 Steps)
 
 ### 1️⃣ Create Directory
+
 ```bash
 mkdir -p api/assistant-api/internal/transformer/myprovider/internal
 ```
 
 ### 2️⃣ Create Configuration (`myprovider/myprovider.go`)
+
 ```go
 package internal_transformer_myprovider
 
@@ -30,6 +32,7 @@ func NewMyproviderOption(...) (*myproviderOption, error) {
 ```
 
 ### 3️⃣ Implement STT (`myprovider/stt.go`)
+
 ```go
 type myproviderSpeechToText struct {
     *myproviderOption
@@ -43,6 +46,7 @@ func (m *myproviderSpeechToText) Name() string { return "myprovider-speech-to-te
 ```
 
 ### 4️⃣ Implement TTS (`myprovider/tts.go`)
+
 ```go
 type myproviderTextToSpeech struct {
     *myproviderOption
@@ -56,6 +60,7 @@ func (m *myproviderTextToSpeech) Name() string { return "myprovider-text-to-spee
 ```
 
 ### 5️⃣ Add Tests
+
 ```go
 // myprovider/stt_test.go & tts_test.go
 // Test initialization, transformation, and cleanup
@@ -66,10 +71,12 @@ func (m *myproviderTextToSpeech) Name() string { return "myprovider-text-to-spee
 ## Key Interfaces
 
 ### Speech-to-Text Transformer
+
 **Input:** `[]byte` (audio data)  
 **Output:** Calls `OnTranscript(transcript, confidence, language, isCompleted)`
 
 ### Text-to-Speech Transformer
+
 **Input:** `string` (text)  
 **Output:** Calls `OnSpeech(contextId, audioData)` and `OnComplete(contextId)`
 
@@ -78,6 +85,7 @@ func (m *myproviderTextToSpeech) Name() string { return "myprovider-text-to-spee
 ## Common Patterns
 
 ### Get Configuration from Vault
+
 ```go
 credMap := vaultCredential.GetValue().AsMap()
 apiKey, ok := credMap["api_key"]
@@ -87,6 +95,7 @@ if !ok {
 ```
 
 ### Thread-Safe Client Access
+
 ```go
 m.mu.Lock()
 client := m.client
@@ -96,6 +105,7 @@ m.mu.Unlock()
 ```
 
 ### Call Callback with Error Handling
+
 ```go
 if m.options.OnTranscript != nil {
     if err := m.options.OnTranscript(text, conf, lang, true); err != nil {
@@ -105,12 +115,14 @@ if m.options.OnTranscript != nil {
 ```
 
 ### Proper Logging
+
 ```go
 m.logger.Debugf("myprovider-stt: connection established")
 m.logger.Errorf("myprovider-stt: failed to send: %v", err)
 ```
 
 ### Context Cancellation in Goroutine
+
 ```go
 go func(ctx context.Context) {
     for {
@@ -131,17 +143,19 @@ go func(ctx context.Context) {
 Credentials are stored in vault with provider-specific keys:
 
 ### Example Vault Structure
+
 ```json
 {
-    "key": "api-key-value",
-    "project_id": "my-project",
-    "subscription_key": "sub-key",
-    "endpoint": "https://api.example.com",
-    "service_account_key": "json-string"
+  "key": "api-key-value",
+  "project_id": "my-project",
+  "subscription_key": "sub-key",
+  "endpoint": "https://api.example.com",
+  "service_account_key": "json-string"
 }
 ```
 
 ### Extract in Code
+
 ```go
 keyValue, ok := credMap["key"]
 if !ok {
@@ -157,6 +171,7 @@ key := keyValue.(string)
 Providers support dynamic configuration through `ModelOptions`:
 
 ### STT Options Example
+
 ```go
 if language, err := m.mdlOpts.GetString("listen.language"); err == nil {
     // Use language
@@ -167,6 +182,7 @@ if model, err := m.mdlOpts.GetString("listen.model"); err == nil {
 ```
 
 ### TTS Options Example
+
 ```go
 if voiceId, err := m.mdlOpts.GetString("speak.voice.id"); err == nil {
     // Use voice ID
@@ -194,21 +210,25 @@ if speed, err := m.mdlOpts.GetString("speak.speed"); err == nil {
 ## Existing Providers Reference
 
 ### Google Cloud
+
 - **Files:** `google/google.go`, `google/stt.go`, `google/tts.go`
 - **Strength:** Well-structured, proper error handling, streaming support
 - **Use for:** Architecture reference
 
 ### Deepgram
+
 - **Files:** `deepgram/deepgram.go`, `deepgram/stt.go`
 - **Strength:** WebSocket streaming, callback pattern
 - **Use for:** WebSocket implementation patterns
 
 ### Azure
+
 - **Files:** `azure/azure.go`, `azure/stt.go`, `azure/tts.go`
 - **Strength:** Event-based callbacks, error handling
 - **Use for:** Event-driven patterns
 
 ### AssemblyAI
+
 - **Files:** `assembly-ai/assemblyai.go`, `assembly-ai/stt.go`
 - **Strength:** WebSocket configuration
 - **Use for:** WebSocket query parameter patterns
@@ -218,19 +238,23 @@ if speed, err := m.mdlOpts.GetString("speak.speed"); err == nil {
 ## Troubleshooting
 
 ### Issue: "Connection not initialized"
+
 → Check if `Initialize()` was called and returned without error
 
 ### Issue: Callbacks not triggered
+
 → Verify callback is not nil before calling  
 → Check if listening goroutine is running  
 → Review error logs in callback processing
 
 ### Issue: Memory leaks
+
 → Verify `Close()` cancels context  
 → Ensure all goroutines listen to context.Done()  
 → Check for closed channels being written to
 
 ### Issue: Race condition errors
+
 → Add `go test -race` to your testing  
 → Ensure mutex protects all shared state access  
 → Never hold mutex across blocking operations
@@ -263,6 +287,7 @@ See [DEVELOPMENT.md](DEVELOPMENT.md) for complete implementation template with d
 ## Contact & Support
 
 For questions about transformer development:
+
 1. Review existing implementations (Google, Deepgram, Azure)
 2. Check [DEVELOPMENT.md](DEVELOPMENT.md) for detailed guide
 3. Refer to test files for usage examples

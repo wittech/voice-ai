@@ -54,10 +54,10 @@ All transformers implement the generic `Transformers` interface:
 type Transformers[IN any, opts TransformOption] interface {
     // Initialize sets up resources before transformation
     Initialize() error
-    
+
     // Transform processes input and returns results via callbacks
     Transform(context.Context, IN, opts) error
-    
+
     // Close cleans up resources
     Close(context.Context) error
 }
@@ -71,7 +71,7 @@ For STT providers, implement:
 type SpeechToTextTransformer interface {
     // Name returns the transformer identifier
     Name() string
-    
+
     // Extends Transformers with []byte input (audio) and SpeechToTextOption
     Transformers[[]byte, *SpeechToTextOption]
 }
@@ -82,7 +82,7 @@ type SpeechToTextTransformer interface {
 ```go
 type SpeechToTextInitializeOptions struct {
     AudioConfig *protos.AudioConfig
-    
+
     // Called when transcript is received
     OnTranscript func(
         transcript string,
@@ -90,7 +90,7 @@ type SpeechToTextInitializeOptions struct {
         languages string,
         isCompleted bool,
     ) error
-    
+
     // Model-specific options
     ModelOptions utils.Option
 }
@@ -104,7 +104,7 @@ For TTS providers, implement:
 type TextToSpeechTransformer interface {
     // Name returns the transformer identifier
     Name() string
-    
+
     // Extends Transformers with string input (text) and TextToSpeechOption
     Transformers[string, *TextToSpeechOption]
 }
@@ -115,13 +115,13 @@ type TextToSpeechTransformer interface {
 ```go
 type TextToSpeechInitializeOptions struct {
     AudioConfig *protos.AudioConfig
-    
+
     // Called when speech audio is generated
     OnSpeech func(string, []byte) error
-    
+
     // Called when synthesis is complete
     OnComplete func(string) error
-    
+
     // Model-specific options
     ModelOptions utils.Option
 }
@@ -171,12 +171,12 @@ func NewMyproviderOption(
 ) (*myproviderOption, error) {
     // Extract credentials from vault
     credentialsMap := vaultCredential.GetValue().AsMap()
-    
+
     apiKey, ok := credentialsMap["api_key"]
     if !ok {
         return nil, fmt.Errorf("myprovider: api_key not found in vault credentials")
     }
-    
+
     return &myproviderOption{
         logger:      logger,
         apiKey:      apiKey.(string),
@@ -209,7 +209,7 @@ import (
     "context"
     "fmt"
     "sync"
-    
+
     internal_transformer "github.com/rapidaai/api/assistant-api/internal/transformer"
     "github.com/rapidaai/pkg/commons"
     "github.com/rapidaai/protos"
@@ -218,14 +218,14 @@ import (
 type myproviderSpeechToText struct {
     *myproviderOption
     mu sync.Mutex
-    
+
     // Context management
     ctx       context.Context
     ctxCancel context.CancelFunc
-    
+
     logger  commons.Logger
     options *internal_transformer.SpeechToTextInitializeOptions
-    
+
     // Provider-specific client (e.g., WebSocket, gRPC connection)
     client interface{}
 }
@@ -242,7 +242,7 @@ func NewMyproviderSpeechToText(
         logger.Errorf("myprovider-stt: failed to initialize options: %v", err)
         return nil, err
     }
-    
+
     ctx, cancel := context.WithCancel(ctx)
     return &myproviderSpeechToText{
         myproviderOption: providerOpts,
@@ -263,7 +263,7 @@ func (m *myproviderSpeechToText) Initialize() error {
     // TODO: Establish connection (WebSocket, gRPC, REST, etc.)
     // Set up any necessary handlers/callbacks
     // Start listening goroutine if needed
-    
+
     m.logger.Debugf("myprovider-stt: connection established")
     return nil
 }
@@ -277,26 +277,26 @@ func (m *myproviderSpeechToText) Transform(
     m.mu.Lock()
     client := m.client
     m.mu.Unlock()
-    
+
     if client == nil {
         return fmt.Errorf("myprovider-stt: not initialized")
     }
-    
+
     // TODO: Send audio data to provider
     // Handle any errors appropriately
-    
+
     return nil
 }
 
 // Close cleans up resources
 func (m *myproviderSpeechToText) Close(ctx context.Context) error {
     m.ctxCancel()
-    
+
     m.mu.Lock()
     defer m.mu.Unlock()
-    
+
     // TODO: Close connection, stop listening goroutines
-    
+
     m.logger.Debugf("myprovider-stt: connection closed")
     return nil
 }
@@ -313,7 +313,7 @@ import (
     "context"
     "fmt"
     "sync"
-    
+
     internal_transformer "github.com/rapidaai/api/assistant-api/internal/transformer"
     "github.com/rapidaai/pkg/commons"
     "github.com/rapidaai/protos"
@@ -322,10 +322,10 @@ import (
 type myproviderTextToSpeech struct {
     *myproviderOption
     mu sync.Mutex
-    
+
     ctx       context.Context
     ctxCancel context.CancelFunc
-    
+
     logger  commons.Logger
     options *internal_transformer.TextToSpeechInitializeOptions
     client  interface{}
@@ -343,7 +343,7 @@ func NewMyproviderTextToSpeech(
         logger.Errorf("myprovider-tts: failed to initialize options: %v", err)
         return nil, err
     }
-    
+
     ctx, cancel := context.WithCancel(ctx)
     return &myproviderTextToSpeech{
         myproviderOption: providerOpts,
@@ -375,27 +375,27 @@ func (m *myproviderTextToSpeech) Transform(
     m.mu.Lock()
     client := m.client
     m.mu.Unlock()
-    
+
     if client == nil {
         return fmt.Errorf("myprovider-tts: not initialized")
     }
-    
+
     // TODO: Send text to provider for synthesis
     // Call m.options.OnSpeech(contextId, audioData) when audio arrives
     // Call m.options.OnComplete(contextId) when done
-    
+
     return nil
 }
 
 // Close cleans up resources
 func (m *myproviderTextToSpeech) Close(ctx context.Context) error {
     m.ctxCancel()
-    
+
     m.mu.Lock()
     defer m.mu.Unlock()
-    
+
     // TODO: Close connection
-    
+
     m.logger.Debugf("myprovider-tts: connection closed")
     return nil
 }
@@ -424,20 +424,24 @@ Here's a concrete example using Google Cloud Speech-to-Text as reference:
 ### Key Features to Consider:
 
 1. **Connection Management**
+
    - Thread-safe client access with mutex
    - Proper connection lifecycle (Initialize → Transform → Close)
 
 2. **Callback Handling**
+
    - Deliver results via callbacks, not return values
    - Handle callback errors appropriately
    - Ensure callbacks are nil-safe if optional
 
 3. **Error Handling**
+
    - Log all errors with context
    - Wrap errors with `fmt.Errorf("%w", err)`
    - Propagate critical errors to caller
 
 4. **Context Management**
+
    - Create child context with `context.WithCancel()`
    - Monitor context cancellation in listening goroutines
    - Clean up goroutines on cancellation
@@ -461,7 +465,7 @@ package internal_transformer_myprovider
 import (
     "context"
     "testing"
-    
+
     internal_transformer "github.com/rapidaai/api/assistant-api/internal/transformer"
     "github.com/rapidaai/pkg/commons"
     "github.com/rapidaai/protos"
@@ -469,7 +473,7 @@ import (
 
 func TestNewMyproviderSpeechToText(t *testing.T) {
     logger := commons.NewMockLogger() // or your test logger
-    
+
     credential := &protos.VaultCredential{
         Value: &protos.VaultCredential_Map{
             Map: &protos.MapValue{
@@ -479,7 +483,7 @@ func TestNewMyproviderSpeechToText(t *testing.T) {
             },
         },
     }
-    
+
     opts := &internal_transformer.SpeechToTextInitializeOptions{
         AudioConfig: &protos.AudioConfig{
             AudioFormat: protos.AudioConfig_LINEAR16,
@@ -490,12 +494,12 @@ func TestNewMyproviderSpeechToText(t *testing.T) {
             return nil
         },
     }
-    
+
     transformer, err := NewMyproviderSpeechToText(context.Background(), logger, credential, opts)
     if err != nil {
         t.Fatalf("Failed to create transformer: %v", err)
     }
-    
+
     if transformer.Name() != "myprovider-speech-to-text" {
         t.Errorf("Expected name 'myprovider-speech-to-text', got '%s'", transformer.Name())
     }
@@ -521,7 +525,7 @@ func TestIntegrationWithRealProvider(t *testing.T) {
     if testing.Short() {
         t.Skip("Skipping integration test")
     }
-    
+
     // Use real credentials from environment
     // Test actual speech-to-text functionality
 }
@@ -532,6 +536,7 @@ func TestIntegrationWithRealProvider(t *testing.T) {
 ## Best Practices
 
 ### 1. **Credential Management**
+
 ```go
 // ✅ GOOD: Extract and validate all required credentials
 credMap := vaultCredential.GetValue().AsMap()
@@ -545,6 +550,7 @@ client := NewClient(option.WithAPIKey("YOUR_API_KEY"))
 ```
 
 ### 2. **Error Handling**
+
 ```go
 // ✅ GOOD: Log and wrap errors
 if err != nil {
@@ -559,6 +565,7 @@ if err != nil {
 ```
 
 ### 3. **Thread Safety**
+
 ```go
 // ✅ GOOD: Protect shared state
 m.mu.Lock()
@@ -570,13 +577,14 @@ return m.client.Send(data)
 ```
 
 ### 4. **Resource Cleanup**
+
 ```go
 // ✅ GOOD: Clean up in Close()
 func (m *myprovider) Close(ctx context.Context) error {
     m.ctxCancel()
     m.mu.Lock()
     defer m.mu.Unlock()
-    
+
     if m.client != nil {
         m.client.Close()
     }
@@ -590,6 +598,7 @@ func (m *myprovider) Close(ctx context.Context) error {
 ```
 
 ### 5. **Logging Standards**
+
 ```go
 // ✅ GOOD: Consistent prefix with provider name
 m.logger.Debugf("myprovider-stt: connection established")
@@ -600,6 +609,7 @@ m.logger.Debugf("connection established")
 ```
 
 ### 6. **Configuration Handling**
+
 ```go
 // ✅ GOOD: Validate and provide defaults
 if language, err := m.mdlOpts.GetString("listen.language"); err == nil {
@@ -611,6 +621,7 @@ if language, err := m.mdlOpts.GetString("listen.language"); err == nil {
 ```
 
 ### 7. **Callback Safety**
+
 ```go
 // ✅ GOOD: Nil check before calling optional callbacks
 if m.options != nil && m.options.OnTranscript != nil {
@@ -628,30 +639,38 @@ if m.options != nil && m.options.OnTranscript != nil {
 ### Common Issues
 
 #### 1. "Provider not initialized" Error
+
 **Cause:** Transform called before Initialize  
 **Solution:** Ensure Initialize() returns successfully before calling Transform()
 
 #### 2. Credentials Not Found
+
 **Cause:** Wrong key names in vault  
 **Solution:** Verify vault credential structure matches your implementation
 
 #### 3. Callback Not Called
+
 **Cause:** Listening goroutine crashed or callback is nil  
-**Solution:** 
+**Solution:**
+
 - Add nil checks for callbacks
 - Log all goroutine errors
 - Verify error handling in message processing
 
 #### 4. Memory Leaks
+
 **Cause:** Goroutines not cleaned up on Close()  
 **Solution:**
+
 - Always cancel context in Close()
 - Wait for goroutines to exit
 - Verify no buffered channels without readers
 
 #### 5. Race Conditions
+
 **Cause:** Unsynchronized access to shared fields  
 **Solution:**
+
 - Use mutex for all shared state
 - Always lock before accessing m.client, m.stream, etc.
 

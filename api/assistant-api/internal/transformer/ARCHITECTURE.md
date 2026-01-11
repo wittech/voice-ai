@@ -220,13 +220,13 @@ Access Pattern:
     2. Get reference: client := m.client
     3. mu.Unlock()
     4. Use client (outside lock)
-    
+
   Close():
     1. ctxCancel() - signal goroutines
     2. mu.Lock()
     3. Cleanup: m.client = nil
     4. mu.Unlock()
-    
+
   Goroutine:
     for {
         select {
@@ -331,15 +331,15 @@ Completion Callback Parameters:
     ├─► Send Audio ◄─────────────┼─► Cancel Context
     │                            │   Stop Goroutines
     └─────────────────┬──────────┘   Close Connection
-                      │              
-                      ▼              
-            Callback triggered       
-            (OnTranscript)           
-                      │              
-            ┌─────────┴─────────┐   
-            │                   │   
-        Interim            Final   
-        Result             Result  
+                      │
+                      ▼
+            Callback triggered
+            (OnTranscript)
+                      │
+            ┌─────────┴─────────┐
+            │                   │
+        Interim            Final
+        Result             Result
         (loop)             (may continue)
 
     At any point: Close() → Closed state
