@@ -3131,6 +3131,9 @@
   .w-screen {
     width: 100vw;
   }
+  .\!max-w-6xl {
+    max-width: var(--container-6xl) !important;
+  }
   .\!max-w-none {
     max-width: none !important;
   }

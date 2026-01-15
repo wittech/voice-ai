@@ -94,7 +94,7 @@ export const ConversationMessages: FC<{ vag: VoiceAgent }> = ({ vag }) => {
                   <div key={`${idx}-${midx}`}>
                     <MarkdownPreview
                       source={x}
-                      className="!prose dark:!prose-invert !prose-sm max-w-none !font-mono"
+                      className="!prose dark:!prose-invert !prose-sm !font-mono !max-w-6xl"
                       style={{
                         background: 'transparent',
                         fontSize: '14px',

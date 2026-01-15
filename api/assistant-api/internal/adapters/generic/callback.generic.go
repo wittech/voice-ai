@@ -25,7 +25,6 @@ func (talking *GenericRequestor) callEndOfSpeech(ctx context.Context, vl interna
 			if err := talking.endOfSpeech.Analyze(ctx, vl); err != nil {
 				talking.logger.Errorf("end of speech analyze error: %v", err)
 			}
-
 		})
 		return nil
 	}
@@ -37,12 +36,10 @@ func (talking *GenericRequestor) OnPacket(ctx context.Context, pkt ...internal_t
 	for _, p := range pkt {
 		switch vl := p.(type) {
 		case internal_type.UserTextPacket:
-			if talking.endOfSpeech != nil {
-				talking.callEndOfSpeech(ctx, vl)
-				continue
+			if err := talking.callEndOfSpeech(ctx, vl); err != nil {
+				talking.OnPacket(ctx, internal_type.EndOfSpeechPacket{ContextID: vl.ContextID, Speech: vl.Text})
 			}
 			// end of speech not configured so directly send end of speech packet
-			talking.OnPacket(ctx, internal_type.EndOfSpeechPacket{ContextID: vl.ContextID, Speech: vl.Text})
 			continue
 		case internal_type.StaticPacket:
 			utils.Go(ctx, func() {
