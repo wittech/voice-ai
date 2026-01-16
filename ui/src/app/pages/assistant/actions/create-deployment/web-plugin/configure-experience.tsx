@@ -181,12 +181,12 @@ export const ConfigureExperience: FC<{
               </InputHelper>
             </FieldSet>
             <FieldSet>
-              <FormLabel>Maximum Session Duration (millisecond)</FormLabel>
+              <FormLabel>Maximum Session Duration (Minute)</FormLabel>
               <div className="flex space-x-2 justify-center items-center">
                 <Slider
-                  min={5000}
-                  max={15000}
-                  step={1000}
+                  min={3}
+                  max={15}
+                  step={1}
                   value={
                     experienceConfig.maxCallDuration &&
                     parseInt(experienceConfig.maxCallDuration)

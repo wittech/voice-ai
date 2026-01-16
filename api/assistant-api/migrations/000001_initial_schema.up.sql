@@ -39,8 +39,6 @@ CREATE INDEX assistant_api_deployments_assistant_id_idx ON public.assistant_api_
 CREATE TABLE public.assistant_conversation_messages (
     id bigint PRIMARY KEY,
     assistant_conversation_id bigint NOT NULL,
-    request jsonb NOT NULL,
-    response jsonb,
     source character varying(50) DEFAULT 'WEB-APP'::character varying NOT NULL,
     status character varying(50) DEFAULT 'IN_PROGRESS'::character varying NOT NULL,
     created_by bigint NOT NULL,
