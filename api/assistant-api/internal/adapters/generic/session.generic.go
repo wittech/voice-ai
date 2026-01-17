@@ -396,8 +396,8 @@ func (r *GenericRequestor) closeExecutor(ctx context.Context) {
 
 // stopIdleTimer stops the idle timeout timer if it is currently active.
 func (r *GenericRequestor) stopIdleTimer() {
-	if r.idealTimeoutTimer != nil {
-		r.idealTimeoutTimer.Stop()
+	if r.idleTimeoutTimer != nil {
+		r.idleTimeoutTimer.Stop()
 	}
 }
 

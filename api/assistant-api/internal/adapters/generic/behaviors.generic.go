@@ -18,145 +18,199 @@ import (
 	"github.com/rapidaai/protos"
 )
 
-func (gr *GenericRequestor) GetBehavior() (*internal_assistant_entity.AssistantDeploymentBehavior, error) {
-	switch gr.source {
+var errDeploymentNotEnabled = errors.New("deployment is not enabled for source")
+
+// GetBehavior retrieves the deployment behavior configuration based on the source type.
+func (r *GenericRequestor) GetBehavior() (*internal_assistant_entity.AssistantDeploymentBehavior, error) {
+	if r.assistant == nil {
+		return nil, errDeploymentNotEnabled
+	}
+
+	switch r.source {
 	case utils.PhoneCall:
-		if a := gr.assistant; a != nil && a.AssistantPhoneDeployment != nil {
-			return &a.AssistantPhoneDeployment.AssistantDeploymentBehavior, nil
+		if r.assistant.AssistantPhoneDeployment != nil {
+			return &r.assistant.AssistantPhoneDeployment.AssistantDeploymentBehavior, nil
 		}
 	case utils.Whatsapp:
-		if a := gr.assistant; a != nil && a.AssistantWhatsappDeployment != nil {
-			return &a.AssistantWhatsappDeployment.AssistantDeploymentBehavior, nil
+		if r.assistant.AssistantWhatsappDeployment != nil {
+			return &r.assistant.AssistantWhatsappDeployment.AssistantDeploymentBehavior, nil
 		}
 	case utils.SDK:
-		if a := gr.assistant; a != nil && a.AssistantApiDeployment != nil {
-			return &a.AssistantApiDeployment.AssistantDeploymentBehavior, nil
+		if r.assistant.AssistantApiDeployment != nil {
+			return &r.assistant.AssistantApiDeployment.AssistantDeploymentBehavior, nil
 		}
 	case utils.WebPlugin:
-		if a := gr.assistant; a != nil && a.AssistantWebPluginDeployment != nil {
-			return &a.AssistantWebPluginDeployment.AssistantDeploymentBehavior, nil
+		if r.assistant.AssistantWebPluginDeployment != nil {
+			return &r.assistant.AssistantWebPluginDeployment.AssistantDeploymentBehavior, nil
 		}
 	case utils.Debugger:
-		if a := gr.assistant; a != nil && a.AssistantDebuggerDeployment != nil {
-			return &a.AssistantDebuggerDeployment.AssistantDeploymentBehavior, nil
+		if r.assistant.AssistantDebuggerDeployment != nil {
+			return &r.assistant.AssistantDebuggerDeployment.AssistantDeploymentBehavior, nil
 		}
 	}
-	return nil, errors.New("deployment is not enabled for source")
+
+	return nil, errDeploymentNotEnabled
 }
 
-func (communication *GenericRequestor) InitializeBehavior(ctx context.Context) error {
-
-	behavior, err := communication.GetBehavior()
+// InitializeBehavior sets up the initial behavior configuration including greeting,
+// idle timeout, and max session duration timers.
+func (r *GenericRequestor) InitializeBehavior(ctx context.Context) error {
+	behavior, err := r.GetBehavior()
 	if err != nil {
-		communication.logger.Errorf("error while fetching deployment behavior: %v", err)
+		r.logger.Errorf("error while fetching deployment behavior: %v", err)
 		return nil
 	}
 
-	if behavior.Greeting != nil {
-		greetingCnt := communication.templateParser.Parse(*behavior.Greeting, communication.GetArgs())
-		if strings.TrimSpace(greetingCnt) != "" {
-			message := communication.messaging.Create(type_enums.UserActor, "")
-			if err := communication.OnPacket(ctx, internal_type.StaticPacket{ContextID: message.GetId(), Text: greetingCnt}); err != nil {
-				communication.logger.Errorf("error while sending on error message: %v", err)
-			}
-		}
+	r.initializeGreeting(ctx, behavior)
+	r.initializeIdleTimeout(ctx, behavior)
+	r.initializeMaxSessionDuration(ctx, behavior)
+
+	return nil
+}
+
+// initializeGreeting sends the greeting message if configured.
+func (r *GenericRequestor) initializeGreeting(ctx context.Context, behavior *internal_assistant_entity.AssistantDeploymentBehavior) {
+	if behavior.Greeting == nil {
+		return
 	}
 
-	if behavior.IdealTimeout != nil && *behavior.IdealTimeout > 0 {
-		// start the ideal timeout timer
-		communication.StartIdealTimeoutTimer(ctx)
+	greetingContent := r.templateParser.Parse(*behavior.Greeting, r.GetArgs())
+	if strings.TrimSpace(greetingContent) == "" {
+		return
 	}
 
-	if behavior.MaxSessionDuration != nil && *behavior.MaxSessionDuration > 0 {
-		timeoutDuration := time.Duration(*behavior.MaxSessionDuration) * time.Minute
-		time.AfterFunc(timeoutDuration, func() {
-			communication.logger.Infof("conversation timeout reached for assistant: %s", communication.assistant.Id)
-			communication.OnPacket(ctx, internal_type.LLMToolPacket{ContextID: communication.messaging.GetId(), Action: protos.AssistantConversationAction_END_CONVERSATION})
+	message := r.messaging.Create(type_enums.UserActor, "")
+	if err := r.OnPacket(ctx, internal_type.StaticPacket{ContextID: message.GetId(), Text: greetingContent}); err != nil {
+		r.logger.Errorf("error while sending greeting message: %v", err)
+	}
+}
+
+// initializeIdleTimeout starts the idle timeout timer if configured.
+func (r *GenericRequestor) initializeIdleTimeout(ctx context.Context, behavior *internal_assistant_entity.AssistantDeploymentBehavior) {
+	if behavior.IdealTimeout == nil || *behavior.IdealTimeout <= 0 {
+		return
+	}
+	r.startIdleTimeoutTimer(ctx)
+}
+
+// initializeMaxSessionDuration sets up the max session duration timer if configured.
+func (r *GenericRequestor) initializeMaxSessionDuration(ctx context.Context, behavior *internal_assistant_entity.AssistantDeploymentBehavior) {
+	if behavior.MaxSessionDuration == nil || *behavior.MaxSessionDuration <= 0 {
+		return
+	}
+
+	timeoutDuration := time.Duration(*behavior.MaxSessionDuration) * time.Minute
+	time.AfterFunc(timeoutDuration, func() {
+		r.logger.Infof("conversation timeout reached for assistant: %s", r.assistant.Id)
+		r.OnPacket(ctx, internal_type.LLMToolPacket{
+			ContextID: r.messaging.GetId(),
+			Action:    protos.AssistantConversationAction_END_CONVERSATION,
 		})
-	}
-
-	return nil
+	})
 }
 
-func (communication *GenericRequestor) OnError(ctx context.Context, messageId string) error {
-	behavior, err := communication.GetBehavior()
+// OnError handles error scenarios by sending a configured or default error message.
+func (r *GenericRequestor) OnError(ctx context.Context, messageID string) error {
+	behavior, err := r.GetBehavior()
 	if err != nil {
-		communication.logger.Warnf("no on error message setup for assistant.")
+		r.logger.Warnf("no error message configured for assistant")
 		return nil
 	}
 
-	mistakeContent := "Oops! It looks like something went wrong. Let me look into that for you right away. I really appreciate your patience—hang tight while I get this sorted!"
+	const defaultMistakeMessage = "Oops! It looks like something went wrong. Let me look into that for you right away. I really appreciate your patience—hang tight while I get this sorted!"
+
+	mistakeContent := defaultMistakeMessage
 	if behavior.Mistake != nil {
-		mistakeContent = communication.templateParser.Parse(*behavior.Mistake, communication.GetArgs())
+		mistakeContent = r.templateParser.Parse(*behavior.Mistake, r.GetArgs())
 	}
-	if err := communication.OnPacket(ctx, internal_type.StaticPacket{ContextID: messageId, Text: mistakeContent}); err != nil {
-		communication.logger.Errorf("error while sending on error message: %v", err)
-		return nil
+
+	if err := r.OnPacket(ctx, internal_type.StaticPacket{ContextID: messageID, Text: mistakeContent}); err != nil {
+		r.logger.Errorf("error while sending error message: %v", err)
 	}
+
 	return nil
 }
 
-// OnIdealTimeout handles the behavior when the bot has spoken but the user has not responded for the ideal timeout duration.
-// If configured, it will ask the user if they are still there.
-func (communication *GenericRequestor) OnIdealTimeout(ctx context.Context) error {
-	behavior, err := communication.GetBehavior()
+// OnIdleTimeout handles the behavior when the bot has spoken but the user
+// has not responded within the idle timeout duration.
+// If configured, it will prompt the user or end the conversation after max retries.
+func (r *GenericRequestor) onIdleTimeout(ctx context.Context) error {
+	behavior, err := r.GetBehavior()
 	if err != nil {
-		communication.logger.Debugf("no ideal timeout behavior setup for assistant.")
+		r.logger.Debugf("no idle timeout behavior configured for assistant")
 		return nil
 	}
 
-	// Check if ideal timeout is configured
 	if behavior.IdealTimeout == nil || *behavior.IdealTimeout == 0 {
 		return nil
 	}
 
-	if behavior.IdealTimeoutBackoff != nil && *behavior.IdealTimeoutBackoff > 0 && communication.idealTimeoutCount >= *behavior.IdealTimeoutBackoff {
-		communication.OnPacket(ctx, internal_type.LLMToolPacket{ContextID: communication.messaging.GetId(), Action: protos.AssistantConversationAction_END_CONVERSATION})
+	// Check if max backoff retries reached
+	if behavior.IdealTimeoutBackoff != nil && *behavior.IdealTimeoutBackoff > 0 {
+		if r.idleTimeoutCount >= *behavior.IdealTimeoutBackoff {
+			r.OnPacket(ctx, internal_type.LLMToolPacket{
+				ContextID: r.messaging.GetId(),
+				Action:    protos.AssistantConversationAction_END_CONVERSATION,
+			})
+			return nil
+		}
+	}
+
+	r.idleTimeoutCount++
+
+	timeoutContent := r.getIdleTimeoutMessage(behavior)
+	if timeoutContent == "" {
+		r.logger.Warnf("empty idle timeout message")
 		return nil
 	}
 
-	// Use default or configured timeout message
-	communication.idealTimeoutCount++
-	timeoutContent := "Are you still there?"
+	if err := r.OnPacket(ctx, internal_type.StaticPacket{ContextID: r.messaging.GetId(), Text: timeoutContent}); err != nil {
+		r.logger.Errorf("error while sending idle timeout message: %v", err)
+	}
+
+	return nil
+}
+
+// getIdleTimeoutMessage returns the configured or default idle timeout message.
+func (r *GenericRequestor) getIdleTimeoutMessage(behavior *internal_assistant_entity.AssistantDeploymentBehavior) string {
+	const defaultTimeoutMessage = "Are you still there?"
+
 	if behavior.IdealTimeoutMessage != nil && strings.TrimSpace(*behavior.IdealTimeoutMessage) != "" {
-		timeoutContent = communication.templateParser.Parse(*behavior.IdealTimeoutMessage, communication.GetArgs())
+		return r.templateParser.Parse(*behavior.IdealTimeoutMessage, r.GetArgs())
 	}
 
-	if strings.TrimSpace(timeoutContent) == "" {
-		communication.logger.Warnf("empty ideal timeout message")
-		return nil
-	}
-	if err := communication.OnPacket(ctx, internal_type.StaticPacket{ContextID: communication.messaging.GetId(), Text: timeoutContent}); err != nil {
-		communication.logger.Errorf("error while sending ideal timeout message: %v", err)
-		return nil
-	}
-	return nil
+	return defaultTimeoutMessage
 }
 
-// StartIdealTimeoutTimer starts a timer that triggers OnIdealTimeout when the bot has spoken but user hasn't responded for the configured duration.
-func (communication *GenericRequestor) StartIdealTimeoutTimer(ctx context.Context) {
-	if communication.idealTimeoutTimer != nil {
-		communication.idealTimeoutTimer.Stop()
+// StartIdleTimeoutTimer starts a timer that triggers OnIdleTimeout when the bot
+// has spoken but the user hasn't responded within the configured duration.
+func (r *GenericRequestor) startIdleTimeoutTimer(ctx context.Context) {
+	if r.idleTimeoutTimer != nil {
+		r.idleTimeoutTimer.Stop()
 	}
-	behavior, err := communication.GetBehavior()
+
+	behavior, err := r.GetBehavior()
 	if err != nil {
 		return
 	}
+
 	if behavior.IdealTimeout == nil || *behavior.IdealTimeout == 0 {
 		return
 	}
+
 	timeoutDuration := time.Duration(*behavior.IdealTimeout) * time.Minute
-	communication.idealTimeoutTimer = time.AfterFunc(timeoutDuration, func() {
-		if err := communication.OnIdealTimeout(ctx); err != nil {
-			communication.logger.Errorf("error while handling ideal timeout: %v", err)
+	r.idleTimeoutTimer = time.AfterFunc(timeoutDuration, func() {
+		if err := r.onIdleTimeout(ctx); err != nil {
+			r.logger.Errorf("error while handling idle timeout: %v", err)
 		}
 	})
 }
 
-// ResetIdealTimeoutTimer resets the ideal timeout timer when the user speaks (indicating they are still there).
-func (communication *GenericRequestor) ResetIdealTimeoutTimer(ctx context.Context) {
-	if communication.idealTimeoutTimer == nil {
+// ResetIdleTimeoutTimer resets the idle timeout timer when the user responds,
+// indicating they are still engaged in the conversation.
+func (r *GenericRequestor) resetIdleTimeoutTimer(ctx context.Context) {
+	if r.idleTimeoutTimer == nil {
 		return
 	}
-	communication.StartIdealTimeoutTimer(ctx)
+	r.startIdleTimeoutTimer(ctx)
 }
