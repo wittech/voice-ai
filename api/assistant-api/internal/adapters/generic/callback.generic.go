@@ -36,7 +36,6 @@ func (talking *GenericRequestor) OnPacket(ctx context.Context, pkts ...internal_
 	for _, p := range pkts {
 		switch vl := p.(type) {
 		case internal_type.UserTextPacket:
-
 			// calling end of speech analyzer
 			if err := talking.callEndOfSpeech(ctx, vl); err != nil {
 				talking.OnPacket(ctx, internal_type.EndOfSpeechPacket{ContextID: vl.ContextID, Speech: vl.Text})
@@ -47,8 +46,8 @@ func (talking *GenericRequestor) OnPacket(ctx context.Context, pkts ...internal_
 			// when static packet is received it means that rapida system has something to speak
 			// do not abrupt it just send it to the assembler
 			utils.Go(ctx, func() {
-				if err := talking.OnCreateMessage(ctx, vl); err != nil {
-					talking.logger.Errorf("Error in OnCreateMessage: %v", err)
+				if err := talking.onCreateMessage(ctx, vl); err != nil {
+					talking.logger.Errorf("Error in onCreateMessage: %v", err)
 				}
 			})
 			if err := talking.sentenceAssembler.Assemble(ctx, internal_type.LLMStreamPacket{ContextID: vl.ContextId(), Text: vl.Text}, internal_type.LLMMessagePacket{ContextID: vl.ContextId()}); err != nil {
@@ -73,9 +72,8 @@ func (talking *GenericRequestor) OnPacket(ctx context.Context, pkts ...internal_
 			case "word":
 				// user had spoken reset the timer
 				span.AddAttributes(ctx, internal_telemetry.KV{K: "activity_type", V: internal_telemetry.StringValue("word_interrupt")})
-
 				//
-				talking.ResetIdealTimeoutTimer(talking.Context())
+				talking.resetIdleTimeoutTimer(talking.Context())
 				if err := talking.messaging.Transition(internal_adapter_request_customizers.Interrupted); err != nil {
 					continue
 				}
@@ -83,7 +81,6 @@ func (talking *GenericRequestor) OnPacket(ctx context.Context, pkts ...internal_
 				if err := talking.sentenceAssembler.Assemble(ctx, vl); err != nil {
 					talking.logger.Debugf("unable to send interruption packet to assembler %v", err)
 				}
-
 				talking.Notify(ctx, &protos.AssistantConversationInterruption{Type: protos.AssistantConversationInterruption_INTERRUPTION_TYPE_WORD, Time: timestamppb.Now()})
 			default:
 				// might be noise at first
@@ -153,8 +150,8 @@ func (talking *GenericRequestor) OnPacket(ctx context.Context, pkts ...internal_
 			//
 			talking.messaging.Transition(internal_adapter_request_customizers.UserCompleted)
 			utils.Go(ctx, func() {
-				if err := talking.OnCreateMessage(ctx, internal_type.UserTextPacket{ContextID: msg.GetId(), Text: msg.String()}); err != nil {
-					talking.logger.Errorf("Error in OnCreateMessage: %v", err)
+				if err := talking.onCreateMessage(ctx, internal_type.UserTextPacket{ContextID: msg.GetId(), Text: msg.String()}); err != nil {
+					talking.logger.Errorf("Error in onCreateMessage: %v", err)
 				}
 			})
 
@@ -167,17 +164,17 @@ func (talking *GenericRequestor) OnPacket(ctx context.Context, pkts ...internal_
 			}
 		case internal_type.LLMStreamPacket:
 			// bot had spoken reset the timer
-			talking.ResetIdealTimeoutTimer(talking.Context())
+			talking.resetIdleTimeoutTimer(talking.Context())
 			talking.sentenceAssembler.Assemble(ctx, vl)
 
 			// send to end of speech analyzer
 			talking.callEndOfSpeech(ctx, vl)
 
 		case internal_type.LLMMessagePacket:
-			talking.ResetIdealTimeoutTimer(talking.Context())
+			talking.resetIdleTimeoutTimer(talking.Context())
 			utils.Go(ctx, func() {
-				if err := talking.OnCreateMessage(ctx, vl); err != nil {
-					talking.logger.Errorf("Error in OnCreateMessage: %v", err)
+				if err := talking.onCreateMessage(ctx, vl); err != nil {
+					talking.logger.Errorf("Error in onCreateMessage: %v", err)
 				}
 			})
 

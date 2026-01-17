@@ -107,8 +107,8 @@ type GenericRequestor struct {
 	StartedAt time.Time
 
 	// experience
-	idealTimeoutTimer *time.Timer
-	idealTimeoutCount uint64
+	idleTimeoutTimer *time.Timer
+	idleTimeoutCount uint64
 }
 
 func NewGenericRequestor(
@@ -182,7 +182,7 @@ func (dm *GenericRequestor) Streamer() internal_streamers.Streamer {
 	return dm.streamer
 }
 
-func (deb *GenericRequestor) OnCreateMessage(ctx context.Context, msg internal_type.MessagePacket) error {
+func (deb *GenericRequestor) onCreateMessage(ctx context.Context, msg internal_type.MessagePacket) error {
 	deb.histories = append(deb.histories, msg)
 	_, err := deb.conversationService.CreateConversationMessage(ctx, deb.Auth(), deb.Source(), deb.Assistant().Id, deb.Assistant().AssistantProviderId, deb.Conversation().Id, msg.ContextId(), msg.Role(), msg.Content())
 
