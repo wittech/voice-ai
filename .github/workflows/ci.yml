@@ -42,7 +42,18 @@ jobs:
           curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh | sh -s -- -b "$(go env GOPATH)/bin"
 
       - name: Run golangci-lint
-        run: golangci-lint run --timeout=5m --build-tags=nocgo
+        run: |
+          # Skip assistant-api entirely - it has deep CGO dependencies (azure speech, silero-vad, rnnoise)
+          # that require C libraries not available in CI. These are validated by Docker build.
+          golangci-lint run --timeout=5m --build-tags=nocgo \
+            ./api/web-api/... \
+            ./api/integration-api/... \
+            ./api/endpoint-api/... \
+            ./pkg/... \
+            ./cmd/web/... \
+            ./cmd/integration/... \
+            ./cmd/endpoint/... \
+            ./config/...
         env:
           CGO_ENABLED: 0
 
