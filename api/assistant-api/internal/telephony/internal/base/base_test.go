@@ -273,7 +273,7 @@ func TestBufferLocking(t *testing.T) {
 				streamer.OutputBuffer().Write([]byte{val})
 				streamer.UnlockOutputAudioBuffer()
 			}(byte(i + 100))
-			}
+		}
 
 		wg.Wait()
 		assert.Equal(t, iterations, streamer.InputBuffer().Len())

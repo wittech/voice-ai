@@ -67,11 +67,11 @@ func TestGetDifferentTelemetry_NilSlice(t *testing.T) {
 // TestGetDifferentTelemetry_SingleType tests separation with single type
 func TestGetDifferentTelemetry_SingleType(t *testing.T) {
 	tests := []struct {
-		name              string
-		input             []Telemetry
-		expectedEvents    int
-		expectedMetrics   int
-		expectedMetadata  int
+		name             string
+		input            []Telemetry
+		expectedEvents   int
+		expectedMetrics  int
+		expectedMetadata int
 	}{
 		{
 			name: "Only events",
