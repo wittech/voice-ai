@@ -146,11 +146,7 @@ func (talking *GenericRequestor) OnPacket(ctx context.Context, pkts ...internal_
 		case internal_type.UserTextPacket:
 			// interrupting
 			talking.OnPacket(ctx, internal_type.InterruptionPacket{ContextID: vl.ContextID, Source: internal_type.InterruptionSourceWord})
-
-			if err := talking.Notify(talking.Context(), &protos.ConversationUserMessage{Id: talking.messaging.GetID(), Completed: false, Message: &protos.ConversationUserMessage_Text{Text: vl.Text}, Time: timestamppb.Now()}); err != nil {
-				talking.logger.Tracef(talking.Context(), "error while notifying the text input from user: %w", err)
-			}
-
+			//
 			if err := talking.callEndOfSpeech(ctx, vl); err != nil {
 				talking.OnPacket(ctx, internal_type.EndOfSpeechPacket{ContextID: talking.messaging.GetID(), Speech: vl.Text})
 			}
@@ -267,10 +263,12 @@ func (talking *GenericRequestor) OnPacket(ctx context.Context, pkts ...internal_
 					V: internal_telemetry.BoolValue(!vl.Interim),
 				})
 			defer span.EndSpan(ctx, utils.AssistantListeningStage)
+			// later move the contextID with audio
+			vl.ContextID = talking.messaging.GetID()
 			//
 			if err := talking.callEndOfSpeech(ctx, vl); err != nil {
 				if !vl.Interim {
-					talking.OnPacket(ctx, internal_type.EndOfSpeechPacket{ContextID: talking.messaging.GetID(), Speech: vl.Script})
+					talking.OnPacket(ctx, internal_type.EndOfSpeechPacket{ContextID: vl.ContextID, Speech: vl.Script})
 				}
 			}
 			continue
@@ -290,18 +288,18 @@ func (talking *GenericRequestor) OnPacket(ctx context.Context, pkts ...internal_
 			talking.stopIdleTimeoutTimer()
 
 			if err := talking.Notify(ctx,
-				&protos.ConversationUserMessage{Id: talking.messaging.GetID(), Message: &protos.ConversationUserMessage_Text{Text: vl.Speech}, Completed: true, Time: timestamppb.New(time.Now())}); err != nil {
+				&protos.ConversationUserMessage{Id: vl.ContextID, Message: &protos.ConversationUserMessage_Text{Text: vl.Speech}, Completed: true, Time: timestamppb.New(time.Now())}); err != nil {
 				talking.logger.Tracef(ctx, "might be returing processing the duplicate message so cut it out.")
 				continue
 			}
 			utils.Go(ctx, func() {
-				if err := talking.onCreateMessage(ctx, internal_type.UserTextPacket{ContextID: talking.messaging.GetID(), Text: vl.Speech}); err != nil {
+				if err := talking.onCreateMessage(ctx, internal_type.UserTextPacket{ContextID: vl.ContextID, Text: vl.Speech}); err != nil {
 					talking.logger.Errorf("Error in onCreateMessage: %v", err)
 				}
 			})
 
 			//
-			if err := talking.assistantExecutor.Execute(ctx, talking, internal_type.UserTextPacket{ContextID: talking.messaging.GetID(), Text: vl.Speech}); err != nil {
+			if err := talking.assistantExecutor.Execute(ctx, talking, internal_type.UserTextPacket{ContextID: vl.ContextID, Text: vl.Speech}); err != nil {
 				talking.logger.Errorf("assistant executor error: %v", err)
 				talking.OnError(ctx)
 				continue
