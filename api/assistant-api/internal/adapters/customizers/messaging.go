@@ -123,10 +123,7 @@ func (ms *messaging) Transition(newState InteractionState) error {
 		if ms.state == Interrupted {
 			return fmt.Errorf("Transition: invalid transition: agent can't interrupted multiple times")
 		}
-		if ms.state == LLMGenerated || ms.state == LLMGenerating {
-			ms.in = uuid.NewString()
-		}
-
+		ms.in = uuid.NewString()
 	}
 	ms.state = newState
 	return nil
