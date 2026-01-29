@@ -89,6 +89,8 @@ func (spk *GenericRequestor) callSpeaking(ctx context.Context, result internal_t
 	case internal_type.LLMResponseDonePacket:
 		if spk.textToSpeechTransformer != nil {
 			// might be stale packet
+			spk.logger.Debugf("testing -> got to speak %+v", result)
+			spk.logger.Debugf("testing -> got to speak ID %+v", spk.messaging.GetID())
 			if result.ContextId() != spk.messaging.GetID() {
 				return nil
 			}
@@ -103,6 +105,8 @@ func (spk *GenericRequestor) callSpeaking(ctx context.Context, result internal_t
 			}
 		}
 	case internal_type.LLMResponseDeltaPacket:
+		spk.logger.Debugf("testing -> got to speak %+v", result)
+		spk.logger.Debugf("testing -> got to speak ID %+v", spk.messaging.GetID())
 		if result.ContextId() != spk.messaging.GetID() {
 			return nil
 		}

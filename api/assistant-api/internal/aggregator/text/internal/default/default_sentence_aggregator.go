@@ -168,7 +168,7 @@ func (st *textAggregator) extractAndQueueLocked(sentence internal_type.LLMPacket
 			content := st.buffer.String()
 			if content != "" {
 				st.toEmitBuffer = append(st.toEmitBuffer, internal_type.LLMResponseDeltaPacket{
-					ContextID: st.currentContext,
+					ContextID: input.ContextID,
 					Text:      content,
 				})
 			}

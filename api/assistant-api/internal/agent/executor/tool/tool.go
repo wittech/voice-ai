@@ -122,13 +122,6 @@ func (executor *toolExecutor) GetFunctionDefinitions() []*protos.FunctionDefinit
 	return executor.availableToolFunctions
 }
 
-func (executor *toolExecutor) tool(messageId string, in, out map[string]interface{}, metrics []*protos.Metric, communication internal_type.Communication) error {
-	utils.Go(communication.Context(), func() {
-		communication.CreateConversationToolLog(messageId, in, out, metrics)
-	})
-	return nil
-}
-
 func (executor *toolExecutor) execute(ctx context.Context, contextID string, call *protos.ToolCall, communication internal_type.Communication) *protos.ToolMessage_Tool {
 	ctx, span, _ := communication.Tracer().StartSpan(ctx, utils.AssistantToolExecuteStage, internal_adapter_telemetry.MessageKV(contextID))
 	defer span.EndSpan(ctx, utils.AssistantToolExecuteStage)

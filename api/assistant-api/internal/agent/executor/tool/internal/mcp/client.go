@@ -114,7 +114,6 @@ type Client struct {
 
 func NewClient(ctx context.Context, logger commons.Logger, opts utils.Option) (*Client, error) {
 
-	logger.Debugf("optiopnms => %+v", opts)
 	// ------------------------------------------------------------------
 	// Required option
 	// ------------------------------------------------------------------
@@ -255,14 +254,6 @@ func NewClient(ctx context.Context, logger commons.Logger, opts utils.Option) (*
 		mcpClient.Close()
 		return nil, err
 	}
-
-	logger.Infof(
-		"Connected to MCP server: %s (protocol=%s timeout=%ds tools=%d)",
-		config.ServerURL,
-		config.Protocol,
-		config.Timeout,
-		len(c.tools),
-	)
 
 	return c, nil
 }

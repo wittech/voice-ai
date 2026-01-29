@@ -80,12 +80,6 @@ func (executor *modelAssistantExecutor) Initialize(ctx context.Context, communic
 		return nil
 	})
 
-	// Goroutine to fetch conversation logs
-	g.Go(func() error {
-		conversationLogs = communication.GetConversationLogs()
-		return nil
-	})
-
 	// Goroutine to initialize tool executor
 	g.Go(func() error {
 		if err := executor.toolExecutor.Initialize(gCtx, communication); err != nil {
