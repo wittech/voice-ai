@@ -193,7 +193,7 @@ export function CreateAgentKit() {
                   <Info className="shrink-0 w-4 h-4" />
                   <div className="ms-3 text-sm font-medium font-sans">
                     Deploy your agent on-premises with the Rapida orchestration
-                    engine via WebSocket connection.
+                    engine via AgentkitConnection.
                   </div>
                   <a
                     target="_blank"

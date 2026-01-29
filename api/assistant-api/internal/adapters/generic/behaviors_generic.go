@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	internal_assistant_entity "github.com/rapidaai/api/assistant-api/internal/entity/assistants"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 	"github.com/rapidaai/pkg/utils"
@@ -77,7 +76,7 @@ func (r *GenericRequestor) initializeGreeting(ctx context.Context, behavior *int
 		return
 	}
 
-	if err := r.OnPacket(ctx, internal_type.StaticPacket{ContextID: uuid.NewString(), Text: greetingContent}); err != nil {
+	if err := r.OnPacket(ctx, internal_type.StaticPacket{ContextID: r.messaging.GetID(), Text: greetingContent}); err != nil {
 		r.logger.Errorf("error while sending greeting message: %v", err)
 	}
 }
@@ -99,7 +98,7 @@ func (r *GenericRequestor) initializeMaxSessionDuration(ctx context.Context, beh
 	timeoutDuration := time.Duration(*behavior.MaxSessionDuration) * time.Second
 	r.maxSessionTimer = time.AfterFunc(timeoutDuration, func() {
 		r.OnPacket(ctx, internal_type.DirectivePacket{
-			ContextID: uuid.NewString(),
+			ContextID: r.messaging.GetID(),
 			Directive: protos.ConversationDirective_END_CONVERSATION,
 			Arguments: map[string]interface{}{
 				"reason": "max session duration reached",
@@ -123,7 +122,7 @@ func (r *GenericRequestor) OnError(ctx context.Context) error {
 		mistakeContent = r.templateParser.Parse(*behavior.Mistake, r.GetArgs())
 	}
 
-	if err := r.OnPacket(ctx, internal_type.StaticPacket{ContextID: uuid.NewString(), Text: mistakeContent}); err != nil {
+	if err := r.OnPacket(ctx, internal_type.StaticPacket{ContextID: r.messaging.GetID(), Text: mistakeContent}); err != nil {
 		r.logger.Errorf("error while sending error message: %v", err)
 	}
 
@@ -148,7 +147,7 @@ func (r *GenericRequestor) onIdleTimeout(ctx context.Context) error {
 	if behavior.IdealTimeoutBackoff != nil && *behavior.IdealTimeoutBackoff > 0 {
 		if r.idleTimeoutCount >= *behavior.IdealTimeoutBackoff {
 			r.OnPacket(ctx, internal_type.DirectivePacket{
-				ContextID: uuid.NewString(),
+				ContextID: r.messaging.GetID(),
 				Directive: protos.ConversationDirective_END_CONVERSATION,
 				Arguments: map[string]interface{}{
 					"reason": "max session duration reached",
@@ -165,7 +164,7 @@ func (r *GenericRequestor) onIdleTimeout(ctx context.Context) error {
 		return nil
 	}
 
-	if err := r.OnPacket(ctx, internal_type.StaticPacket{ContextID: uuid.NewString(), Text: timeoutContent}); err != nil {
+	if err := r.OnPacket(ctx, internal_type.StaticPacket{ContextID: r.messaging.GetID(), Text: timeoutContent}); err != nil {
 		r.logger.Errorf("error while sending idle timeout message: %v", err)
 	}
 
