@@ -7,6 +7,7 @@ package internal_adapter_generic
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/rapidaai/api/assistant-api/config"
@@ -233,6 +234,11 @@ func (talking *GenericRequestor) ResumeConversation(auth types.SimplePrinciple, 
 	conversation, err := talking.GetAssistantConversation(auth, assistant.Id, conversationId, identifier)
 	if err != nil {
 		talking.logger.Errorf("failed to get assistant conversation: %+v", err)
+		return nil, err
+	}
+	if conversation == nil {
+		talking.logger.Errorf("conversation not found: %d", conversationId)
+		return nil, fmt.Errorf("conversation not found: %d", conversationId)
 	}
 	talking.assistantConversation = conversation
 	talking.args = conversation.GetArguments()

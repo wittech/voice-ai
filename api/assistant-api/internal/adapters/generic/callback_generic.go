@@ -105,6 +105,7 @@ func (spk *GenericRequestor) interruptAllProvider(ctx context.Context, result in
 }
 
 func (spk *GenericRequestor) callSpeaking(ctx context.Context, result internal_type.LLMPacket) error {
+	spk.logger.Debugf("testing -> callSpeaking called with result type %T", result)
 	switch res := result.(type) {
 	case internal_type.LLMResponseDonePacket:
 		if spk.textToSpeechTransformer != nil {
@@ -122,6 +123,7 @@ func (spk *GenericRequestor) callSpeaking(ctx context.Context, result internal_t
 				spk.logger.Errorf("speak: failed to send flush to text to speech transformer error: %v", err)
 			}
 		}
+
 	case internal_type.LLMResponseDeltaPacket:
 		if result.ContextId() != spk.messaging.GetID() {
 			return nil

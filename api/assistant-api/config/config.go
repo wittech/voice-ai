@@ -15,6 +15,16 @@ import (
 	"github.com/spf13/viper"
 )
 
+// SIPConfig holds the SIP server configuration
+type SIPConfig struct {
+	Enabled           bool   `mapstructure:"enabled"`
+	Server            string `mapstructure:"server"`
+	Port              int    `mapstructure:"port"`
+	Transport         string `mapstructure:"transport"` // udp, tcp, tls
+	RTPPortRangeStart int    `mapstructure:"rtp_port_range_start"`
+	RTPPortRangeEnd   int    `mapstructure:"rtp_port_range_end"`
+}
+
 // Application config structure
 type AssistantConfig struct {
 	config.AppConfig    `mapstructure:",squash"`
@@ -24,6 +34,7 @@ type AssistantConfig struct {
 	WeaviateConfig      configs.WeaviateConfig   `mapstructure:"weaviate"`
 	AssetStoreConfig    configs.AssetStoreConfig `mapstructure:"asset_store" validate:"required"`
 	PublicAssistantHost string                   `mapstructure:"public_assistant_host" validate:"required"`
+	SIPConfig           SIPConfig                `mapstructure:"sip"`
 }
 
 // reading config and intializing configs for application

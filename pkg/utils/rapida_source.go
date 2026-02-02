@@ -19,6 +19,8 @@ const (
 	SDK       RapidaSource = "sdk"
 	PhoneCall RapidaSource = "phone-call"
 	Whatsapp  RapidaSource = "whatsapp"
+	WebRTC    RapidaSource = "webrtc"
+	SIP       RapidaSource = "sip"
 )
 
 // Get returns the string value of the RapidaRegion
@@ -40,8 +42,12 @@ func FromSourceStr(label string) RapidaSource {
 		return PhoneCall
 	case "whatsapp":
 		return Whatsapp
+	case "webrtc":
+		return WebRTC
+	case "sip":
+		return SIP
 	default:
-		log.Printf("%s The source is not supported. Supported sources are 'web-plugin', 'debugger', 'sdk', 'phone-call', and 'whatsapp'.", label)
+		log.Printf("%s The source is not supported. Supported sources are 'web-plugin', 'debugger', 'sdk', 'phone-call', 'whatsapp', 'webrtc', and 'sip'.", label)
 		return Debugger
 	}
 }

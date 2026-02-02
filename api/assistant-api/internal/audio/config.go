@@ -15,6 +15,14 @@ func NewMulaw8khzMonoAudioConfig() *protos.AudioConfig {
 	}
 }
 
+func NewLinear48khzMonoAudioConfig() *protos.AudioConfig {
+	return &protos.AudioConfig{
+		SampleRate:  48000,
+		AudioFormat: protos.AudioConfig_LINEAR16,
+		Channels:    1,
+	}
+}
+
 func NewLinear24khzMonoAudioConfig() *protos.AudioConfig {
 	return &protos.AudioConfig{
 		SampleRate:  24000,

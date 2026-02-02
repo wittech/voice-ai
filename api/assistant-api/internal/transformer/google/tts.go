@@ -183,19 +183,23 @@ func (g *googleTextToSpeech) textToSpeechCallback(streamClient texttospeechpb.Te
 				continue
 			}
 
-			// Check if context has changed - discard chunks from old context
+			// Check if stream has been replaced due to interruption
 			g.mu.Lock()
 			currentContextId := g.contextId
+			currentStreamClient := g.streamClient
 			g.mu.Unlock()
 
-			// Use current context ID for first message (when initialContextId is empty)
-			// or if context matches the initial context
-			effectiveContextId := initialContextId
+			// If Initialize() was called (due to interruption) and replaced the stream,
+			// exit this callback - a new callback is handling the new stream
+			if currentStreamClient != streamClient {
+				g.logger.Debugf("google-tts: interrupted, stream replaced - stopping old callback")
+				return
+			}
+
+			// Use current context ID (allows context to update without interruption)
+			effectiveContextId := currentContextId
 			if effectiveContextId == "" {
-				effectiveContextId = currentContextId
-			} else if currentContextId != initialContextId {
-				g.logger.Debugf("google-tts: discarding chunk from old context %s, current is %s", initialContextId, currentContextId)
-				return // Stop processing this stream as context has changed
+				effectiveContextId = initialContextId
 			}
 
 			if err := g.onPacket(internal_type.TextToSpeechAudioPacket{
