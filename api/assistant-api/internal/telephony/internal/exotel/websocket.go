@@ -14,7 +14,8 @@ import (
 	internal_audio "github.com/rapidaai/api/assistant-api/internal/audio"
 	internal_assistant_entity "github.com/rapidaai/api/assistant-api/internal/entity/assistants"
 	internal_conversation_entity "github.com/rapidaai/api/assistant-api/internal/entity/conversations"
-	streamers "github.com/rapidaai/api/assistant-api/internal/streamers"
+	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
+
 	internal_telephony_base "github.com/rapidaai/api/assistant-api/internal/telephony/internal/base"
 	internal_exotel "github.com/rapidaai/api/assistant-api/internal/telephony/internal/exotel/internal"
 	"github.com/rapidaai/pkg/commons"
@@ -28,7 +29,7 @@ type exotelWebsocketStreamer struct {
 }
 
 func NewExotelWebsocketStreamer(logger commons.Logger, connection *websocket.Conn, assistant *internal_assistant_entity.Assistant, conversation *internal_conversation_entity.AssistantConversation, vlt *protos.VaultCredential,
-) streamers.Streamer {
+) internal_type.TelephonyStreamer {
 	return &exotelWebsocketStreamer{
 		logger:   logger,
 		streamID: "",

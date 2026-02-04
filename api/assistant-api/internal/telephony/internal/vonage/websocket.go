@@ -15,8 +15,8 @@ import (
 	internal_audio "github.com/rapidaai/api/assistant-api/internal/audio"
 	internal_assistant_entity "github.com/rapidaai/api/assistant-api/internal/entity/assistants"
 	internal_conversation_entity "github.com/rapidaai/api/assistant-api/internal/entity/conversations"
-	internal_streamers "github.com/rapidaai/api/assistant-api/internal/streamers"
 	internal_telephony_base "github.com/rapidaai/api/assistant-api/internal/telephony/internal/base"
+	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 	"github.com/rapidaai/pkg/commons"
 	protos "github.com/rapidaai/protos"
 	"github.com/vonage/vonage-go-sdk"
@@ -27,7 +27,7 @@ type vonageWebsocketStreamer struct {
 	logger   commons.Logger
 }
 
-func NewVonageWebsocketStreamer(logger commons.Logger, connection *websocket.Conn, assistant *internal_assistant_entity.Assistant, conversation *internal_conversation_entity.AssistantConversation, vlt *protos.VaultCredential) internal_streamers.Streamer {
+func NewVonageWebsocketStreamer(logger commons.Logger, connection *websocket.Conn, assistant *internal_assistant_entity.Assistant, conversation *internal_conversation_entity.AssistantConversation, vlt *protos.VaultCredential) internal_type.TelephonyStreamer {
 	return &vonageWebsocketStreamer{
 		logger:   logger,
 		streamer: internal_telephony_base.NewBaseTelephonyStreamer(logger, connection, assistant, conversation, vlt),

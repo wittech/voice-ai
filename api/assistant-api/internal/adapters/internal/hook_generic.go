@@ -3,7 +3,7 @@
 //
 // Licensed under GPL-2.0 with Rapida Additional Terms.
 // See LICENSE.md or contact sales@rapida.ai for commercial usage.
-package internal_adapter_generic
+package adapter_internal
 
 import (
 	"context"
@@ -23,7 +23,7 @@ import (
 	"github.com/rapidaai/protos"
 )
 
-func (md *GenericRequestor) OnBeginConversation() error {
+func (md *genericRequestor) OnBeginConversation() error {
 	utils.Go(md.Context(), func() {
 		for _, webhook := range md.assistant.AssistantWebhooks {
 			if slices.Contains(webhook.AssistantEvents, utils.ConversationBegin.Get()) {
@@ -35,7 +35,7 @@ func (md *GenericRequestor) OnBeginConversation() error {
 	return nil
 }
 
-func (md *GenericRequestor) OnResumeConversation() error {
+func (md *genericRequestor) OnResumeConversation() error {
 	for _, webhook := range md.assistant.AssistantWebhooks {
 		if slices.Contains(webhook.AssistantEvents, utils.ConversationBegin.Get()) {
 			arguments := md.Parse(utils.ConversationResume, webhook.GetBody())
@@ -45,7 +45,7 @@ func (md *GenericRequestor) OnResumeConversation() error {
 	return nil
 }
 
-func (md *GenericRequestor) OnErrorConversation() error {
+func (md *genericRequestor) OnErrorConversation() error {
 	for _, webhook := range md.assistant.AssistantWebhooks {
 		if slices.Contains(webhook.AssistantEvents, utils.ConversationFailed.Get()) {
 			arguments := md.Parse(utils.ConversationFailed, webhook.GetBody())
@@ -55,7 +55,7 @@ func (md *GenericRequestor) OnErrorConversation() error {
 	return nil
 }
 
-func (md *GenericRequestor) OnEndConversation() error {
+func (md *genericRequestor) OnEndConversation() error {
 	utils.Go(md.Context(), func() {
 		if len(md.assistant.AssistantAnalyses) > 0 {
 			output := make(map[string]interface{})
@@ -79,7 +79,7 @@ func (md *GenericRequestor) OnEndConversation() error {
 	})
 	return nil
 }
-func (hk *GenericRequestor) Analysis(endpointId uint64, endpointVersion string, arguments map[string]interface{}) (map[string]interface{}, error) {
+func (hk *genericRequestor) Analysis(endpointId uint64, endpointVersion string, arguments map[string]interface{}) (map[string]interface{}, error) {
 	ivk, err := hk.analyze(
 		hk.Context(),
 		&protos.EndpointDefinition{
@@ -107,7 +107,7 @@ func (hk *GenericRequestor) Analysis(endpointId uint64, endpointVersion string, 
 	return nil, fmt.Errorf("empty response from endpoint")
 }
 
-func (md *GenericRequestor) Webhook(event string, arguments map[string]interface{}, webhook *internal_assistant_entity.AssistantWebhook) {
+func (md *genericRequestor) Webhook(event string, arguments map[string]interface{}, webhook *internal_assistant_entity.AssistantWebhook) {
 	utils.Go(md.Context(), func() {
 		startTime := time.Now()
 		var res *rest.APIResponse
@@ -170,7 +170,7 @@ func (md *GenericRequestor) Webhook(event string, arguments map[string]interface
 	})
 }
 
-func (md *GenericRequestor) SimplifyHistory(msgs []internal_type.MessagePacket) []map[string]string {
+func (md *genericRequestor) SimplifyHistory(msgs []internal_type.MessagePacket) []map[string]string {
 	out := make([]map[string]string, 0)
 	for _, msg := range msgs {
 		out = append(out, map[string]string{
@@ -181,7 +181,7 @@ func (md *GenericRequestor) SimplifyHistory(msgs []internal_type.MessagePacket) 
 	return out
 }
 
-func (md *GenericRequestor) Parse(event utils.AssistantWebhookEvent, mapping map[string]string) map[string]interface{} {
+func (md *genericRequestor) Parse(event utils.AssistantWebhookEvent, mapping map[string]string) map[string]interface{} {
 	arguments := make(map[string]interface{})
 	for key, value := range mapping {
 		if k, ok := strings.CutPrefix(key, "event."); ok {
@@ -250,7 +250,7 @@ func (md *GenericRequestor) Parse(event utils.AssistantWebhookEvent, mapping map
 	return arguments
 }
 
-func (ae *GenericRequestor) analyze(ctx context.Context, endpointDef *protos.EndpointDefinition, arguments, metadata, opts map[string]interface{}) (*protos.InvokeResponse, error) {
+func (ae *genericRequestor) analyze(ctx context.Context, endpointDef *protos.EndpointDefinition, arguments, metadata, opts map[string]interface{}) (*protos.InvokeResponse, error) {
 	inputBuilder := endpoint_client_builders.NewInputInvokeBuilder(ae.logger)
 	return ae.DeploymentCaller().Invoke(
 		ctx,
@@ -264,7 +264,7 @@ func (ae *GenericRequestor) analyze(ctx context.Context, endpointDef *protos.End
 	)
 }
 
-func (aw *GenericRequestor) webhook(ctx context.Context, timeout uint32, baseUrl string, method string, headers map[string]string, body map[string]interface{}) (*rest.APIResponse, error) {
+func (aw *genericRequestor) webhook(ctx context.Context, timeout uint32, baseUrl string, method string, headers map[string]string, body map[string]interface{}) (*rest.APIResponse, error) {
 	client := rest.NewRestClientWithConfig(baseUrl, headers, timeout)
 	switch method {
 	case "POST":

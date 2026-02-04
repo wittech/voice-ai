@@ -15,9 +15,7 @@ import (
 	"github.com/rapidaai/api/assistant-api/config"
 	internal_assistant_entity "github.com/rapidaai/api/assistant-api/internal/entity/assistants"
 	internal_conversation_entity "github.com/rapidaai/api/assistant-api/internal/entity/conversations"
-	internal_streamers "github.com/rapidaai/api/assistant-api/internal/streamers"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
-
 	"github.com/rapidaai/pkg/commons"
 	"github.com/rapidaai/pkg/types"
 	"github.com/rapidaai/pkg/utils"
@@ -172,7 +170,7 @@ func (tpc *twilioTelephony) InboundCall(c *gin.Context, auth types.SimplePrincip
 	return nil
 }
 
-func (tpc *twilioTelephony) Streamer(c *gin.Context, connection *websocket.Conn, assistant *internal_assistant_entity.Assistant, conversation *internal_conversation_entity.AssistantConversation, vlt *protos.VaultCredential) internal_streamers.Streamer {
+func (tpc *twilioTelephony) Streamer(c *gin.Context, connection *websocket.Conn, assistant *internal_assistant_entity.Assistant, conversation *internal_conversation_entity.AssistantConversation, vlt *protos.VaultCredential) internal_type.TelephonyStreamer {
 	return NewTwilioWebsocketStreamer(tpc.logger, connection, assistant, conversation, vlt)
 }
 

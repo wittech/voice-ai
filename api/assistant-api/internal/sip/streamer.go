@@ -15,7 +15,7 @@ import (
 	internal_audio "github.com/rapidaai/api/assistant-api/internal/audio"
 	internal_assistant_entity "github.com/rapidaai/api/assistant-api/internal/entity/assistants"
 	internal_conversation_entity "github.com/rapidaai/api/assistant-api/internal/entity/conversations"
-	internal_streamers "github.com/rapidaai/api/assistant-api/internal/streamers"
+	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 	"github.com/rapidaai/pkg/commons"
 	"github.com/rapidaai/protos"
 )
@@ -55,7 +55,7 @@ type StreamerConfig struct {
 
 // NewStreamer creates a new native SIP streamer
 // Uses sipgo for SIP signaling and RTP for audio transport - no WebSocket needed
-func NewStreamer(ctx context.Context, cfg *StreamerConfig) (internal_streamers.Streamer, error) {
+func NewStreamer(ctx context.Context, cfg *StreamerConfig) (internal_type.Streamer, error) {
 	if err := cfg.Config.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid SIP config: %w", err)
 	}

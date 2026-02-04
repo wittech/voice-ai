@@ -32,7 +32,7 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 //
-// Talk Service for assistant messaging
+// TalkService provides the main API for assistant conversations.
 type TalkServiceClient interface {
 	// Bi-directional streaming RPC for assistant messaging
 	AssistantTalk(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[AssistantTalkInput, AssistantTalkOutput], error)
@@ -135,7 +135,7 @@ func (c *talkServiceClient) CreateBulkPhoneCall(ctx context.Context, in *CreateB
 // All implementations should embed UnimplementedTalkServiceServer
 // for forward compatibility.
 //
-// Talk Service for assistant messaging
+// TalkService provides the main API for assistant conversations.
 type TalkServiceServer interface {
 	// Bi-directional streaming RPC for assistant messaging
 	AssistantTalk(grpc.BidiStreamingServer[AssistantTalkInput, AssistantTalkOutput]) error
@@ -352,106 +352,6 @@ var TalkService_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "AssistantTalk",
 			Handler:       _TalkService_AssistantTalk_Handler,
-			ServerStreams: true,
-			ClientStreams: true,
-		},
-	},
-	Metadata: "talk-api.proto",
-}
-
-const (
-	AgentKit_Talk_FullMethodName = "/talk_api.AgentKit/Talk"
-)
-
-// AgentKitClient is the client API for AgentKit service.
-//
-// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-//
-// AgentKit Service for assistant messaging
-type AgentKitClient interface {
-	// Bi-directional streaming RPC for assistant messaging
-	Talk(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[TalkInput, TalkOutput], error)
-}
-
-type agentKitClient struct {
-	cc grpc.ClientConnInterface
-}
-
-func NewAgentKitClient(cc grpc.ClientConnInterface) AgentKitClient {
-	return &agentKitClient{cc}
-}
-
-func (c *agentKitClient) Talk(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[TalkInput, TalkOutput], error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &AgentKit_ServiceDesc.Streams[0], AgentKit_Talk_FullMethodName, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &grpc.GenericClientStream[TalkInput, TalkOutput]{ClientStream: stream}
-	return x, nil
-}
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type AgentKit_TalkClient = grpc.BidiStreamingClient[TalkInput, TalkOutput]
-
-// AgentKitServer is the server API for AgentKit service.
-// All implementations should embed UnimplementedAgentKitServer
-// for forward compatibility.
-//
-// AgentKit Service for assistant messaging
-type AgentKitServer interface {
-	// Bi-directional streaming RPC for assistant messaging
-	Talk(grpc.BidiStreamingServer[TalkInput, TalkOutput]) error
-}
-
-// UnimplementedAgentKitServer should be embedded to have
-// forward compatible implementations.
-//
-// NOTE: this should be embedded by value instead of pointer to avoid a nil
-// pointer dereference when methods are called.
-type UnimplementedAgentKitServer struct{}
-
-func (UnimplementedAgentKitServer) Talk(grpc.BidiStreamingServer[TalkInput, TalkOutput]) error {
-	return status.Errorf(codes.Unimplemented, "method Talk not implemented")
-}
-func (UnimplementedAgentKitServer) testEmbeddedByValue() {}
-
-// UnsafeAgentKitServer may be embedded to opt out of forward compatibility for this service.
-// Use of this interface is not recommended, as added methods to AgentKitServer will
-// result in compilation errors.
-type UnsafeAgentKitServer interface {
-	mustEmbedUnimplementedAgentKitServer()
-}
-
-func RegisterAgentKitServer(s grpc.ServiceRegistrar, srv AgentKitServer) {
-	// If the following call pancis, it indicates UnimplementedAgentKitServer was
-	// embedded by pointer and is nil.  This will cause panics if an
-	// unimplemented method is ever invoked, so we test this at initialization
-	// time to prevent it from happening at runtime later due to I/O.
-	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
-		t.testEmbeddedByValue()
-	}
-	s.RegisterService(&AgentKit_ServiceDesc, srv)
-}
-
-func _AgentKit_Talk_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(AgentKitServer).Talk(&grpc.GenericServerStream[TalkInput, TalkOutput]{ServerStream: stream})
-}
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type AgentKit_TalkServer = grpc.BidiStreamingServer[TalkInput, TalkOutput]
-
-// AgentKit_ServiceDesc is the grpc.ServiceDesc for AgentKit service.
-// It's only intended for direct use with grpc.RegisterService,
-// and not to be introspected or modified (even as a copy)
-var AgentKit_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "talk_api.AgentKit",
-	HandlerType: (*AgentKitServer)(nil),
-	Methods:     []grpc.MethodDesc{},
-	Streams: []grpc.StreamDesc{
-		{
-			StreamName:    "Talk",
-			Handler:       _AgentKit_Talk_Handler,
 			ServerStreams: true,
 			ClientStreams: true,
 		},

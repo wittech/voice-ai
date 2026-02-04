@@ -15,7 +15,6 @@ import (
 	"github.com/rapidaai/api/assistant-api/config"
 	internal_assistant_entity "github.com/rapidaai/api/assistant-api/internal/entity/assistants"
 	internal_conversation_entity "github.com/rapidaai/api/assistant-api/internal/entity/conversations"
-	internal_streamers "github.com/rapidaai/api/assistant-api/internal/streamers"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 	"github.com/rapidaai/pkg/commons"
 	"github.com/rapidaai/pkg/types"
@@ -138,7 +137,7 @@ func (vt *vonageTelephony) InboundCall(c *gin.Context, auth types.SimplePrincipl
 	return nil
 }
 
-func (tpc *vonageTelephony) Streamer(c *gin.Context, connection *websocket.Conn, assistant *internal_assistant_entity.Assistant, assistantConversation *internal_conversation_entity.AssistantConversation, vltC *protos.VaultCredential) internal_streamers.Streamer {
+func (tpc *vonageTelephony) Streamer(c *gin.Context, connection *websocket.Conn, assistant *internal_assistant_entity.Assistant, assistantConversation *internal_conversation_entity.AssistantConversation, vltC *protos.VaultCredential) internal_type.TelephonyStreamer {
 	return NewVonageWebsocketStreamer(tpc.logger, connection, assistant, assistantConversation, vltC)
 }
 

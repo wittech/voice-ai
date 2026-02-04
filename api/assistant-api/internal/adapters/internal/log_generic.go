@@ -3,7 +3,7 @@
 //
 // Licensed under GPL-2.0 with Rapida Additional Terms.
 // See LICENSE.md or contact sales@rapida.ai for commercial usage.
-package internal_adapter_generic
+package adapter_internal
 
 import (
 	type_enums "github.com/rapidaai/pkg/types/enums"
@@ -12,7 +12,7 @@ import (
 
 const ConversationPageHistory uint32 = 50
 
-func (kr *GenericRequestor) CreateKnowledgeLog(knowledgeId uint64, retrievalMethod string,
+func (kr *genericRequestor) CreateKnowledgeLog(knowledgeId uint64, retrievalMethod string,
 	topK uint32,
 	scoreThreshold float32,
 	documentCount int,
@@ -24,7 +24,7 @@ func (kr *GenericRequestor) CreateKnowledgeLog(knowledgeId uint64, retrievalMeth
 	return err
 }
 
-func (cr *GenericRequestor) CreateWebhookLog(
+func (cr *genericRequestor) CreateWebhookLog(
 
 	webhookID uint64, httpUrl, httpMethod, event string,
 	responseStatus int64,
@@ -36,7 +36,7 @@ func (cr *GenericRequestor) CreateWebhookLog(
 	return err
 }
 
-func (cr *GenericRequestor) GetConversationLogs() []*protos.Message {
+func (cr *genericRequestor) GetConversationLogs() []*protos.Message {
 	messages := make([]*protos.Message, 0)
 	cnt, conversations, err := cr.
 		conversationService.
@@ -74,7 +74,7 @@ func (cr *GenericRequestor) GetConversationLogs() []*protos.Message {
 	return messages
 }
 
-func (cr *GenericRequestor) CreateConversationMessageLog(messageid string, in, out *protos.Message, metrics []*protos.Metric) error {
+func (cr *genericRequestor) CreateConversationMessageLog(messageid string, in, out *protos.Message, metrics []*protos.Metric) error {
 	cr.conversationService.CreateLLMAction(
 		cr.Context(),
 		cr.Auth(),
@@ -85,7 +85,7 @@ func (cr *GenericRequestor) CreateConversationMessageLog(messageid string, in, o
 	return nil
 }
 
-func (cr *GenericRequestor) CreateConversationToolLog(
+func (cr *genericRequestor) CreateConversationToolLog(
 	messageid string, in, out map[string]interface{}, metrics []*protos.Metric) error {
 	cr.conversationService.CreateToolAction(
 		cr.Context(),
@@ -97,7 +97,7 @@ func (cr *GenericRequestor) CreateConversationToolLog(
 	return nil
 }
 
-func (cr *GenericRequestor) CreateToolLog(
+func (cr *genericRequestor) CreateToolLog(
 	toolId uint64,
 	messageId string,
 	toolName string,

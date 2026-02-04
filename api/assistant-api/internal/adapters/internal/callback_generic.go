@@ -3,7 +3,7 @@
 //
 // Licensed under GPL-2.0 with Rapida Additional Terms.
 // See LICENSE.md or contact sales@rapida.ai for commercial usage.
-package internal_adapter_generic
+package adapter_internal
 
 import (
 	"context"
@@ -19,7 +19,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-func (talking *GenericRequestor) callEndOfSpeech(ctx context.Context, vl internal_type.Packet) error {
+func (talking *genericRequestor) callEndOfSpeech(ctx context.Context, vl internal_type.Packet) error {
 	if talking.endOfSpeech != nil {
 		utils.Go(ctx, func() {
 			if err := talking.endOfSpeech.Analyze(ctx, vl); err != nil {
@@ -31,7 +31,7 @@ func (talking *GenericRequestor) callEndOfSpeech(ctx context.Context, vl interna
 	return errors.New("end of speech analyzer not configured")
 }
 
-func (talking *GenericRequestor) callTextAggregator(ctx context.Context, vl internal_type.Packet) error {
+func (talking *genericRequestor) callTextAggregator(ctx context.Context, vl internal_type.Packet) error {
 	if talking.textAggregator != nil {
 		if err := talking.textAggregator.Aggregate(ctx, vl); err != nil {
 			talking.logger.Debugf("unable to send packet to aggregator %v", err)
@@ -41,7 +41,7 @@ func (talking *GenericRequestor) callTextAggregator(ctx context.Context, vl inte
 	return errors.New("textAggregator not configured")
 }
 
-func (talking *GenericRequestor) callRecording(ctx context.Context, vl internal_type.Packet) error {
+func (talking *genericRequestor) callRecording(ctx context.Context, vl internal_type.Packet) error {
 	if talking.recorder != nil {
 		utils.Go(ctx, func() {
 			if err := talking.recorder.Record(ctx, vl); err != nil {
@@ -53,7 +53,7 @@ func (talking *GenericRequestor) callRecording(ctx context.Context, vl internal_
 	return nil
 }
 
-func (talking *GenericRequestor) callCreateMessage(ctx context.Context, vl internal_type.MessagePacket) error {
+func (talking *genericRequestor) callCreateMessage(ctx context.Context, vl internal_type.MessagePacket) error {
 	utils.Go(ctx, func() {
 		if err := talking.onCreateMessage(talking.Context(), vl); err != nil {
 			talking.logger.Errorf("Error in onCreateMessage: %v", err)
@@ -62,7 +62,7 @@ func (talking *GenericRequestor) callCreateMessage(ctx context.Context, vl inter
 	return nil
 }
 
-func (talking *GenericRequestor) callVadProcess(ctx context.Context, vl internal_type.UserAudioPacket) error {
+func (talking *genericRequestor) callVadProcess(ctx context.Context, vl internal_type.UserAudioPacket) error {
 	if talking.vad != nil {
 		utils.Go(ctx, func() {
 			if err := talking.vad.Process(ctx, vl); err != nil {
@@ -73,7 +73,7 @@ func (talking *GenericRequestor) callVadProcess(ctx context.Context, vl internal
 	return nil
 }
 
-func (talking *GenericRequestor) callSpeechToText(ctx context.Context, vl internal_type.UserAudioPacket) error {
+func (talking *genericRequestor) callSpeechToText(ctx context.Context, vl internal_type.UserAudioPacket) error {
 	if talking.speechToTextTransformer != nil {
 		utils.Go(ctx, func() {
 			if err := talking.speechToTextTransformer.Transform(ctx, vl); err != nil {
@@ -84,7 +84,7 @@ func (talking *GenericRequestor) callSpeechToText(ctx context.Context, vl intern
 	return nil
 }
 
-func (spk *GenericRequestor) interruptAllProvider(ctx context.Context, result internal_type.InterruptionPacket) error {
+func (spk *genericRequestor) interruptAllProvider(ctx context.Context, result internal_type.InterruptionPacket) error {
 	if spk.textToSpeechTransformer != nil {
 		// can be done on goroutine
 		utils.Go(ctx, func() {
@@ -104,7 +104,7 @@ func (spk *GenericRequestor) interruptAllProvider(ctx context.Context, result in
 	return nil
 }
 
-func (spk *GenericRequestor) callSpeaking(ctx context.Context, result internal_type.LLMPacket) error {
+func (spk *genericRequestor) callSpeaking(ctx context.Context, result internal_type.LLMPacket) error {
 	switch res := result.(type) {
 	case internal_type.LLMResponseDonePacket:
 		if spk.textToSpeechTransformer != nil {
@@ -147,7 +147,7 @@ func (spk *GenericRequestor) callSpeaking(ctx context.Context, result internal_t
 	return nil
 }
 
-func (talking *GenericRequestor) callDirective(ctx context.Context, vl internal_type.DirectivePacket) error {
+func (talking *genericRequestor) callDirective(ctx context.Context, vl internal_type.DirectivePacket) error {
 	anyArgs, _ := utils.InterfaceMapToAnyMap(vl.Arguments)
 	switch vl.Directive {
 	case protos.ConversationDirective_END_CONVERSATION:
@@ -161,7 +161,7 @@ func (talking *GenericRequestor) callDirective(ctx context.Context, vl internal_
 }
 
 /**/
-func (talking *GenericRequestor) OnPacket(ctx context.Context, pkts ...internal_type.Packet) error {
+func (talking *genericRequestor) OnPacket(ctx context.Context, pkts ...internal_type.Packet) error {
 	for _, p := range pkts {
 		switch vl := p.(type) {
 		case internal_type.UserTextPacket:

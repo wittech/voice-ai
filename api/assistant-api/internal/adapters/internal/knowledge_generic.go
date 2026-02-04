@@ -3,7 +3,7 @@
 //
 // Licensed under GPL-2.0 with Rapida Additional Terms.
 // See LICENSE.md or contact sales@rapida.ai for commercial usage.
-package internal_adapter_generic
+package adapter_internal
 
 import (
 	"context"
@@ -24,7 +24,7 @@ const (
 	defaultScoreThreshold = 0.5
 )
 
-func (kr *GenericRequestor) RetrieveToolKnowledge(knowledge *internal_knowledge_gorm.Knowledge, messageId string, query string, filter map[string]interface{}, kc *internal_type.KnowledgeRetrieveOption) ([]internal_type.KnowledgeContextResult, error) {
+func (kr *genericRequestor) RetrieveToolKnowledge(knowledge *internal_knowledge_gorm.Knowledge, messageId string, query string, filter map[string]interface{}, kc *internal_type.KnowledgeRetrieveOption) ([]internal_type.KnowledgeContextResult, error) {
 	start := time.Now()
 	result, err := kr.retrieve(kr.Context(), knowledge, query, filter, kc)
 	utils.Go(context.Background(), func() {
@@ -63,7 +63,7 @@ func (kr *GenericRequestor) RetrieveToolKnowledge(knowledge *internal_knowledge_
 
 }
 
-func (kr *GenericRequestor) retrieve(ctx context.Context, knowledge *internal_knowledge_gorm.Knowledge, query string, filter map[string]interface{}, kc *internal_type.KnowledgeRetrieveOption) ([]internal_type.KnowledgeContextResult, error) {
+func (kr *genericRequestor) retrieve(ctx context.Context, knowledge *internal_knowledge_gorm.Knowledge, query string, filter map[string]interface{}, kc *internal_type.KnowledgeRetrieveOption) ([]internal_type.KnowledgeContextResult, error) {
 	topK := int(defaultTopK)
 	if kc.TopK != 0 {
 		topK = int(kc.TopK)

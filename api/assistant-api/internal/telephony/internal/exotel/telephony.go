@@ -19,7 +19,6 @@ import (
 	"github.com/rapidaai/api/assistant-api/config"
 	internal_assistant_entity "github.com/rapidaai/api/assistant-api/internal/entity/assistants"
 	internal_conversation_entity "github.com/rapidaai/api/assistant-api/internal/entity/conversations"
-	internal_streamers "github.com/rapidaai/api/assistant-api/internal/streamers"
 	internal_exotel "github.com/rapidaai/api/assistant-api/internal/telephony/internal/exotel/internal"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 
@@ -173,7 +172,7 @@ func (tpc *exotelTelephony) InboundCall(c *gin.Context, auth types.SimplePrincip
 	return nil
 }
 
-func (tpc *exotelTelephony) Streamer(c *gin.Context, connection *websocket.Conn, assistant *internal_assistant_entity.Assistant, conversation *internal_conversation_entity.AssistantConversation, vlt *protos.VaultCredential) internal_streamers.Streamer {
+func (tpc *exotelTelephony) Streamer(c *gin.Context, connection *websocket.Conn, assistant *internal_assistant_entity.Assistant, conversation *internal_conversation_entity.AssistantConversation, vlt *protos.VaultCredential) internal_type.TelephonyStreamer {
 	return NewExotelWebsocketStreamer(tpc.logger, connection, assistant, conversation, vlt)
 }
 

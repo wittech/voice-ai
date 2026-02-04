@@ -3,7 +3,7 @@
 //
 // Licensed under GPL-2.0 with Rapida Additional Terms.
 // See LICENSE.md or contact sales@rapida.ai for commercial usage.
-package internal_adapter_generic
+package adapter_internal
 
 import (
 	"context"
@@ -20,7 +20,7 @@ import (
 var errDeploymentNotEnabled = errors.New("deployment is not enabled for source")
 
 // GetBehavior retrieves the deployment behavior configuration based on the source type.
-func (r *GenericRequestor) GetBehavior() (*internal_assistant_entity.AssistantDeploymentBehavior, error) {
+func (r *genericRequestor) GetBehavior() (*internal_assistant_entity.AssistantDeploymentBehavior, error) {
 	if r.assistant == nil {
 		return nil, errDeploymentNotEnabled
 	}
@@ -53,7 +53,7 @@ func (r *GenericRequestor) GetBehavior() (*internal_assistant_entity.AssistantDe
 
 // InitializeBehavior sets up the initial behavior configuration including greeting,
 // idle timeout, and max session duration timers.
-func (r *GenericRequestor) initializeBehavior(ctx context.Context) error {
+func (r *genericRequestor) initializeBehavior(ctx context.Context) error {
 	behavior, err := r.GetBehavior()
 	if err != nil {
 		r.logger.Errorf("error while fetching deployment behavior: %v", err)
@@ -66,7 +66,7 @@ func (r *GenericRequestor) initializeBehavior(ctx context.Context) error {
 }
 
 // initializeGreeting sends the greeting message if configured.
-func (r *GenericRequestor) initializeGreeting(ctx context.Context, behavior *internal_assistant_entity.AssistantDeploymentBehavior) {
+func (r *genericRequestor) initializeGreeting(ctx context.Context, behavior *internal_assistant_entity.AssistantDeploymentBehavior) {
 	if behavior.Greeting == nil {
 		return
 	}
@@ -82,7 +82,7 @@ func (r *GenericRequestor) initializeGreeting(ctx context.Context, behavior *int
 }
 
 // initializeIdleTimeout starts the idle timeout timer if configured.
-func (r *GenericRequestor) initializeIdleTimeout(ctx context.Context, behavior *internal_assistant_entity.AssistantDeploymentBehavior) {
+func (r *genericRequestor) initializeIdleTimeout(ctx context.Context, behavior *internal_assistant_entity.AssistantDeploymentBehavior) {
 	if behavior.IdealTimeout == nil || *behavior.IdealTimeout <= 0 {
 		return
 	}
@@ -90,7 +90,7 @@ func (r *GenericRequestor) initializeIdleTimeout(ctx context.Context, behavior *
 }
 
 // initializeMaxSessionDuration sets up the max session duration timer if configured.
-func (r *GenericRequestor) initializeMaxSessionDuration(ctx context.Context, behavior *internal_assistant_entity.AssistantDeploymentBehavior) {
+func (r *genericRequestor) initializeMaxSessionDuration(ctx context.Context, behavior *internal_assistant_entity.AssistantDeploymentBehavior) {
 	if behavior.MaxSessionDuration == nil || *behavior.MaxSessionDuration <= 0 {
 		return
 	}
@@ -108,7 +108,7 @@ func (r *GenericRequestor) initializeMaxSessionDuration(ctx context.Context, beh
 }
 
 // OnError handles error scenarios by sending a configured or default error message.
-func (r *GenericRequestor) OnError(ctx context.Context) error {
+func (r *genericRequestor) OnError(ctx context.Context) error {
 	behavior, err := r.GetBehavior()
 	if err != nil {
 		r.logger.Warnf("no error message configured for assistant")
@@ -132,7 +132,7 @@ func (r *GenericRequestor) OnError(ctx context.Context) error {
 // OnIdleTimeout handles the behavior when the bot has spoken but the user
 // has not responded within the idle timeout duration.
 // If configured, it will prompt the user or end the conversation after max retries.
-func (r *GenericRequestor) onIdleTimeout(ctx context.Context) error {
+func (r *genericRequestor) onIdleTimeout(ctx context.Context) error {
 	behavior, err := r.GetBehavior()
 	if err != nil {
 		r.logger.Debugf("no idle timeout behavior configured for assistant")
@@ -172,7 +172,7 @@ func (r *GenericRequestor) onIdleTimeout(ctx context.Context) error {
 }
 
 // getIdleTimeoutMessage returns the configured or default idle timeout message.
-func (r *GenericRequestor) getIdleTimeoutMessage(behavior *internal_assistant_entity.AssistantDeploymentBehavior) string {
+func (r *genericRequestor) getIdleTimeoutMessage(behavior *internal_assistant_entity.AssistantDeploymentBehavior) string {
 	const defaultTimeoutMessage = "Are you still there?"
 
 	if behavior.IdealTimeoutMessage != nil && strings.TrimSpace(*behavior.IdealTimeoutMessage) != "" {
@@ -185,7 +185,7 @@ func (r *GenericRequestor) getIdleTimeoutMessage(behavior *internal_assistant_en
 // StartIdleTimeoutTimer starts a timer that triggers OnIdleTimeout when the bot
 // has spoken but the user hasn't responded within the configured duration.
 // The inputDuration parameter extends the idle timeout to account for user input time.
-func (r *GenericRequestor) startIdleTimeoutTimer(ctx context.Context, inputDuration ...time.Duration) {
+func (r *genericRequestor) startIdleTimeoutTimer(ctx context.Context, inputDuration ...time.Duration) {
 	if r.idleTimeoutTimer != nil {
 		r.idleTimeoutTimer.Stop()
 	}
@@ -214,7 +214,7 @@ func (r *GenericRequestor) startIdleTimeoutTimer(ctx context.Context, inputDurat
 // ResetIdleTimeoutTimer resets the idle timeout timer when the user responds,
 // indicating they are still engaged in the conversation.
 // The inputDuration parameter extends the idle timeout to account for user input time.
-func (r *GenericRequestor) resetIdleTimeoutTimer(ctx context.Context, inputDuration ...time.Duration) {
+func (r *genericRequestor) resetIdleTimeoutTimer(ctx context.Context, inputDuration ...time.Duration) {
 	if r.idleTimeoutTimer == nil {
 		return
 	}
@@ -223,7 +223,7 @@ func (r *GenericRequestor) resetIdleTimeoutTimer(ctx context.Context, inputDurat
 }
 
 // stopIdleTimeoutTimer stops the idle timeout timer and resets retry count.
-func (r *GenericRequestor) stopIdleTimeoutTimer() {
+func (r *genericRequestor) stopIdleTimeoutTimer() {
 	if r.idleTimeoutTimer != nil {
 		r.idleTimeoutTimer.Stop()
 		r.idleTimeoutTimer = nil

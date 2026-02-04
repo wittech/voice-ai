@@ -3,7 +3,7 @@
 //
 // Licensed under GPL-2.0 with Rapida Additional Terms.
 // See LICENSE.md or contact sales@rapida.ai for commercial usage.
-package internal_adapter_generic
+package adapter_internal
 
 import (
 	"context"
@@ -12,7 +12,7 @@ import (
 
 	"github.com/rapidaai/api/assistant-api/config"
 	internal_adapter_request_customizers "github.com/rapidaai/api/assistant-api/internal/adapters/customizers"
-	internal_streamers "github.com/rapidaai/api/assistant-api/internal/streamers"
+
 	internal_assistant_telemetry "github.com/rapidaai/api/assistant-api/internal/telemetry/assistant"
 	internal_assistant_telemetry_exporters "github.com/rapidaai/api/assistant-api/internal/telemetry/assistant/exporters"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
@@ -42,13 +42,13 @@ import (
 	"github.com/rapidaai/pkg/utils"
 )
 
-type GenericRequestor struct {
+type genericRequestor struct {
 	logger   commons.Logger
 	config   *config.AssistantConfig
 	ctx      context.Context
 	source   utils.RapidaSource
 	auth     types.SimplePrinciple
-	streamer internal_streamers.Streamer
+	streamer internal_type.Streamer
 
 	// service
 	assistantService     internal_services.AssistantService
@@ -108,11 +108,14 @@ type GenericRequestor struct {
 	maxSessionTimer  *time.Timer
 }
 
-func NewGenericRequestor(ctx context.Context, config *config.AssistantConfig, logger commons.Logger, source utils.RapidaSource, postgres connectors.PostgresConnector, opensearch connectors.OpenSearchConnector, redis connectors.RedisConnector, storage storages.Storage, streamer internal_streamers.Streamer,
-) GenericRequestor {
-	// Initialize services
-
-	return GenericRequestor{
+func NewGenericRequestor(
+	ctx context.Context,
+	config *config.AssistantConfig,
+	logger commons.Logger, source utils.RapidaSource,
+	postgres connectors.PostgresConnector, opensearch connectors.OpenSearchConnector,
+	redis connectors.RedisConnector, storage storages.Storage, streamer internal_type.Streamer,
+) *genericRequestor {
+	return &genericRequestor{
 		logger:   logger,
 		config:   config,
 		ctx:      ctx,
@@ -133,22 +136,16 @@ func NewGenericRequestor(ctx context.Context, config *config.AssistantConfig, lo
 		textReranker:  internal_agent_rerankers.NewTextReranker(logger, config, redis),
 
 		// clients
+		integrationClient: integration_client.NewIntegrationServiceClientGRPC(&config.AppConfig, logger, redis),
 		deploymentClient:  endpoint_client.NewDeploymentServiceClientGRPC(&config.AppConfig, logger, redis),
 		vaultClient:       web_client.NewVaultClientGRPC(&config.AppConfig, logger, redis),
-		integrationClient: integration_client.NewIntegrationServiceClientGRPC(&config.AppConfig, logger, redis),
 
 		//
-		tracer: internal_assistant_telemetry.NewInMemoryTracer(logger,
-			internal_assistant_telemetry_exporters.NewOpensearchAssistantTraceExporter(
-				logger,
-				&config.AppConfig, opensearch,
-			)),
-
+		tracer:            internal_assistant_telemetry.NewInMemoryTracer(logger, internal_assistant_telemetry_exporters.NewOpensearchAssistantTraceExporter(logger, &config.AppConfig, opensearch)),
 		messaging:         internal_adapter_request_customizers.NewMessaging(logger),
 		assistantExecutor: internal_agent_executor_llm.NewAssistantExecutor(logger),
 
-		// will change
-
+		//
 		histories: make([]internal_type.MessagePacket, 0),
 		metadata:  make(map[string]interface{}),
 		args:      make(map[string]interface{}),
@@ -157,20 +154,16 @@ func NewGenericRequestor(ctx context.Context, config *config.AssistantConfig, lo
 }
 
 // Context implements internal_adapter_requests.Messaging.
-func (dm *GenericRequestor) Context() context.Context {
+func (dm *genericRequestor) Context() context.Context {
 	return dm.ctx
 }
 
 // GetSource implements internal_adapter_requests.Messaging.
-func (dm *GenericRequestor) Source() utils.RapidaSource {
+func (dm *genericRequestor) Source() utils.RapidaSource {
 	return dm.source
 }
 
-func (dm *GenericRequestor) Streamer() internal_streamers.Streamer {
-	return dm.streamer
-}
-
-func (deb *GenericRequestor) onCreateMessage(ctx context.Context, msg internal_type.MessagePacket) error {
+func (deb *genericRequestor) onCreateMessage(ctx context.Context, msg internal_type.MessagePacket) error {
 	deb.histories = append(deb.histories, msg)
 	_, err := deb.conversationService.CreateConversationMessage(ctx, deb.Auth(), deb.Source(), deb.Assistant().Id, deb.Assistant().AssistantProviderId, deb.Conversation().Id, msg.ContextId(), msg.Role(), msg.Content())
 	if err != nil {
@@ -180,11 +173,11 @@ func (deb *GenericRequestor) onCreateMessage(ctx context.Context, msg internal_t
 	return nil
 }
 
-func (dm *GenericRequestor) Tracer() internal_telemetry.VoiceAgentTracer {
+func (dm *genericRequestor) Tracer() internal_telemetry.VoiceAgentTracer {
 	return dm.tracer
 }
 
-func (gr *GenericRequestor) GetAssistantConversation(auth types.SimplePrinciple, assistantId uint64, assistantConversationId uint64, identifier string) (*internal_conversation_entity.AssistantConversation, error) {
+func (gr *genericRequestor) GetAssistantConversation(auth types.SimplePrinciple, assistantId uint64, assistantConversationId uint64, identifier string) (*internal_conversation_entity.AssistantConversation, error) {
 	return gr.conversationService.GetConversation(gr.Context(), auth, identifier, assistantId, assistantConversationId, &internal_services.GetConversationOption{
 		InjectContext:  true,
 		InjectArgument: true,
@@ -194,7 +187,7 @@ func (gr *GenericRequestor) GetAssistantConversation(auth types.SimplePrinciple,
 	)
 }
 
-func (gr *GenericRequestor) CreateAssistantConversation(auth types.SimplePrinciple, assistantId uint64, assistantProviderModelId uint64, identifier string, direction type_enums.ConversationDirection, arguments map[string]interface{}, metadata map[string]interface{}, options map[string]interface{}) (*internal_conversation_entity.AssistantConversation, error) {
+func (gr *genericRequestor) CreateAssistantConversation(auth types.SimplePrinciple, assistantId uint64, assistantProviderModelId uint64, identifier string, direction type_enums.ConversationDirection, arguments map[string]interface{}, metadata map[string]interface{}, options map[string]interface{}) (*internal_conversation_entity.AssistantConversation, error) {
 	conversation, err := gr.conversationService.CreateConversation(gr.Context(), auth, identifier, assistantId, assistantProviderModelId, direction, gr.Source())
 	if err != nil {
 		return conversation, err
@@ -215,7 +208,7 @@ func (gr *GenericRequestor) CreateAssistantConversation(auth types.SimplePrincip
 
 }
 
-func (talking *GenericRequestor) BeginConversation(auth types.SimplePrinciple, assistant *internal_assistant_entity.Assistant, direction type_enums.ConversationDirection, identifier string, argument, metadata, options map[string]interface{}) (*internal_conversation_entity.AssistantConversation, error) {
+func (talking *genericRequestor) BeginConversation(auth types.SimplePrinciple, assistant *internal_assistant_entity.Assistant, direction type_enums.ConversationDirection, identifier string, argument, metadata, options map[string]interface{}) (*internal_conversation_entity.AssistantConversation, error) {
 	talking.assistant = assistant
 	talking.args = argument
 	talking.options = options
@@ -229,7 +222,7 @@ func (talking *GenericRequestor) BeginConversation(auth types.SimplePrinciple, a
 	return conversation, err
 }
 
-func (talking *GenericRequestor) ResumeConversation(auth types.SimplePrinciple, assistant *internal_assistant_entity.Assistant, conversationId uint64, identifier string) (*internal_conversation_entity.AssistantConversation, error) {
+func (talking *genericRequestor) ResumeConversation(auth types.SimplePrinciple, assistant *internal_assistant_entity.Assistant, conversationId uint64, identifier string) (*internal_conversation_entity.AssistantConversation, error) {
 	talking.assistant = assistant
 	conversation, err := talking.GetAssistantConversation(auth, assistant.Id, conversationId, identifier)
 	if err != nil {
@@ -247,36 +240,36 @@ func (talking *GenericRequestor) ResumeConversation(auth types.SimplePrinciple, 
 	return conversation, nil
 }
 
-func (talking *GenericRequestor) IntegrationCaller() integration_client.IntegrationServiceClient {
+func (talking *genericRequestor) IntegrationCaller() integration_client.IntegrationServiceClient {
 	return talking.integrationClient
 
 }
 
-func (talking *GenericRequestor) VaultCaller() web_client.VaultClient {
+func (talking *genericRequestor) VaultCaller() web_client.VaultClient {
 	return talking.vaultClient
 }
 
-func (talking *GenericRequestor) DeploymentCaller() endpoint_client.DeploymentServiceClient {
+func (talking *genericRequestor) DeploymentCaller() endpoint_client.DeploymentServiceClient {
 	return talking.deploymentClient
 }
 
-func (talking *GenericRequestor) GetKnowledge(knowledgeId uint64) (*internal_knowledge_gorm.Knowledge, error) {
+func (talking *genericRequestor) GetKnowledge(knowledgeId uint64) (*internal_knowledge_gorm.Knowledge, error) {
 	return talking.knowledgeService.Get(talking.ctx, talking.auth, knowledgeId)
 }
 
-func (gr *GenericRequestor) GetArgs() map[string]interface{} {
+func (gr *genericRequestor) GetArgs() map[string]interface{} {
 	return gr.args
 }
 
-func (gr *GenericRequestor) GetOptions() map[string]interface{} {
+func (gr *genericRequestor) GetOptions() map[string]interface{} {
 	return gr.options
 }
 
-func (dm *GenericRequestor) GetHistories() []internal_type.MessagePacket {
+func (dm *genericRequestor) GetHistories() []internal_type.MessagePacket {
 	return dm.histories
 }
 
-func (gr *GenericRequestor) CreateConversationRecording(body []byte) error {
+func (gr *genericRequestor) CreateConversationRecording(body []byte) error {
 	if _, err := gr.conversationService.CreateConversationRecording(gr.ctx, gr.auth, gr.assistant.Id, gr.assistantConversation.Id, body); err != nil {
 		gr.logger.Errorf("unable to create recording for the conversation id %d with error : %v", err)
 		return err

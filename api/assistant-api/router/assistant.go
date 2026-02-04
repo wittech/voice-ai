@@ -57,6 +57,14 @@ func AssistantConversationApiRoute(
 			Opensearch,
 			Opensearch,
 		))
+	workflow_api.RegisterWebRTCServer(S,
+		assistantTalkApi.NewWebRtcApi(Cfg,
+			Logger,
+			Postgres,
+			Redis,
+			Opensearch,
+			Opensearch,
+		))
 }
 
 func TalkCallbackApiRoute(

@@ -13,11 +13,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/rapidaai/api/assistant-api/config"
 
-	internal_debugger "github.com/rapidaai/api/assistant-api/internal/adapters/internal/debugger"
-	internal_phone "github.com/rapidaai/api/assistant-api/internal/adapters/internal/phone"
-	internal_sdk "github.com/rapidaai/api/assistant-api/internal/adapters/internal/sdk"
-	internal_web_plugin "github.com/rapidaai/api/assistant-api/internal/adapters/internal/web-plugin"
-	internal_streamers "github.com/rapidaai/api/assistant-api/internal/streamers"
+	adapter_internal "github.com/rapidaai/api/assistant-api/internal/adapters/internal"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 	"github.com/rapidaai/pkg/commons"
 	"github.com/rapidaai/pkg/connectors"
@@ -26,54 +22,9 @@ import (
 	"github.com/rapidaai/pkg/utils"
 )
 
-func GetTalker(source utils.RapidaSource, ctx context.Context, cfg *config.AssistantConfig, logger commons.Logger, postgres connectors.PostgresConnector, opensearch connectors.OpenSearchConnector, redis connectors.RedisConnector, storage storages.Storage, streamer internal_streamers.Streamer,
+func GetTalker(source utils.RapidaSource, ctx context.Context, cfg *config.AssistantConfig, logger commons.Logger, postgres connectors.PostgresConnector, opensearch connectors.OpenSearchConnector, redis connectors.RedisConnector, storage storages.Storage, streamer internal_type.Streamer,
 ) (internal_type.Talking, error) {
-	switch source {
-	case utils.SDK:
-		talker, err := internal_sdk.NewSDKTalking(ctx, cfg, logger, postgres, opensearch, redis, storage, streamer)
-		if err != nil {
-			logger.Errorf("assistant call talker failed with err %+v", err)
-			return nil, err
-		}
-		return talker, nil
-
-	case utils.Debugger:
-		talker, err := internal_debugger.NewTalking(ctx, cfg, logger, postgres, opensearch, redis, storage, streamer)
-		if err != nil {
-			logger.Errorf("assistant call talker failed with err %+v", err)
-			return nil, err
-		}
-		return talker, nil
-
-	case utils.PhoneCall:
-		talker, err := internal_phone.NewTalking(ctx, cfg, logger, postgres, opensearch, redis, storage, streamer)
-		if err != nil {
-			logger.Errorf("assistant call talker failed with err %+v", err)
-		}
-		return talker, nil
-	case utils.WebPlugin:
-		talker, err := internal_web_plugin.NewTalking(ctx, cfg, logger, postgres, opensearch, redis, storage, streamer)
-		if err != nil {
-			logger.Errorf("assistant call talker failed with err %+v", err)
-		}
-		return talker, nil
-	case utils.SIP:
-		// SIP uses the phone talker since it's similar to phone call but with native SIP/RTP transport
-		talker, err := internal_phone.NewTalking(ctx, cfg, logger, postgres, opensearch, redis, storage, streamer)
-		if err != nil {
-			logger.Errorf("sip talker failed with err %+v", err)
-			return nil, err
-		}
-		return talker, nil
-	default:
-		talker, err := internal_debugger.NewTalking(ctx, cfg, logger, postgres, opensearch, redis, storage, streamer)
-		if err != nil {
-			logger.Errorf("assistant call talker failed with err %+v", err)
-			return nil, err
-		}
-		return talker, nil
-	}
-
+	return adapter_internal.NewGenericRequestor(ctx, cfg, logger, source, postgres, opensearch, redis, storage, streamer), nil
 }
 
 func Identifier(source utils.RapidaSource, ctx context.Context, auth types.SimplePrinciple, identity string) string {

@@ -3,7 +3,7 @@
 //
 // Licensed under GPL-2.0 with Rapida Additional Terms.
 // See LICENSE.md or contact sales@rapida.ai for commercial usage.
-package internal_adapter_generic
+package adapter_internal
 
 import (
 	"context"
@@ -17,15 +17,15 @@ import (
 	"github.com/rapidaai/pkg/utils"
 )
 
-func (dm *GenericRequestor) Assistant() *internal_assistant_entity.Assistant {
+func (dm *genericRequestor) Assistant() *internal_assistant_entity.Assistant {
 	return dm.assistant
 }
 
-func (gr *GenericRequestor) Conversation() *internal_conversation_entity.AssistantConversation {
+func (gr *genericRequestor) Conversation() *internal_conversation_entity.AssistantConversation {
 	return gr.assistantConversation
 }
 
-func (gr *GenericRequestor) GetSpeechToTextTransformer() (
+func (gr *genericRequestor) GetSpeechToTextTransformer() (
 	*internal_assistant_entity.AssistantDeploymentAudio,
 	error,
 ) {
@@ -53,7 +53,7 @@ func (gr *GenericRequestor) GetSpeechToTextTransformer() (
 	return nil, errors.New("audio is not enabled for the source")
 }
 
-func (gr *GenericRequestor) GetTextToSpeechTransformer() (*internal_assistant_entity.AssistantDeploymentAudio, error) {
+func (gr *genericRequestor) GetTextToSpeechTransformer() (*internal_assistant_entity.AssistantDeploymentAudio, error) {
 	switch gr.source {
 	case utils.PhoneCall:
 		if a := gr.assistant; a != nil && a.AssistantPhoneDeployment != nil && a.AssistantPhoneDeployment.OuputAudio != nil {
@@ -78,7 +78,7 @@ func (gr *GenericRequestor) GetTextToSpeechTransformer() (*internal_assistant_en
 	return nil, errors.New("audio is not enabled for the source")
 }
 
-func (gr *GenericRequestor) GetAssistant(
+func (gr *genericRequestor) GetAssistant(
 	auth types.SimplePrinciple,
 	assistantId uint64,
 	version string) (*internal_assistant_entity.Assistant, error) {
@@ -121,7 +121,7 @@ func (gr *GenericRequestor) GetAssistant(
  * Returns:
  *   - types.SimplePrinciple: The authentication information for the debugger.
  */
-func (dm *GenericRequestor) Auth() types.SimplePrinciple {
+func (dm *genericRequestor) Auth() types.SimplePrinciple {
 	return dm.auth
 }
 
@@ -136,7 +136,7 @@ func (dm *GenericRequestor) Auth() types.SimplePrinciple {
  * Parameters:
  *   - auth: types.SimplePrinciple - The new authentication information to set.
  */
-func (deb *GenericRequestor) SetAuth(auth types.SimplePrinciple) {
+func (deb *genericRequestor) SetAuth(auth types.SimplePrinciple) {
 	deb.auth = auth
 }
 
@@ -155,11 +155,11 @@ func (deb *GenericRequestor) SetAuth(auth types.SimplePrinciple) {
  * Note: Proper use of these methods ensures consistent handling of
  * conversation metadata across the application.
  */
-func (tc *GenericRequestor) GetMetadata() map[string]interface{} {
+func (tc *genericRequestor) GetMetadata() map[string]interface{} {
 	return tc.metadata
 }
 
-func (tc *GenericRequestor) onSetMetadata(auth types.SimplePrinciple, mt map[string]interface{}) {
+func (tc *genericRequestor) onSetMetadata(auth types.SimplePrinciple, mt map[string]interface{}) {
 	modified := make(map[string]interface{})
 	for k, v := range mt {
 		vl, ok := tc.metadata[k]
@@ -174,7 +174,7 @@ func (tc *GenericRequestor) onSetMetadata(auth types.SimplePrinciple, mt map[str
 		tc.conversationService.ApplyConversationMetadata(
 			tc.Context(),
 			auth, tc.assistant.Id, tc.assistantConversation.Id, types.NewMetadataList(modified))
-		tc.logger.Benchmark("GenericRequestor.SetMetadata", time.Since(start))
+		tc.logger.Benchmark("genericRequestor.SetMetadata", time.Since(start))
 	})
 
 }
@@ -186,7 +186,7 @@ func (tc *GenericRequestor) onSetMetadata(auth types.SimplePrinciple, mt map[str
 // -----------------------------------------------------------------------------
 //
 // The following methods are responsible for managing metrics associated with
-// the GenericRequestor. Metrics provide valuable insights into the
+// the genericRequestor. Metrics provide valuable insights into the
 // conversation's performance, usage, and other relevant statistics.
 //
 // GetMetrics retrieves the current set of metrics associated with this
@@ -198,12 +198,12 @@ func (tc *GenericRequestor) onSetMetadata(auth types.SimplePrinciple, mt map[str
 // with new data points or measurements.
 //
 // These methods play a crucial role in monitoring and analyzing the behavior
-// and performance of the GenericRequestor, enabling data-driven
+// and performance of the genericRequestor, enabling data-driven
 // improvements and optimizations.
 //
 // -----------------------------------------------------------------------------
 
-func (tc *GenericRequestor) onAddMetrics(auth types.SimplePrinciple, metrics ...*types.Metric) {
+func (tc *genericRequestor) onAddMetrics(auth types.SimplePrinciple, metrics ...*types.Metric) {
 	utils.Go(tc.ctx, func() {
 		start := time.Now()
 		_, err := tc.conversationService.ApplyConversationMetrics(
@@ -213,14 +213,14 @@ func (tc *GenericRequestor) onAddMetrics(auth types.SimplePrinciple, metrics ...
 			tc.assistantConversation.Id,
 			metrics,
 		)
-		tc.logger.Benchmark("GenericRequestor.AddMetrics", time.Since(start))
+		tc.logger.Benchmark("genericRequestor.AddMetrics", time.Since(start))
 		if err != nil {
 			tc.logger.Errorf("unable to flush metrics for conversation %+v", err)
 		}
 	})
 }
 
-func (deb *GenericRequestor) onMessageMetric(ctx context.Context, messageId string, metrics []*types.Metric) error {
+func (deb *genericRequestor) onMessageMetric(ctx context.Context, messageId string, metrics []*types.Metric) error {
 	if _, err := deb.
 		conversationService.ApplyMessageMetrics(ctx, deb.Auth(), deb.Conversation().Id, messageId, metrics); err != nil {
 		deb.logger.Errorf("error updating metrics for message: %v", err)

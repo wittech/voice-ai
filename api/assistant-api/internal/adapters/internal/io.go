@@ -3,7 +3,7 @@
 //
 // Licensed under GPL-2.0 with Rapida Additional Terms.
 // See LICENSE.md or contact sales@rapida.ai for commercial usage.
-package internal_adapter_generic
+package adapter_internal
 
 import (
 	"context"
@@ -25,7 +25,7 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-func (io *GenericRequestor) Input(message *protos.ConversationUserMessage) error {
+func (io *genericRequestor) Input(message *protos.ConversationUserMessage) error {
 	switch msg := message.GetMessage().(type) {
 	case *protos.ConversationUserMessage_Audio:
 		return io.OnPacket(io.Context(), internal_type.UserAudioPacket{Audio: msg.Audio})
@@ -40,7 +40,7 @@ func (io *GenericRequestor) Input(message *protos.ConversationUserMessage) error
 // Init initializes the audio talking system for a given assistant persona.
 // It sets up both audio input and output transformer.
 // This function is typically called at the beginning of a communication session.
-func (listening *GenericRequestor) connectMicrophone(ctx context.Context, audioConfig *protos.AudioConfig) error {
+func (listening *genericRequestor) connectMicrophone(ctx context.Context, audioConfig *protos.AudioConfig) error {
 	eGroup, ctx := errgroup.WithContext(ctx)
 	options := utils.Option{"microphone.eos.timeout": 500}
 	transformerConfig, _ := listening.GetSpeechToTextTransformer()
@@ -86,7 +86,7 @@ func (listening *GenericRequestor) connectMicrophone(ctx context.Context, audioC
 	return nil
 }
 
-func (listening *GenericRequestor) disconnectMicrophone(ctx context.Context) error {
+func (listening *genericRequestor) disconnectMicrophone(ctx context.Context) error {
 	if listening.speechToTextTransformer != nil {
 		if err := listening.speechToTextTransformer.Close(ctx); err != nil {
 			listening.logger.Warnf("cancel all output transformer with error %v", err)
@@ -107,7 +107,7 @@ func (listening *GenericRequestor) disconnectMicrophone(ctx context.Context) err
 	return nil
 }
 
-func (listening *GenericRequestor) initializeSpeechToText(ctx context.Context, transformerConfig *internal_assistant_entity.AssistantDeploymentAudio, audioConfig *protos.AudioConfig, options utils.Option) error {
+func (listening *genericRequestor) initializeSpeechToText(ctx context.Context, transformerConfig *internal_assistant_entity.AssistantDeploymentAudio, audioConfig *protos.AudioConfig, options utils.Option) error {
 	ctx, span, _ := listening.Tracer().StartSpan(ctx, utils.AssistantListenConnectStage)
 	defer span.EndSpan(ctx, utils.AssistantListenConnectStage)
 
@@ -148,7 +148,7 @@ func (listening *GenericRequestor) initializeSpeechToText(ctx context.Context, t
 	return nil
 }
 
-func (listening *GenericRequestor) initializeEndOfSpeech(ctx context.Context, options utils.Option) error {
+func (listening *genericRequestor) initializeEndOfSpeech(ctx context.Context, options utils.Option) error {
 	start := time.Now()
 
 	endOfSpeech, err := internal_end_of_speech.GetEndOfSpeech(ctx,
@@ -164,7 +164,7 @@ func (listening *GenericRequestor) initializeEndOfSpeech(ctx context.Context, op
 	return nil
 }
 
-func (listening *GenericRequestor) initializeDenoiser(ctx context.Context, audioConfig *protos.AudioConfig, options utils.Option) error {
+func (listening *genericRequestor) initializeDenoiser(ctx context.Context, audioConfig *protos.AudioConfig, options utils.Option) error {
 	denoise, err := internal_denoiser.GetDenoiser(listening.Context(), listening.logger, audioConfig, options)
 	if err != nil {
 		listening.logger.Errorf("error wile intializing denoiser %+v", err)
@@ -173,7 +173,7 @@ func (listening *GenericRequestor) initializeDenoiser(ctx context.Context, audio
 	return nil
 }
 
-func (listening *GenericRequestor) initializeVAD(ctx context.Context, audioConfig *protos.AudioConfig, options utils.Option,
+func (listening *genericRequestor) initializeVAD(ctx context.Context, audioConfig *protos.AudioConfig, options utils.Option,
 ) error {
 	start := time.Now()
 	vad, err := internal_vad.GetVAD(listening.Context(), listening.logger, audioConfig, listening.OnPacket, options)
@@ -189,7 +189,7 @@ func (listening *GenericRequestor) initializeVAD(ctx context.Context, audioConfi
 // Init initializes the audio talking system for a given assistant persona.
 // It sets up both audio input and output transformer.
 // This function is typically called at the beginning of a communication session.
-func (spk *GenericRequestor) connectSpeaker(ctx context.Context, audioOutConfig *protos.AudioConfig) error {
+func (spk *genericRequestor) connectSpeaker(ctx context.Context, audioOutConfig *protos.AudioConfig) error {
 	speakerOpts := spk.GetOptions()
 	var wg sync.WaitGroup
 	// initialize audio output transformer
@@ -220,7 +220,7 @@ func (spk *GenericRequestor) connectSpeaker(ctx context.Context, audioOutConfig 
 	return nil
 }
 
-func (spk *GenericRequestor) disconnectSpeaker() error {
+func (spk *genericRequestor) disconnectSpeaker() error {
 	if spk.textToSpeechTransformer != nil {
 		if err := spk.textToSpeechTransformer.Close(spk.Context()); err != nil {
 			spk.logger.Errorf("cancel all output transformer with error %v", err)
@@ -232,7 +232,7 @@ func (spk *GenericRequestor) disconnectSpeaker() error {
 	return nil
 }
 
-func (spk *GenericRequestor) initializeTextToSpeech(context context.Context, transformerConfig *internal_assistant_entity.AssistantDeploymentAudio, audioConfig *protos.AudioConfig, speakerOpts utils.Option) error {
+func (spk *genericRequestor) initializeTextToSpeech(context context.Context, transformerConfig *internal_assistant_entity.AssistantDeploymentAudio, audioConfig *protos.AudioConfig, speakerOpts utils.Option) error {
 	context, span, _ := spk.Tracer().StartSpan(context, utils.AssistantSpeakConnectStage)
 	defer span.EndSpan(context, utils.AssistantSpeakConnectStage)
 	span.AddAttributes(context,
@@ -272,7 +272,7 @@ func (spk *GenericRequestor) initializeTextToSpeech(context context.Context, tra
 	return nil
 }
 
-func (spk *GenericRequestor) initializeTextAggregator(ctx context.Context, options utils.Option) error {
+func (spk *genericRequestor) initializeTextAggregator(ctx context.Context, options utils.Option) error {
 	if textAggregator, err := internal_sentence_aggregator.GetLLMTextAggregator(spk.Context(), spk.logger, options); err == nil {
 		spk.textAggregator = textAggregator
 		go spk.onAssembleSentence(spk.Context())
@@ -280,7 +280,7 @@ func (spk *GenericRequestor) initializeTextAggregator(ctx context.Context, optio
 	return nil
 }
 
-func (spk *GenericRequestor) onAssembleSentence(ctx context.Context) {
+func (spk *genericRequestor) onAssembleSentence(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():

@@ -8,7 +8,7 @@
 // for managing voice assistant sessions. It handles the complete lifecycle of
 // assistant conversations including connection, disconnection, audio streaming,
 // and state management.
-package internal_adapter_generic
+package adapter_internal
 
 import (
 	"context"
@@ -62,7 +62,7 @@ const (
 //
 // Thread Safety: This method is safe to call from any goroutine, but should
 // only be called once per session to avoid duplicate cleanup operations.
-func (r *GenericRequestor) Disconnect() {
+func (r *genericRequestor) Disconnect() {
 	ctx, span, _ := r.Tracer().StartSpan(r.Context(), utils.AssistantDisconnectStage)
 	startTime := time.Now()
 
@@ -112,7 +112,7 @@ func (r *GenericRequestor) Disconnect() {
 //	err := requestor.Connect(ctx, auth, "user-123", &protos.ConversationConfiguration{
 //	    Assistant: &protos.AssistantDefinition{AssistantId: 1},
 //	})
-func (r *GenericRequestor) Connect(
+func (r *genericRequestor) Connect(
 	ctx context.Context,
 	auth types.SimplePrinciple,
 	identifier string,
@@ -177,7 +177,7 @@ func (r *GenericRequestor) Connect(
 // Concurrency: This method spawns multiple goroutines for parallel
 // initialization. Critical path operations run in the error group,
 // while non-critical operations run as background tasks.
-func (r *GenericRequestor) OnCreateSession(
+func (r *genericRequestor) OnCreateSession(
 	ctx context.Context,
 	config *protos.ConversationConfiguration,
 	assistant *internal_assistant_entity.Assistant,
@@ -248,7 +248,7 @@ func (r *GenericRequestor) OnCreateSession(
 //
 // Note: The conversation must exist and be in a resumable state.
 // Attempting to resume a completed or cancelled conversation will fail.
-func (r *GenericRequestor) OnResumeSession(
+func (r *genericRequestor) OnResumeSession(
 	ctx context.Context,
 	config *protos.ConversationConfiguration,
 	assistant *internal_assistant_entity.Assistant,
@@ -306,7 +306,7 @@ func (r *GenericRequestor) OnResumeSession(
 // This method closes listeners, speakers, and flushes final metrics in parallel
 // to minimize disconnection latency. It waits for all cleanup operations to
 // complete before returning.
-func (r *GenericRequestor) closeSessionResources(ctx context.Context) {
+func (r *genericRequestor) closeSessionResources(ctx context.Context) {
 	var waitGroup sync.WaitGroup
 	waitGroup.Add(3)
 
@@ -337,7 +337,7 @@ func (r *GenericRequestor) closeSessionResources(ctx context.Context) {
 
 // flushFinalMetrics records the final conversation metrics including
 // total duration and completion status.
-func (r *GenericRequestor) flushFinalMetrics() {
+func (r *genericRequestor) flushFinalMetrics() {
 	conversationDuration := time.Since(r.StartedAt)
 
 	metrics := []*types.Metric{
@@ -361,7 +361,7 @@ func (r *GenericRequestor) flushFinalMetrics() {
 // This method runs in a background goroutine to avoid blocking the
 // disconnect flow. Any errors are logged but do not affect the
 // disconnection process.
-func (r *GenericRequestor) persistRecording(ctx context.Context) {
+func (r *genericRequestor) persistRecording(ctx context.Context) {
 	if r.recorder != nil {
 		utils.Go(r.Context(), func() {
 			audioData, err := r.recorder.Persist()
@@ -378,7 +378,7 @@ func (r *GenericRequestor) persistRecording(ctx context.Context) {
 }
 
 // exportTelemetry exports conversation telemetry data for analytics and monitoring.
-func (r *GenericRequestor) exportTelemetry(ctx context.Context) {
+func (r *genericRequestor) exportTelemetry(ctx context.Context) {
 	exportOptions := &internal_telemetry.VoiceAgentExportOption{
 		AssistantId:              r.assistant.Id,
 		AssistantProviderModelId: r.assistant.AssistantProviderId,
@@ -391,14 +391,14 @@ func (r *GenericRequestor) exportTelemetry(ctx context.Context) {
 }
 
 // closeExecutor shuts down the assistant executor and releases its resources.
-func (r *GenericRequestor) closeExecutor(ctx context.Context) {
+func (r *genericRequestor) closeExecutor(ctx context.Context) {
 	if err := r.assistantExecutor.Close(ctx); err != nil {
 		r.logger.Errorf("failed to close assistant executor: %v", err)
 	}
 }
 
 // stopTimers stops all active timers (idle timeout and max session duration).
-func (r *GenericRequestor) stopTimers() {
+func (r *genericRequestor) stopTimers() {
 	if r.idleTimeoutTimer != nil {
 		r.idleTimeoutTimer.Stop()
 	}
@@ -412,7 +412,7 @@ func (r *GenericRequestor) stopTimers() {
 // =============================================================================
 
 // resumeSession delegates to OnResumeSession with extracted configuration values.
-func (r *GenericRequestor) resumeSession(
+func (r *genericRequestor) resumeSession(
 	ctx context.Context,
 	config *protos.ConversationConfiguration,
 	assistant *internal_assistant_entity.Assistant,
@@ -430,7 +430,7 @@ func (r *GenericRequestor) resumeSession(
 }
 
 // createSession delegates to OnCreateSession with extracted configuration values.
-func (r *GenericRequestor) createSession(
+func (r *genericRequestor) createSession(
 	ctx context.Context,
 	config *protos.ConversationConfiguration,
 	assistant *internal_assistant_entity.Assistant,
@@ -454,7 +454,7 @@ func (r *GenericRequestor) createSession(
 // and switches the messaging system to the appropriate input/output modes.
 //
 // Returns the audio configurations for both input (microphone) and output (speaker).
-func (r *GenericRequestor) configureAudioModes(
+func (r *genericRequestor) configureAudioModes(
 	inputConfig, outputConfig *protos.StreamConfig,
 ) (audioInput *protos.AudioConfig, audioOutput *protos.AudioConfig) {
 	audioInput = inputConfig.GetAudio()
@@ -471,7 +471,7 @@ func (r *GenericRequestor) configureAudioModes(
 }
 
 // initializeExecutor sets up the LLM executor for processing conversation messages.
-func (r *GenericRequestor) initializeExecutor(ctx context.Context, config *protos.ConversationConfiguration) error {
+func (r *genericRequestor) initializeExecutor(ctx context.Context, config *protos.ConversationConfiguration) error {
 	if err := r.assistantExecutor.Initialize(ctx, r, config); err != nil {
 		r.logger.Tracef(ctx, "failed to initialize executor: %+v", err)
 		return err
@@ -483,7 +483,7 @@ func (r *GenericRequestor) initializeExecutor(ctx context.Context, config *proto
 //
 // This notification includes the conversation ID and assistant details,
 // allowing the client to track the session.
-func (r *GenericRequestor) notifyConfiguration(
+func (r *genericRequestor) notifyConfiguration(
 	ctx context.Context,
 	conversation *internal_conversation_entity.AssistantConversation,
 	assistant *internal_assistant_entity.Assistant,
@@ -504,7 +504,7 @@ func (r *GenericRequestor) notifyConfiguration(
 
 // connectSpeakerAndInitializeBehavior establishes the speaker connection
 // and initializes assistant behavior (greeting, timeouts, etc.).
-func (r *GenericRequestor) connectSpeakerAndInitializeBehavior(ctx context.Context, audioOutputConfig *protos.AudioConfig) {
+func (r *genericRequestor) connectSpeakerAndInitializeBehavior(ctx context.Context, audioOutputConfig *protos.AudioConfig) {
 	if err := r.connectSpeaker(ctx, audioOutputConfig); err != nil {
 		r.logger.Tracef(ctx, "failed to connect speaker: %+v", err)
 	}
@@ -527,7 +527,7 @@ func (r *GenericRequestor) connectSpeakerAndInitializeBehavior(ctx context.Conte
 //   - audioInputConfig: Audio configuration for the listener
 //   - audioOutputConfig: Audio configuration for the recorder
 //   - isNewSession: Whether this is a new session (triggers OnBeginConversation)
-func (r *GenericRequestor) startBackgroundTasks(
+func (r *genericRequestor) startBackgroundTasks(
 	ctx context.Context,
 	audioInputConfig, audioOutputConfig *protos.AudioConfig,
 	isNewSession bool,
@@ -577,7 +577,7 @@ func (r *GenericRequestor) startBackgroundTasks(
 
 // storeClientInformation extracts client metadata from the gRPC context
 // and persists it as conversation metadata for analytics purposes.
-func (r *GenericRequestor) storeClientInformation(ctx context.Context) {
+func (r *genericRequestor) storeClientInformation(ctx context.Context) {
 	clientInfo := types.GetClientInfoFromGrpcContext(ctx)
 	if clientInfo == nil {
 		return

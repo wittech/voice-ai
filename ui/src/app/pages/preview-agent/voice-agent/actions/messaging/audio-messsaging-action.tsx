@@ -20,7 +20,6 @@ import {
   VoiceAgent,
 } from '@rapidaai/react';
 import { cn } from '@/utils';
-import { Tooltip } from '@/app/components/base/tooltip';
 import TooltipPlus from '@/app/components/base/tooltip-plus';
 
 /**

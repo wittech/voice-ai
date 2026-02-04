@@ -8,10 +8,21 @@ package webrtc_internal
 
 // Opus audio constants (WebRTC standard: 48kHz)
 const (
-	OpusSampleRate       = 48000
-	OpusFrameDuration    = 20                   // milliseconds
-	OpusFrameBytes       = 1920                 // 960 samples * 2 bytes (20ms at 48kHz)
-	MaxOutputBufferBytes = OpusFrameBytes * 500 // ~10 seconds, warning threshold
+	OpusSampleRate    = 48000
+	OpusFrameDuration = 20   // milliseconds
+	OpusFrameBytes    = 1920 // 960 samples * 2 bytes (20ms at 48kHz)
+	OpusChannels      = 2    // Stereo channels for WebRTC compatibility
+	OpusPayloadType   = 111  // Standard dynamic payload type for Opus
+	OpusSDPFmtpLine   = "minptime=10;useinbandfec=1;stereo=0;sprop-stereo=0"
+)
+
+// Channel and buffer sizes
+const (
+	InputChannelSize     = 100  // Buffered channel for incoming messages
+	ErrorChannelSize     = 1    // Error channel buffer
+	RTPBufferSize        = 1500 // Max RTP packet size (MTU)
+	MaxConsecutiveErrors = 50   // Max read errors before stopping
+	InputBufferThreshold = 1920 // 60ms at 16kHz (32 bytes/ms * 60ms)
 )
 
 // Config holds WebRTC configuration
