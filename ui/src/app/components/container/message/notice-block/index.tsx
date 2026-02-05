@@ -42,16 +42,14 @@ export const RedNoticeBlock: React.FC<HTMLAttributes<HTMLDivElement>> = ({
   children,
 }) => {
   return (
-    <div className="bg-white dark:bg-slate-950">
-      <div
-        className={cn(
-          'm-2 px-4 py-2 border-[0.5px] rounded-md',
-          'text-sm border-red-600 bg-red-100 dark:bg-red-500/20',
-          className,
-        )}
-      >
-        {children}
-      </div>
+    <div
+      className={cn(
+        'm-2 px-4 py-2 border-[0.5px] rounded-md',
+        'text-sm border-red-600 bg-red-100 dark:bg-red-500/20',
+        className,
+      )}
+    >
+      {children}
     </div>
   );
 };

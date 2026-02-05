@@ -279,6 +279,25 @@ func (app *AppRunner) Init(ctx context.Context) error {
 		}
 		app.Closeable = append(app.Closeable, audioManager.Close)
 	}
+
+	// Start SIP server for inbound calls
+	if app.Cfg.SIPConfig.Enabled {
+		cApi := assistant_talk_api.NewConversationApi(app.Cfg, app.Logger, app.Postgres, app.Redis, app.Opensearch, app.Opensearch)
+		sipConfig := assistant_talk_api.NewSIPConfigFromAppConfig(
+			app.Cfg.SIPConfig.Server,
+			app.Cfg.SIPConfig.Port,
+			app.Cfg.SIPConfig.Transport,
+			app.Cfg.SIPConfig.RTPPortRangeStart,
+			app.Cfg.SIPConfig.RTPPortRangeEnd,
+		)
+		sipManager := assistant_talk_api.NewSIPManager(cApi, sipConfig)
+		if err := sipManager.Start(ctx); err != nil {
+			app.Logger.Errorf("Failed to start SIP server: %v", err)
+			return err
+		}
+		app.Closeable = append(app.Closeable, sipManager.Close)
+		app.Logger.Info("SIP server started", "port", app.Cfg.SIPConfig.Port)
+	}
 	return nil
 }
 

@@ -184,17 +184,34 @@ func (apt *asteriskTelephony) OutboundCall(
 		), err
 	}
 
+	// Get deployment-level parameters from opts
+	// These override defaults from vault config
+	context := ariConfig.SIPContext
+	if ctxVal, err := opts.GetString("context"); err == nil && ctxVal != "" {
+		context = ctxVal
+	}
+
+	extension := toPhone
+	if extVal, err := opts.GetString("extension"); err == nil && extVal != "" {
+		extension = extVal
+	}
+
+	callerId := fromPhone
+	if callerIdVal, err := opts.GetString("caller_id"); err == nil && callerIdVal != "" {
+		callerId = callerIdVal
+	}
+
 	// Build ARI REST endpoint URL using scheme from vault config
 	ariURL := fmt.Sprintf("%s://%s:%d/ari/channels", ariConfig.ARIScheme, ariConfig.ARIHost, ariConfig.ARIPort)
 
 	// Build query parameters for channel origination
-	// Uses SIP endpoint type and context from vault configuration
+	// Uses SIP endpoint type from vault, context/extension/callerId from deployment
 	params := url.Values{}
 	params.Set("endpoint", fmt.Sprintf("%s/%s", ariConfig.SIPEndpoint, toPhone))
-	params.Set("extension", toPhone)
-	params.Set("context", ariConfig.SIPContext)
+	params.Set("extension", extension)
+	params.Set("context", context)
 	params.Set("priority", "1")
-	params.Set("callerId", fromPhone)
+	params.Set("callerId", callerId)
 	params.Set("app", ariConfig.ARIApp)
 	params.Set("appArgs", fmt.Sprintf("incoming,assistant_id=%d,conversation_id=%d", assistantId, assistantConversationId))
 
@@ -285,14 +302,12 @@ func (apt *asteriskTelephony) InboundCall(
 // MINIMAL vault credential (3 required fields):
 //
 //	{
-//	  "ari_host": "asterisk.example.com",  // REQUIRED
-//	  "ari_user": "asterisk",              // REQUIRED
-//	  "ari_password": "secret"             // REQUIRED
+//	  "ari_url": "http://asterisk.example.com:8088",  // REQUIRED (scheme://host:port)
+//	  "ari_user": "asterisk",                          // REQUIRED
+//	  "ari_password": "secret"                         // REQUIRED
 //	}
 //
 // All other fields have sensible defaults:
-//   - ari_port: 8088
-//   - ari_scheme: http
 //   - ari_app: rapida
 //   - sip_endpoint: PJSIP
 //   - sip_context: from-internal
@@ -312,34 +327,32 @@ func (apt *asteriskTelephony) getARIConfig(vaultCredential *protos.VaultCredenti
 		SIPContext:  "from-internal", // default dialplan context
 	}
 
-	// Parse REQUIRED fields
-	if host, ok := credMap["ari_host"]; ok && host != nil {
-		config.ARIHost = fmt.Sprintf("%v", host)
-	}
-	if user, ok := credMap["ari_user"]; ok && user != nil {
-		config.ARIUser = fmt.Sprintf("%v", user)
-	}
-	if password, ok := credMap["ari_password"]; ok && password != nil {
-		config.ARIPassword = fmt.Sprintf("%v", password)
-	}
+	// Parse ari_url (e.g., http://asterisk.example.com:8088)
+	if ariURL, ok := credMap["ari_url"]; ok && ariURL != nil {
+		parsedURL, err := url.Parse(fmt.Sprintf("%v", ariURL))
+		if err != nil {
+			return nil, fmt.Errorf("invalid ari_url: %w", err)
+		}
 
-	// Parse ARI port
-	if port, ok := credMap["ari_port"]; ok && port != nil {
-		switch v := port.(type) {
-		case float64:
-			config.ARIPort = int(v)
-		case int:
-			config.ARIPort = v
-		case string:
-			if p, err := parsePort(v); err == nil {
+		config.ARIScheme = parsedURL.Scheme
+		if config.ARIScheme == "" {
+			config.ARIScheme = "http"
+		}
+
+		config.ARIHost = parsedURL.Hostname()
+		if portStr := parsedURL.Port(); portStr != "" {
+			if p, err := parsePort(portStr); err == nil {
 				config.ARIPort = p
 			}
 		}
 	}
 
-	// Parse ARI scheme (http/https)
-	if scheme, ok := credMap["ari_scheme"]; ok && scheme != nil {
-		config.ARIScheme = fmt.Sprintf("%v", scheme)
+	// Parse REQUIRED fields
+	if user, ok := credMap["ari_user"]; ok && user != nil {
+		config.ARIUser = fmt.Sprintf("%v", user)
+	}
+	if password, ok := credMap["ari_password"]; ok && password != nil {
+		config.ARIPassword = fmt.Sprintf("%v", password)
 	}
 
 	// Parse ARI app name
@@ -357,9 +370,9 @@ func (apt *asteriskTelephony) getARIConfig(vaultCredential *protos.VaultCredenti
 		config.SIPContext = fmt.Sprintf("%v", context)
 	}
 
-	// Validate required fields (only 3 needed!)
-	if config.ARIHost == "" || config.ARIHost == "localhost" {
-		return nil, fmt.Errorf("ari_host is required in vault credential")
+	// Validate required fields
+	if config.ARIHost == "" {
+		return nil, fmt.Errorf("ari_url is required in vault credential")
 	}
 	if config.ARIUser == "" {
 		return nil, fmt.Errorf("ari_user is required in vault credential")

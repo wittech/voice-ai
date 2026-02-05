@@ -9,6 +9,7 @@ package sip
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/emiago/sipgo"
@@ -185,17 +186,56 @@ func (s *Server) handleInvite(req *sip.Request, tx sip.ServerTransaction) {
 	fromURI := req.From().Address.String()
 	toURI := req.To().Address.String()
 
+	// Parse SDP from incoming INVITE to get remote RTP address
+	remoteRTPIP, remoteRTPPort := s.parseIncomingSDP(req)
+	s.logger.Info("Parsed remote SDP", "call_id", callID, "remote_rtp_ip", remoteRTPIP, "remote_rtp_port", remoteRTPPort)
+
+	// Create RTP handler for this session before calling the invite handler
+	var payloadType uint8 = 0 // PCMU
+	rtpHandler, err := NewRTPHandler(s.ctx, &RTPConfig{
+		LocalIP:     s.config.Server,
+		LocalPort:   s.config.RTPPortRangeStart,
+		PayloadType: payloadType,
+		ClockRate:   8000,
+		Logger:      s.logger,
+	})
+	if err != nil {
+		s.logger.Error("Failed to create RTP handler", "error", err)
+		s.sendResponse(tx, req, 500)
+		return
+	}
+
+	// Set remote RTP address from incoming SDP
+	if remoteRTPIP != "" && remoteRTPPort > 0 {
+		rtpHandler.SetRemoteAddr(remoteRTPIP, remoteRTPPort)
+		session.SetRemoteRTP(remoteRTPIP, remoteRTPPort)
+		s.logger.Info("Set remote RTP address", "call_id", callID, "ip", remoteRTPIP, "port", remoteRTPPort)
+	}
+
+	// Get local RTP address
+	localIP, localPort := rtpHandler.LocalAddr()
+	session.SetLocalRTP(localIP, localPort)
+	session.SetNegotiatedCodec("PCMU", 8000)
+
+	// Store the RTP handler in the session
+	session.SetRTPHandler(rtpHandler)
+
+	// Start RTP processing
+	rtpHandler.Start()
+
+	// Send 200 OK with SDP containing RTP port
+	s.sendResponseWithSDP(tx, req, 200, localIP, localPort)
+	session.SetState(CallStateConnected)
+
+	s.logger.Info("SIP call answered with SDP", "call_id", callID, "local_rtp_port", localPort, "remote_rtp_ip", remoteRTPIP, "remote_rtp_port", remoteRTPPort)
+
+	// Call the invite handler (which will start the conversation)
 	if s.onInvite != nil {
 		if err := s.onInvite(session, fromURI, toURI); err != nil {
 			s.logger.Error("INVITE handler failed", "error", err)
-			s.sendResponse(tx, req, 503) // Service Unavailable
-			return
+			// Call already answered, just log the error
 		}
 	}
-
-	// Send 200 OK with SDP
-	s.sendResponse(tx, req, 200)
-	session.SetState(CallStateConnected)
 }
 
 func (s *Server) handleAck(req *sip.Request, tx sip.ServerTransaction) {
@@ -273,6 +313,67 @@ func (s *Server) sendResponse(tx sip.ServerTransaction, req *sip.Request, status
 	if err := tx.Respond(resp); err != nil {
 		s.logger.Error("Failed to send SIP response", "error", err, "status", statusCode)
 	}
+}
+
+// sendResponseWithSDP sends a SIP response with SDP body
+func (s *Server) sendResponseWithSDP(tx sip.ServerTransaction, req *sip.Request, statusCode int, localIP string, rtpPort int) {
+	sdp := s.generateSDP(localIP, rtpPort)
+	// NewSDPResponseFromRequest creates a 200 OK with proper Content-Type for SDP
+	resp := sip.NewSDPResponseFromRequest(req, []byte(sdp))
+	if err := tx.Respond(resp); err != nil {
+		s.logger.Error("Failed to send SIP response with SDP", "error", err, "status", statusCode)
+	}
+}
+
+// generateSDP generates an SDP answer for the call
+func (s *Server) generateSDP(localIP string, rtpPort int) string {
+	return fmt.Sprintf(`v=0
+o=rapida 0 0 IN IP4 %s
+s=Rapida Voice AI
+c=IN IP4 %s
+t=0 0
+m=audio %d RTP/AVP 0 8
+a=rtpmap:0 PCMU/8000
+a=rtpmap:8 PCMA/8000
+a=ptime:20
+a=sendrecv
+`, localIP, localIP, rtpPort)
+}
+
+// parseIncomingSDP extracts RTP connection info from incoming SDP
+func (s *Server) parseIncomingSDP(req *sip.Request) (string, int) {
+	body := req.Body()
+	if len(body) == 0 {
+		s.logger.Warn("No SDP body in INVITE")
+		return "", 0
+	}
+
+	sdpStr := string(body)
+	s.logger.Debug("Incoming SDP", "sdp", sdpStr)
+
+	var connectionIP string
+	var audioPort int
+
+	lines := strings.Split(sdpStr, "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+
+		// Parse connection line: c=IN IP4 192.168.1.5
+		if strings.HasPrefix(line, "c=IN IP4 ") {
+			connectionIP = strings.TrimPrefix(line, "c=IN IP4 ")
+			connectionIP = strings.TrimSpace(connectionIP)
+		}
+
+		// Parse media line: m=audio 10000 RTP/AVP 0 8
+		if strings.HasPrefix(line, "m=audio ") {
+			parts := strings.Fields(line)
+			if len(parts) >= 2 {
+				fmt.Sscanf(parts[1], "%d", &audioPort)
+			}
+		}
+	}
+
+	return connectionIP, audioPort
 }
 
 // GetSession returns a session by call ID

@@ -29,6 +29,7 @@ type Session struct {
 	errorChan    chan error
 
 	// RTP handling
+	rtpHandler    *RTPHandler
 	rtpLocalPort  int
 	rtpRemoteAddr string
 	rtpRemotePort int
@@ -121,6 +122,20 @@ func (s *Session) GetNegotiatedCodec() (string, int) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.negotiatedCodec, s.sampleRate
+}
+
+// SetRTPHandler sets the RTP handler for this session
+func (s *Session) SetRTPHandler(handler *RTPHandler) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.rtpHandler = handler
+}
+
+// GetRTPHandler returns the RTP handler for this session
+func (s *Session) GetRTPHandler() *RTPHandler {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.rtpHandler
 }
 
 // AudioIn returns the channel for receiving audio from remote

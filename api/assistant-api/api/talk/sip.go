@@ -16,6 +16,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 	internal_adapter "github.com/rapidaai/api/assistant-api/internal/adapters"
+	internal_assistant_entity "github.com/rapidaai/api/assistant-api/internal/entity/assistants"
+	internal_conversation_entity "github.com/rapidaai/api/assistant-api/internal/entity/conversations"
+	internal_services "github.com/rapidaai/api/assistant-api/internal/services"
 	internal_sip "github.com/rapidaai/api/assistant-api/internal/sip"
 	"github.com/rapidaai/pkg/commons"
 	"github.com/rapidaai/pkg/types"
@@ -33,8 +36,14 @@ type SIPManager struct {
 	// SIP server configuration
 	config *internal_sip.Config
 
+	// Global SIP server for inbound calls
+	server *internal_sip.Server
+
 	// Active SIP sessions mapped by call ID
 	sessions map[string]*SIPSession
+
+	ctx    context.Context
+	cancel context.CancelFunc
 }
 
 // SIPSession represents an active SIP call session
@@ -56,6 +65,26 @@ func NewSIPManager(cApi *ConversationApi, config *internal_sip.Config) *SIPManag
 	}
 }
 
+// NewSIPConfigFromAppConfig creates internal SIP config from app config parameters
+func NewSIPConfigFromAppConfig(server string, port int, transport string, rtpStart, rtpEnd int) *internal_sip.Config {
+	transportType := internal_sip.TransportUDP
+	switch transport {
+	case "tcp":
+		transportType = internal_sip.TransportTCP
+	case "tls":
+		transportType = internal_sip.TransportTLS
+	}
+	return &internal_sip.Config{
+		Server:            server,
+		Port:              port,
+		Transport:         transportType,
+		RTPPortRangeStart: rtpStart,
+		RTPPortRangeEnd:   rtpEnd,
+		Username:          "rapida",
+		Password:          "rapida",
+	}
+}
+
 // Start begins the SIP server and listens for incoming calls
 func (m *SIPManager) Start(ctx context.Context) error {
 	if m.config == nil {
@@ -66,10 +95,197 @@ func (m *SIPManager) Start(ctx context.Context) error {
 		return fmt.Errorf("invalid SIP config: %w", err)
 	}
 
-	m.logger.Info("SIP Manager started",
+	m.ctx, m.cancel = context.WithCancel(ctx)
+
+	// Create the global SIP server
+	server, err := internal_sip.NewServer(m.ctx, &internal_sip.ServerConfig{
+		TenantID: "global",
+		Config:   m.config,
+		Logger:   m.logger,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create SIP server: %w", err)
+	}
+	m.server = server
+
+	// Set up handlers for incoming calls
+	server.SetOnInvite(m.handleInvite)
+	server.SetOnBye(m.handleBye)
+	server.SetOnCancel(m.handleCancel)
+
+	// Start the SIP server
+	if err := server.Start(); err != nil {
+		return fmt.Errorf("failed to start SIP server: %w", err)
+	}
+
+	m.logger.Info("SIP server listening for inbound calls",
 		"server", m.config.Server,
 		"port", m.config.Port,
 		"transport", m.config.Transport)
+
+	return nil
+}
+
+// handleInvite processes incoming SIP INVITE requests
+func (m *SIPManager) handleInvite(session *internal_sip.Session, fromURI, toURI string) error {
+	m.logger.Info("Incoming SIP INVITE",
+		"from", fromURI,
+		"to", toURI,
+		"call_id", session.GetInfo().CallID)
+
+	// Resolve auth and assistant (hardcoded like AudioSocket)
+	auth, assistant, conversation, callerID, err := m.resolveCallContext(m.ctx, fromURI)
+	if err != nil {
+		m.logger.Error("SIP context resolution failed", "error", err)
+		return err
+	}
+
+	// Start the call in a goroutine
+	go m.startCall(m.ctx, session, auth, assistant, conversation, callerID)
+
+	return nil
+}
+
+// resolveCallContext resolves auth and assistant for SIP calls (hardcoded like AudioSocket)
+func (m *SIPManager) resolveCallContext(ctx context.Context, fromURI string) (types.SimplePrinciple, *internal_assistant_entity.Assistant, *internal_conversation_entity.AssistantConversation, string, error) {
+	// Hardcoded auth - same as AudioSocket
+	auth := &types.ServiceScope{
+		ProjectId:      utils.Ptr(uint64(2257831930382778368)),
+		OrganizationId: utils.Ptr(uint64(2257831925018263552)),
+		CurrentToken:   "3dd5c2eef53d27942bccd892750fda23ea0b92965d4699e73d8e754ab882955f",
+	}
+
+	// Hardcoded assistant ID - same as AudioSocket
+	assistantID := uint64(2263072539095859200)
+
+	assistant, err := m.cApi.assistantService.Get(ctx, auth, assistantID, utils.GetVersionDefinition("latest"), &internal_services.GetAssistantOption{InjectPhoneDeployment: true})
+	if err != nil {
+		return nil, nil, nil, "", fmt.Errorf("failed to get assistant: %w", err)
+	}
+
+	callerID := fromURI
+
+	conversation, err := m.cApi.assistantConversationService.CreateConversation(
+		ctx,
+		auth,
+		internal_adapter.Identifier(utils.SIP, ctx, auth, callerID),
+		assistant.Id,
+		assistant.AssistantProviderId,
+		type_enums.DIRECTION_INBOUND,
+		utils.SIP,
+	)
+	if err != nil {
+		return nil, nil, nil, "", fmt.Errorf("failed to create conversation: %w", err)
+	}
+
+	_, _ = m.cApi.assistantConversationService.ApplyConversationMetadata(ctx, auth, assistant.Id, conversation.Id,
+		[]*types.Metadata{types.NewMetadata("sip.caller_uri", fromURI)})
+
+	return auth, assistant, conversation, callerID, nil
+}
+
+// startCall starts the SIP conversation with the assistant
+func (m *SIPManager) startCall(ctx context.Context, session *internal_sip.Session, auth types.SimplePrinciple, assistant *internal_assistant_entity.Assistant, conversation *internal_conversation_entity.AssistantConversation, callerID string) {
+	callCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	callID := session.GetInfo().CallID
+
+	// Store session
+	m.mu.Lock()
+	m.sessions[callID] = &SIPSession{
+		CallID:      callID,
+		AssistantID: assistant.Id,
+		Auth:        auth,
+		Cancel:      cancel,
+	}
+	m.mu.Unlock()
+
+	defer func() {
+		m.mu.Lock()
+		delete(m.sessions, callID)
+		m.mu.Unlock()
+	}()
+
+	// Create SIP streamer for this inbound call (uses existing session, no new server)
+	streamer, err := internal_sip.NewInboundStreamer(callCtx, &internal_sip.InboundStreamerConfig{
+		Config:       m.config,
+		Logger:       m.logger,
+		Session:      session,
+		Assistant:    assistant,
+		Conversation: conversation,
+	})
+	if err != nil {
+		m.logger.Error("Failed to create SIP streamer", "error", err, "call_id", callID)
+		return
+	}
+
+	identifier := internal_adapter.Identifier(utils.SIP, callCtx, auth, callerID)
+
+	talker, err := internal_adapter.GetTalker(
+		utils.PhoneCall,
+		callCtx,
+		m.cApi.cfg,
+		m.logger,
+		m.cApi.postgres,
+		m.cApi.opensearch,
+		m.cApi.redis,
+		m.cApi.storage,
+		streamer,
+	)
+	if err != nil {
+		if closeable, ok := streamer.(io.Closer); ok {
+			closeable.Close()
+		}
+		m.logger.Error("Failed to create SIP talker", "error", err, "call_id", callID)
+		return
+	}
+
+	m.logger.Info("SIP call started",
+		"call_id", callID,
+		"assistant_id", assistant.Id,
+		"conversation_id", conversation.Id,
+		"caller", callerID)
+
+	if err := talker.Talk(callCtx, auth, identifier); err != nil {
+		m.logger.Warn("SIP talker exited", "error", err, "call_id", callID)
+	}
+
+	m.logger.Info("SIP call ended", "call_id", callID)
+}
+
+// handleBye processes SIP BYE requests
+func (m *SIPManager) handleBye(session *internal_sip.Session) error {
+	callID := session.GetInfo().CallID
+	m.logger.Info("SIP BYE received", "call_id", callID)
+
+	// Cancel the call context
+	m.mu.Lock()
+	if sipSession, exists := m.sessions[callID]; exists {
+		if sipSession.Cancel != nil {
+			sipSession.Cancel()
+		}
+		delete(m.sessions, callID)
+	}
+	m.mu.Unlock()
+
+	return nil
+}
+
+// handleCancel processes SIP CANCEL requests
+func (m *SIPManager) handleCancel(session *internal_sip.Session) error {
+	callID := session.GetInfo().CallID
+	m.logger.Info("SIP CANCEL received", "call_id", callID)
+
+	// Cancel the call context
+	m.mu.Lock()
+	if sipSession, exists := m.sessions[callID]; exists {
+		if sipSession.Cancel != nil {
+			sipSession.Cancel()
+		}
+		delete(m.sessions, callID)
+	}
+	m.mu.Unlock()
 
 	return nil
 }
@@ -209,6 +425,14 @@ func (m *SIPManager) GetActiveCalls() int {
 
 // Stop stops the SIP manager and terminates all active calls
 func (m *SIPManager) Stop() {
+	if m.cancel != nil {
+		m.cancel()
+	}
+
+	if m.server != nil {
+		m.server.Stop()
+	}
+
 	m.mu.Lock()
 	for callID, session := range m.sessions {
 		if session.Cancel != nil {
@@ -219,6 +443,12 @@ func (m *SIPManager) Stop() {
 	m.mu.Unlock()
 
 	m.logger.Info("SIP Manager stopped")
+}
+
+// Close implements the closeable interface for graceful shutdown
+func (m *SIPManager) Close(ctx context.Context) error {
+	m.Stop()
+	return nil
 }
 
 // GetSIPConfigFromDeployment extracts SIP configuration from assistant deployment

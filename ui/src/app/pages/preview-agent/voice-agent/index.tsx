@@ -216,6 +216,7 @@ export const PreviewPhoneAgent = () => {
     { name: 'Vietnam', value: '+84', code: 'VN' },
     { name: 'Yemen', value: '+967', code: 'YE' },
     { name: 'Zimbabwe', value: '+263', code: 'ZW' },
+    { name: 'Other', value: '', code: 'OTH' },
   ];
   const [country, setCountry] = useState({
     name: 'Singapore',
@@ -276,11 +277,15 @@ export const PreviewPhoneAgent = () => {
   };
 
   const validatePhoneNumber = () => {
-    if (!country.value) {
+    if (!country.name) {
       setError('Please select a country');
       return false;
     }
-    if (phoneNumber.length < 7 || phoneNumber.length > 15) {
+
+    if (
+      (country.name !== 'Other' && phoneNumber.length < 7) ||
+      phoneNumber.length > 15
+    ) {
       setError('Please enter a valid phone number for call.');
       return false;
     }

@@ -153,6 +153,7 @@ func (h *RTPHandler) AudioOut() chan<- []byte {
 
 func (h *RTPHandler) receiveLoop() {
 	buf := make([]byte, 1500)
+	logCounter := 0
 
 	for {
 		select {
@@ -172,34 +173,53 @@ func (h *RTPHandler) receiveLoop() {
 		}
 
 		if n < 12 {
+			h.logger.Warn("RTP packet too small", "size", n)
 			continue
 		}
 
 		packet, err := h.parseRTPPacket(buf[:n])
 		if err != nil {
+			h.logger.Warn("Failed to parse RTP packet", "error", err)
 			continue
 		}
 
 		h.mu.Lock()
 		if h.remoteAddr == nil {
 			h.remoteAddr = remoteAddr
+			h.logger.Info("RTP: Auto-detected remote address", "addr", remoteAddr.String())
 		}
 		h.packetsReceived++
+		count := h.packetsReceived
 		h.mu.Unlock()
+
+		// Log every 50 packets (1 second of audio)
+		logCounter++
+		if logCounter%50 == 1 {
+			h.logger.Debug("RTP: Received audio packet", "seq", packet.SequenceNumber, "payload_size", len(packet.Payload), "total_received", count)
+		}
 
 		select {
 		case h.audioInChan <- packet.Payload:
 		default:
+			h.logger.Warn("RTP: Audio input channel full, dropping packet")
 		}
 	}
 }
 
 func (h *RTPHandler) sendLoop() {
-	packetDuration := 20 * time.Millisecond
-	ticker := time.NewTicker(packetDuration)
-	defer ticker.Stop()
+	chunkDuration := 20 * time.Millisecond
+	// PCMU at 8kHz: 20ms = 160 samples = 160 bytes (8-bit μ-law)
+	samplesPerPacket := int(h.clockRate * 20 / 1000) // 160 bytes
+
+	// Pre-create silence chunk (μ-law silence is 0xFF, not 0x00)
+	silenceChunk := make([]byte, samplesPerPacket)
+	for i := range silenceChunk {
+		silenceChunk[i] = 0xFF // μ-law silence
+	}
 
 	var pendingAudio []byte
+	logCounter := 0
+	nextSendTime := time.Now().Add(chunkDuration)
 
 	for {
 		select {
@@ -207,32 +227,67 @@ func (h *RTPHandler) sendLoop() {
 			return
 		case audio := <-h.audioOutChan:
 			pendingAudio = append(pendingAudio, audio...)
-		case <-ticker.C:
-			h.mu.RLock()
-			remoteAddr := h.remoteAddr
-			h.mu.RUnlock()
+		default:
+		}
 
-			if remoteAddr == nil || len(pendingAudio) == 0 {
-				continue
+		// Wait until next send time with precision
+		now := time.Now()
+		if sleepDuration := nextSendTime.Sub(now); sleepDuration > 0 {
+			time.Sleep(sleepDuration)
+		}
+
+		// Schedule next send immediately to minimize drift
+		nextSendTime = nextSendTime.Add(chunkDuration)
+
+		// If we've fallen behind, reset timing (don't try to catch up)
+		if time.Now().After(nextSendTime) {
+			nextSendTime = time.Now().Add(chunkDuration)
+		}
+
+		h.mu.RLock()
+		remoteAddr := h.remoteAddr
+		h.mu.RUnlock()
+
+		if remoteAddr == nil {
+			continue
+		}
+
+		// Get exactly ONE chunk: audio if available, otherwise silence
+		var chunk []byte
+		if len(pendingAudio) >= samplesPerPacket {
+			chunk = pendingAudio[:samplesPerPacket]
+			pendingAudio = pendingAudio[samplesPerPacket:]
+		} else if len(pendingAudio) > 0 {
+			// Partial audio - pad with silence
+			chunk = make([]byte, samplesPerPacket)
+			copy(chunk, pendingAudio)
+			for i := len(pendingAudio); i < samplesPerPacket; i++ {
+				chunk[i] = 0xFF // μ-law silence
 			}
+			pendingAudio = nil
+		} else {
+			// No audio - send silence to maintain timing
+			chunk = silenceChunk
+		}
 
-			samplesPerPacket := int(h.clockRate * 20 / 1000)
+		packet := h.createRTPPacket(chunk)
+		data := h.serializeRTPPacket(packet)
 
-			for len(pendingAudio) >= samplesPerPacket {
-				chunk := pendingAudio[:samplesPerPacket]
-				pendingAudio = pendingAudio[samplesPerPacket:]
+		if _, err := h.conn.WriteToUDP(data, remoteAddr); err != nil {
+			h.logger.Error("RTP: Failed to send packet", "error", err, "remote", remoteAddr.String())
+			continue
+		}
 
-				packet := h.createRTPPacket(chunk)
-				data := h.serializeRTPPacket(packet)
+		h.mu.Lock()
+		h.packetsSent++
+		count := h.packetsSent
+		h.mu.Unlock()
 
-				if _, err := h.conn.WriteToUDP(data, remoteAddr); err != nil {
-					continue
-				}
-
-				h.mu.Lock()
-				h.packetsSent++
-				h.mu.Unlock()
-			}
+		// Log every 50 packets (1 second of audio)
+		logCounter++
+		if logCounter%50 == 1 {
+			isSilence := len(pendingAudio) == 0 && chunk[0] == 0xFF
+			h.logger.Debug("RTP: Sent packet", "seq", packet.SequenceNumber, "total_sent", count, "pending", len(pendingAudio), "silence", isSilence)
 		}
 	}
 }
