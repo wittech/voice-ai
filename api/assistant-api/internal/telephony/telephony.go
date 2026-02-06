@@ -20,6 +20,7 @@ import (
 	internal_asterisk_audiosocket "github.com/rapidaai/api/assistant-api/internal/telephony/internal/asterisk/audiosocket"
 	internal_asterisk_websocket "github.com/rapidaai/api/assistant-api/internal/telephony/internal/asterisk/websocket"
 	internal_exotel_telephony "github.com/rapidaai/api/assistant-api/internal/telephony/internal/exotel"
+	internal_sip_telephony "github.com/rapidaai/api/assistant-api/internal/telephony/internal/sip"
 	internal_twilio_telephony "github.com/rapidaai/api/assistant-api/internal/telephony/internal/twilio"
 	internal_vonage_telephony "github.com/rapidaai/api/assistant-api/internal/telephony/internal/vonage"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
@@ -51,6 +52,8 @@ func GetTelephony(at Telephony, cfg *config.AssistantConfig, logger commons.Logg
 		return internal_vonage_telephony.NewVonageTelephony(cfg, logger)
 	case Asterisk:
 		return internal_asterisk_telephony.NewAsteriskTelephony(cfg, logger)
+	case SIP:
+		return internal_sip_telephony.NewSIPTelephony(cfg, logger)
 	default:
 		return nil, errors.New("illegal telephony provider")
 	}

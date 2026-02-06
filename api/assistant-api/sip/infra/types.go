@@ -4,7 +4,7 @@
 // Licensed under GPL-2.0 with Rapida Additional Terms.
 // See LICENSE.md or contact sales@rapida.ai for commercial usage.
 
-package internal_sip
+package sip_infra
 
 import (
 	"context"
@@ -89,7 +89,6 @@ type Config struct {
 	RTPPortRangeEnd   int       `json:"rtp_port_range_end" mapstructure:"rtp_port_range_end" validate:"required,gtfield=RTPPortRangeStart"`
 	SRTPEnabled       bool      `json:"srtp_enabled" mapstructure:"srtp_enabled"`
 	Domain            string    `json:"sip_domain,omitempty" mapstructure:"sip_domain"`
-
 	// Optional timeout settings
 	RegisterTimeout  time.Duration `json:"register_timeout,omitempty" mapstructure:"register_timeout"`
 	InviteTimeout    time.Duration `json:"invite_timeout,omitempty" mapstructure:"invite_timeout"`
@@ -283,7 +282,7 @@ type SIPSession struct {
 	AssistantID uint64
 	TenantID    string
 	Auth        types.SimplePrinciple
-	Streamer    internal_type.TelephonyStreamer
 	Config      *Config
+	Streamer    internal_type.TelephonyStreamer
 	Cancel      context.CancelFunc
 }

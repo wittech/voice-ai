@@ -4,7 +4,7 @@
 // Licensed under GPL-2.0 with Rapida Additional Terms.
 // See LICENSE.md or contact sales@rapida.ai for commercial usage.
 
-package internal_sip
+package sip_infra
 
 import (
 	"context"
@@ -32,6 +32,9 @@ const (
 	// Audio channel buffer sizes
 	rtpAudioInBufferSize  = 100
 	rtpAudioOutBufferSize = 100
+
+	// rtpLogInterval is the number of packets between periodic log entries
+	rtpLogInterval = 50
 )
 
 // RTPPacket represents an RTP packet

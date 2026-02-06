@@ -4,7 +4,7 @@
 // Licensed under GPL-2.0 with Rapida Additional Terms.
 // See LICENSE.md or contact sales@rapida.ai for commercial usage.
 
-package internal_sip
+package internal_sip_telephony
 
 import (
 	"context"
@@ -16,6 +16,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/rapidaai/api/assistant-api/config"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
+	sip_infra "github.com/rapidaai/api/assistant-api/sip/infra"
 	"github.com/rapidaai/pkg/commons"
 	"github.com/rapidaai/pkg/types"
 	"github.com/rapidaai/pkg/utils"
@@ -27,7 +28,7 @@ type sipTelephony struct {
 	mu      sync.RWMutex
 	appCfg  *config.AssistantConfig
 	logger  commons.Logger
-	servers map[string]*Server
+	servers map[string]*sip_infra.Server
 }
 
 // NewSIPTelephony creates a new SIP telephony provider
@@ -35,19 +36,19 @@ func NewSIPTelephony(cfg *config.AssistantConfig, logger commons.Logger) (intern
 	return &sipTelephony{
 		appCfg:  cfg,
 		logger:  logger,
-		servers: make(map[string]*Server),
+		servers: make(map[string]*sip_infra.Server),
 	}, nil
 }
 
 // ParseConfig parses SIP configuration from vault credentials
-func ParseConfig(vaultCredential *protos.VaultCredential) (*Config, error) {
+func (t *sipTelephony) parseConfig(vaultCredential *protos.VaultCredential) (*sip_infra.Config, error) {
 	if vaultCredential == nil || vaultCredential.GetValue() == nil {
 		return nil, fmt.Errorf("vault credential is required")
 	}
 
 	credMap := vaultCredential.GetValue().AsMap()
 
-	cfg := DefaultConfig()
+	cfg := sip_infra.DefaultConfig()
 
 	// Required fields
 	if server, ok := credMap["sip_server"].(string); ok {
@@ -65,7 +66,7 @@ func ParseConfig(vaultCredential *protos.VaultCredential) (*Config, error) {
 		cfg.Port = int(port)
 	}
 	if transport, ok := credMap["sip_transport"].(string); ok {
-		cfg.Transport = Transport(transport)
+		cfg.Transport = sip_infra.Transport(transport)
 	}
 	if realm, ok := credMap["sip_realm"].(string); ok {
 		cfg.Realm = realm
@@ -91,7 +92,7 @@ func ParseConfig(vaultCredential *protos.VaultCredential) (*Config, error) {
 }
 
 // getOrCreateServer gets an existing server or creates a new one for the tenant
-func (t *sipTelephony) getOrCreateServer(ctx context.Context, tenantID string, cfg *Config) (*Server, error) {
+func (t *sipTelephony) getOrCreateServer(ctx context.Context, tenantID string, cfg *sip_infra.Config) (*sip_infra.Server, error) {
 	t.mu.RLock()
 	server, exists := t.servers[tenantID]
 	t.mu.RUnlock()
@@ -109,7 +110,7 @@ func (t *sipTelephony) getOrCreateServer(ctx context.Context, tenantID string, c
 	}
 
 	// Create ListenConfig from tenant config
-	listenConfig := &ListenConfig{
+	listenConfig := &sip_infra.ListenConfig{
 		Address:   cfg.Server,
 		Port:      cfg.Port,
 		Transport: cfg.Transport,
@@ -117,15 +118,15 @@ func (t *sipTelephony) getOrCreateServer(ctx context.Context, tenantID string, c
 
 	// Config resolver returns the tenant config for all calls on this server
 	tenantConfig := cfg
-	configResolver := func(inviteCtx *InviteContext) (*InviteResult, error) {
-		return &InviteResult{
+	configResolver := func(inviteCtx *sip_infra.InviteContext) (*sip_infra.InviteResult, error) {
+		return &sip_infra.InviteResult{
 			Config:      tenantConfig,
 			ShouldAllow: true,
 		}, nil
 	}
 
 	// Create new server
-	newServer, err := NewServer(ctx, &ServerConfig{
+	newServer, err := sip_infra.NewServer(ctx, &sip_infra.ServerConfig{
 		ListenConfig:   listenConfig,
 		ConfigResolver: configResolver,
 		Logger:         t.logger,
@@ -193,7 +194,7 @@ func (t *sipTelephony) OutboundCall(
 		types.NewMetadata("telephony.provider", "sip"),
 	}
 
-	cfg, err := ParseConfig(vaultCredential)
+	cfg, err := t.parseConfig(vaultCredential)
 	if err != nil {
 		return append(mtds,
 			types.NewMetadata("telephony.error", fmt.Sprintf("config error: %s", err.Error())),

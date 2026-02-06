@@ -4,11 +4,10 @@
 // Licensed under GPL-2.0 with Rapida Additional Terms.
 // See LICENSE.md or contact sales@rapida.ai for commercial usage.
 
-package internal_sip
+package internal_sip_telephony
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"sync"
 	"sync/atomic"
@@ -18,6 +17,7 @@ import (
 	internal_assistant_entity "github.com/rapidaai/api/assistant-api/internal/entity/assistants"
 	internal_conversation_entity "github.com/rapidaai/api/assistant-api/internal/entity/conversations"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
+	sip_infra "github.com/rapidaai/api/assistant-api/sip/infra"
 	"github.com/rapidaai/pkg/commons"
 	"github.com/rapidaai/protos"
 )
@@ -39,15 +39,15 @@ type Streamer struct {
 	closed atomic.Bool
 
 	logger     commons.Logger
-	config     *Config
-	session    *Session
-	server     *Server
-	rtpHandler *RTPHandler
+	config     *sip_infra.Config
+	session    *sip_infra.Session
+	server     *sip_infra.Server
+	rtpHandler *sip_infra.RTPHandler
 
 	assistant    *internal_assistant_entity.Assistant
 	conversation *internal_conversation_entity.AssistantConversation
 
-	codec *Codec
+	codec *sip_infra.Codec
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -56,89 +56,38 @@ type Streamer struct {
 	configSent  atomic.Bool
 }
 
-// StreamerConfig holds configuration for creating a SIP streamer
-type StreamerConfig struct {
-	Config       *Config
-	Logger       commons.Logger
-	TenantID     string
-	Assistant    *internal_assistant_entity.Assistant
-	Conversation *internal_conversation_entity.AssistantConversation
-}
-
-// Validate validates the streamer configuration
-func (c *StreamerConfig) Validate() error {
-	if c.Config == nil {
-		return fmt.Errorf("SIP config is required")
-	}
-	if c.Logger == nil {
-		return fmt.Errorf("logger is required")
-	}
-	if c.TenantID == "" {
-		return fmt.Errorf("tenant_id is required")
-	}
-	if c.Assistant == nil {
-		return fmt.Errorf("assistant is required")
-	}
-	if c.Conversation == nil {
-		return fmt.Errorf("conversation is required")
-	}
-	return c.Config.Validate()
-}
-
-// InboundStreamerConfig holds configuration for inbound SIP calls
-type InboundStreamerConfig struct {
-	Config       *Config
-	Logger       commons.Logger
-	Session      *Session
-	Assistant    *internal_assistant_entity.Assistant
-	Conversation *internal_conversation_entity.AssistantConversation
-}
-
-// Validate validates the inbound streamer configuration
-func (c *InboundStreamerConfig) Validate() error {
-	if c.Session == nil {
-		return fmt.Errorf("session is required for inbound streamer")
-	}
-	if c.Logger == nil {
-		return fmt.Errorf("logger is required")
-	}
-	if c.Assistant == nil {
-		return fmt.Errorf("assistant is required")
-	}
-	if c.Conversation == nil {
-		return fmt.Errorf("conversation is required")
-	}
-	return nil
-}
-
 // NewInboundStreamer creates a streamer for an inbound SIP call using an existing session
 // This does NOT create a new SIP server - it uses the session's RTP handler from the global server
-func NewInboundStreamer(ctx context.Context, cfg *InboundStreamerConfig) (internal_type.TelephonyStreamer, error) {
-	if err := cfg.Validate(); err != nil {
-		return nil, NewSIPError("NewInboundStreamer", "", "invalid configuration", err)
-	}
+func NewInboundStreamer(ctx context.Context,
+	config *sip_infra.Config,
+	logger commons.Logger,
+	session *sip_infra.Session,
+	assistant *internal_assistant_entity.Assistant,
+	conversation *internal_conversation_entity.AssistantConversation,
+) (internal_type.TelephonyStreamer, error) {
 
 	// Get the RTP handler from the session (created by server.handleInvite)
-	rtpHandler := cfg.Session.GetRTPHandler()
+	rtpHandler := session.GetRTPHandler()
 	if rtpHandler == nil {
-		return nil, NewSIPError("NewInboundStreamer", cfg.Session.GetCallID(), "session has no RTP handler", ErrRTPNotInitialized)
+		return nil, sip_infra.NewSIPError("NewInboundStreamer", session.GetCallID(), "session has no RTP handler", sip_infra.ErrRTPNotInitialized)
 	}
 
 	streamerCtx, cancel := context.WithCancel(ctx)
 
 	// Get codec from session
-	codec := cfg.Session.GetNegotiatedCodec()
+	codec := session.GetNegotiatedCodec()
 	if codec == nil {
-		codec = &CodecPCMU
+		pcmu := sip_infra.CodecPCMU
+		codec = &pcmu
 	}
 
 	s := &Streamer{
-		logger:       cfg.Logger,
-		config:       cfg.Config,
-		session:      cfg.Session,
+		logger:       logger,
+		config:       config,
+		session:      session,
 		rtpHandler:   rtpHandler,
-		assistant:    cfg.Assistant,
-		conversation: cfg.Conversation,
+		assistant:    assistant,
+		conversation: conversation,
 		codec:        codec,
 		ctx:          streamerCtx,
 		cancel:       cancel,
@@ -148,8 +97,8 @@ func NewInboundStreamer(ctx context.Context, cfg *InboundStreamerConfig) (intern
 	go s.forwardIncomingAudio()
 
 	localIP, localPort := rtpHandler.LocalAddr()
-	cfg.Logger.Info("Inbound SIP streamer created",
-		"call_id", cfg.Session.GetCallID(),
+	logger.Info("Inbound SIP streamer created",
+		"call_id", session.GetCallID(),
 		"codec", codec.Name,
 		"rtp_port", localPort,
 		"local_ip", localIP)
@@ -159,42 +108,47 @@ func NewInboundStreamer(ctx context.Context, cfg *InboundStreamerConfig) (intern
 
 // NewStreamer creates a new native SIP streamer for outbound calls
 // Uses sipgo for SIP signaling and RTP for audio transport - no WebSocket needed
-func NewStreamer(ctx context.Context, cfg *StreamerConfig) (internal_type.TelephonyStreamer, error) {
-	if err := cfg.Validate(); err != nil {
-		return nil, NewSIPError("NewStreamer", "", "invalid configuration", err)
-	}
+func NewOutboundStreamer(ctx context.Context,
+	config *sip_infra.Config,
+	logger commons.Logger,
+	tenantID string,
+	assistant *internal_assistant_entity.Assistant,
+	conversation *internal_conversation_entity.AssistantConversation,
+) (internal_type.TelephonyStreamer, error) {
 	streamerCtx, cancel := context.WithCancel(ctx)
+
+	pcmu := sip_infra.CodecPCMU
 	s := &Streamer{
-		logger:       cfg.Logger,
-		config:       cfg.Config,
-		assistant:    cfg.Assistant,
-		conversation: cfg.Conversation,
-		codec:        &CodecPCMU,
+		logger:       logger,
+		config:       config,
+		assistant:    assistant,
+		conversation: conversation,
+		codec:        &pcmu,
 		ctx:          streamerCtx,
 		cancel:       cancel,
 	}
 
 	// Initialize SIP server for outbound calls
 	// Creates ListenConfig from tenant config for local binding
-	listenConfig := &ListenConfig{
-		Address:   cfg.Config.Server,
-		Port:      cfg.Config.Port,
-		Transport: cfg.Config.Transport,
+	listenConfig := &sip_infra.ListenConfig{
+		Address:   config.Server,
+		Port:      config.Port,
+		Transport: config.Transport,
 	}
 
 	// Config resolver returns the tenant config for all calls on this server
-	tenantConfig := cfg.Config
-	configResolver := func(inviteCtx *InviteContext) (*InviteResult, error) {
-		return &InviteResult{
+	tenantConfig := config
+	configResolver := func(inviteCtx *sip_infra.InviteContext) (*sip_infra.InviteResult, error) {
+		return &sip_infra.InviteResult{
 			Config:      tenantConfig,
 			ShouldAllow: true,
 		}, nil
 	}
 
-	server, err := NewServer(streamerCtx, &ServerConfig{
+	server, err := sip_infra.NewServer(streamerCtx, &sip_infra.ServerConfig{
 		ListenConfig:   listenConfig,
 		ConfigResolver: configResolver,
-		Logger:         cfg.Logger,
+		Logger:         logger,
 	})
 	if err != nil {
 		cancel()
@@ -212,23 +166,17 @@ func NewStreamer(ctx context.Context, cfg *StreamerConfig) (internal_type.Teleph
 		cancel()
 		return nil, err
 	}
-
-	cfg.Logger.Info("Outbound SIP streamer created",
-		"tenant_id", cfg.TenantID,
-		"assistant_id", cfg.Assistant.Id,
-		"conversation_id", cfg.Conversation.Id)
-
 	return s, nil
 }
 
-func (s *Streamer) handleInvite(session *Session, fromURI, toURI string) error {
+func (s *Streamer) handleInvite(session *sip_infra.Session, fromURI, toURI string) error {
 	s.mu.Lock()
 	s.session = session
 	codec := s.codec
 	s.mu.Unlock()
 
 	// Initialize RTP handler for audio
-	rtpHandler, err := NewRTPHandler(s.ctx, &RTPConfig{
+	rtpHandler, err := sip_infra.NewRTPHandler(s.ctx, &sip_infra.RTPConfig{
 		LocalIP:     s.config.Server,
 		LocalPort:   s.config.RTPPortRangeStart,
 		PayloadType: codec.PayloadType,
@@ -236,7 +184,7 @@ func (s *Streamer) handleInvite(session *Session, fromURI, toURI string) error {
 		Logger:      s.logger,
 	})
 	if err != nil {
-		return NewSIPError("handleInvite", session.GetCallID(), "failed to create RTP handler", err)
+		return sip_infra.NewSIPError("handleInvite", session.GetCallID(), "failed to create RTP handler", err)
 	}
 
 	s.mu.Lock()
@@ -264,12 +212,12 @@ func (s *Streamer) handleInvite(session *Session, fromURI, toURI string) error {
 	return nil
 }
 
-func (s *Streamer) handleBye(session *Session) error {
+func (s *Streamer) handleBye(session *sip_infra.Session) error {
 	s.logger.Info("BYE received, closing streamer", "call_id", session.GetCallID())
 	return s.Close()
 }
 
-func (s *Streamer) handleError(session *Session, err error) {
+func (s *Streamer) handleError(session *sip_infra.Session, err error) {
 	s.logger.Error("SIP error occurred",
 		"call_id", session.GetCallID(),
 		"error", err)
@@ -402,7 +350,7 @@ func (s *Streamer) createConnectionRequest() (*protos.AssistantTalkInput, error)
 
 func (s *Streamer) Send(response *protos.AssistantTalkOutput) error {
 	if s.closed.Load() {
-		return ErrSessionClosed
+		return sip_infra.ErrSessionClosed
 	}
 
 	switch data := response.GetData().(type) {
@@ -432,7 +380,7 @@ func (s *Streamer) sendAudio(audioData []byte) error {
 	s.mu.RUnlock()
 
 	if rtpHandler == nil {
-		return ErrRTPNotInitialized
+		return sip_infra.ErrRTPNotInitialized
 	}
 
 	select {
@@ -527,7 +475,7 @@ func (s *Streamer) IsClosed() bool {
 }
 
 // GetSession returns the underlying SIP session
-func (s *Streamer) GetSession() *Session {
+func (s *Streamer) GetSession() *sip_infra.Session {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.session

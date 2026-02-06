@@ -20,7 +20,7 @@ import (
 	internal_services "github.com/rapidaai/api/assistant-api/internal/services"
 	internal_assistant_service "github.com/rapidaai/api/assistant-api/internal/services/assistant"
 	internal_telephony "github.com/rapidaai/api/assistant-api/internal/telephony"
-	internal_sip "github.com/rapidaai/api/assistant-api/sip/internal"
+	sip_infra "github.com/rapidaai/api/assistant-api/sip/infra"
 	web_client "github.com/rapidaai/pkg/clients/web"
 	"github.com/rapidaai/pkg/commons"
 	"github.com/rapidaai/pkg/connectors"
@@ -38,8 +38,8 @@ type SIPManager struct {
 	mu       sync.RWMutex
 	cfg      *config.AssistantConfig
 	logger   commons.Logger
-	server   *internal_sip.Server
-	sessions map[string]*internal_sip.SIPSession
+	server   *sip_infra.Server
+	sessions map[string]*sip_infra.SIPSession
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -73,21 +73,21 @@ func NewSIPManager(config *config.AssistantConfig, logger commons.Logger,
 		storage:                      storage_files.NewStorage(config.AssetStoreConfig, logger),
 		vaultClient:                  web_client.NewVaultClientGRPC(&config.AppConfig, logger, redis),
 		authClient:                   web_client.NewAuthenticator(&config.AppConfig, logger, redis),
-		sessions:                     make(map[string]*internal_sip.SIPSession),
+		sessions:                     make(map[string]*sip_infra.SIPSession),
 	}
 }
 
 // NewSIPConfigFromAppConfig creates internal SIP config from app config parameters
 // Used for tenant-specific config (RTP ports, credentials, etc.)
-func NewSIPConfigFromAppConfig(server string, port int, transport string, rtpStart, rtpEnd int) *internal_sip.Config {
-	transportType := internal_sip.TransportUDP
+func NewSIPConfigFromAppConfig(server string, port int, transport string, rtpStart, rtpEnd int) *sip_infra.Config {
+	transportType := sip_infra.TransportUDP
 	switch transport {
 	case "tcp":
-		transportType = internal_sip.TransportTCP
+		transportType = sip_infra.TransportTCP
 	case "tls":
-		transportType = internal_sip.TransportTLS
+		transportType = sip_infra.TransportTLS
 	}
-	return &internal_sip.Config{
+	return &sip_infra.Config{
 		Server:            server,
 		Port:              port,
 		Transport:         transportType,
@@ -98,15 +98,15 @@ func NewSIPConfigFromAppConfig(server string, port int, transport string, rtpSta
 
 // NewSIPListenConfig creates a ListenConfig for the shared SIP server
 // Multi-tenant: Server listens on this address, tenant config resolved per-call
-func (m *SIPManager) listenConfig() *internal_sip.ListenConfig {
-	transportType := internal_sip.TransportUDP
+func (m *SIPManager) listenConfig() *sip_infra.ListenConfig {
+	transportType := sip_infra.TransportUDP
 	switch m.cfg.SIPConfig.Transport {
 	case "tcp":
-		transportType = internal_sip.TransportTCP
+		transportType = sip_infra.TransportTCP
 	case "tls":
-		transportType = internal_sip.TransportTLS
+		transportType = sip_infra.TransportTLS
 	}
-	return &internal_sip.ListenConfig{
+	return &sip_infra.ListenConfig{
 		Address:   m.cfg.SIPConfig.Server,
 		Port:      m.cfg.SIPConfig.Port,
 		Transport: transportType,
@@ -116,7 +116,7 @@ func (m *SIPManager) listenConfig() *internal_sip.ListenConfig {
 // Start initializes the shared SIP server with multi-tenant config resolution
 func (m *SIPManager) Start(ctx context.Context) error {
 	m.ctx, m.cancel = context.WithCancel(ctx)
-	server, err := internal_sip.NewServer(m.ctx, &internal_sip.ServerConfig{
+	server, err := sip_infra.NewServer(m.ctx, &sip_infra.ServerConfig{
 		ListenConfig:   m.listenConfig(),
 		ConfigResolver: m.resolveConfig,
 		Logger:         m.logger,
@@ -142,14 +142,14 @@ func (m *SIPManager) Start(ctx context.Context) error {
 // Multi-tenant: Extracts assistant/tenant from To URI and validates API key
 // URI format: sip:{assistantID}.rapid-sip@in.rapida.ai
 // Auth: X-API-Key header required for authentication
-func (m *SIPManager) resolveConfig(inviteCtx *internal_sip.InviteContext) (*internal_sip.InviteResult, error) {
+func (m *SIPManager) resolveConfig(inviteCtx *sip_infra.InviteContext) (*sip_infra.InviteResult, error) {
 	// 1. Validate API key is present
 	if inviteCtx.APIKey == "" {
 		m.logger.Warn("SIP call rejected: missing API key",
 			"call_id", inviteCtx.CallID,
 			"from", inviteCtx.FromURI,
 			"to", inviteCtx.ToURI)
-		return &internal_sip.InviteResult{
+		return &sip_infra.InviteResult{
 			ShouldAllow: false,
 			RejectCode:  401, // Unauthorized
 			RejectMsg:   "Missing X-API-Key header",
@@ -162,7 +162,7 @@ func (m *SIPManager) resolveConfig(inviteCtx *internal_sip.InviteContext) (*inte
 		m.logger.Warn("SIP call rejected: missing assistant ID in URI",
 			"call_id", inviteCtx.CallID,
 			"to_uri", inviteCtx.ToURI)
-		return &internal_sip.InviteResult{
+		return &sip_infra.InviteResult{
 			ShouldAllow: false,
 			RejectCode:  404, // Not Found
 			RejectMsg:   "Invalid SIP URI format, expected: sip:{assistantID}.rapid-sip@in.rapida.ai",
@@ -176,7 +176,7 @@ func (m *SIPManager) resolveConfig(inviteCtx *internal_sip.InviteContext) (*inte
 			"call_id", inviteCtx.CallID,
 			"assistant_id", assistantIDStr,
 			"error", err)
-		return &internal_sip.InviteResult{
+		return &sip_infra.InviteResult{
 			ShouldAllow: false,
 			RejectCode:  404, // Not Found
 			RejectMsg:   "Invalid assistant ID format",
@@ -190,7 +190,7 @@ func (m *SIPManager) resolveConfig(inviteCtx *internal_sip.InviteContext) (*inte
 			"call_id", inviteCtx.CallID,
 			"assistant_id", assistantID,
 			"error", err)
-		return &internal_sip.InviteResult{
+		return &sip_infra.InviteResult{
 			ShouldAllow: false,
 			RejectCode:  403, // Forbidden
 			RejectMsg:   "Invalid API key",
@@ -205,7 +205,7 @@ func (m *SIPManager) resolveConfig(inviteCtx *internal_sip.InviteContext) (*inte
 			"call_id", inviteCtx.CallID,
 			"assistant_id", assistantID,
 			"error", err)
-		return &internal_sip.InviteResult{
+		return &sip_infra.InviteResult{
 			ShouldAllow: false,
 			RejectCode:  404, // Not Found
 			RejectMsg:   "Assistant not found",
@@ -217,7 +217,7 @@ func (m *SIPManager) resolveConfig(inviteCtx *internal_sip.InviteContext) (*inte
 		m.logger.Warn("SIP call rejected: API key does not have access to assistant",
 			"call_id", inviteCtx.CallID,
 			"assistant_id", assistantID)
-		return &internal_sip.InviteResult{
+		return &sip_infra.InviteResult{
 			ShouldAllow: false,
 			RejectCode:  403, // Forbidden
 			RejectMsg:   "API key does not have access to this assistant",
@@ -225,13 +225,13 @@ func (m *SIPManager) resolveConfig(inviteCtx *internal_sip.InviteContext) (*inte
 	}
 
 	// 7. Extract SIP config from assistant's deployment settings
-	var sipConfig *internal_sip.Config
+	var sipConfig *sip_infra.Config
 	if assistant.AssistantPhoneDeployment != nil {
 		opts := assistant.AssistantPhoneDeployment.GetOptions()
 		sipConfig, _ = GetSIPConfigFromDeployment(opts)
 	}
 	if sipConfig == nil {
-		sipConfig = internal_sip.DefaultConfig()
+		sipConfig = sip_infra.DefaultConfig()
 	}
 
 	tenantID := fmt.Sprintf("%d", *auth.GetCurrentOrganizationId())
@@ -241,7 +241,7 @@ func (m *SIPManager) resolveConfig(inviteCtx *internal_sip.InviteContext) (*inte
 		"tenant_id", tenantID,
 		"from", inviteCtx.FromURI)
 
-	return &internal_sip.InviteResult{
+	return &sip_infra.InviteResult{
 		Config:      sipConfig,
 		ShouldAllow: true,
 	}, nil
@@ -275,7 +275,7 @@ func (m *SIPManager) hasAccessToAssistant(auth types.SimplePrinciple, assistant 
 }
 
 // handleInvite processes incoming SIP INVITE requests
-func (m *SIPManager) handleInvite(session *internal_sip.Session, fromURI, toURI string) error {
+func (m *SIPManager) handleInvite(session *sip_infra.Session, fromURI, toURI string) error {
 	m.logger.Info("Incoming SIP INVITE",
 		"from", fromURI,
 		"to", toURI,
@@ -296,7 +296,7 @@ func (m *SIPManager) handleInvite(session *internal_sip.Session, fromURI, toURI 
 
 // resolveCallContext resolves auth, assistant, and SIP config for inbound calls
 // Multi-tenant: extracts SIP config from assistant's deployment settings
-func (m *SIPManager) resolveCallContext(ctx context.Context, fromURI string) (types.SimplePrinciple, *internal_assistant_entity.Assistant, *internal_conversation_entity.AssistantConversation, string, *internal_sip.Config, error) {
+func (m *SIPManager) resolveCallContext(ctx context.Context, fromURI string) (types.SimplePrinciple, *internal_assistant_entity.Assistant, *internal_conversation_entity.AssistantConversation, string, *sip_infra.Config, error) {
 	// Hardcoded auth - same as AudioSocket (will be resolved from SIP headers in production)
 	auth := &types.ServiceScope{
 		ProjectId:      utils.Ptr(uint64(2257831930382778368)),
@@ -313,14 +313,14 @@ func (m *SIPManager) resolveCallContext(ctx context.Context, fromURI string) (ty
 	}
 
 	// Extract SIP config from assistant's deployment settings (multi-tenant)
-	var sipConfig *internal_sip.Config
+	var sipConfig *sip_infra.Config
 	if assistant.AssistantPhoneDeployment != nil {
 		opts := assistant.AssistantPhoneDeployment.GetOptions()
 		sipConfig, _ = GetSIPConfigFromDeployment(opts)
 	}
 	if sipConfig == nil {
 		// Use defaults if no deployment config
-		sipConfig = internal_sip.DefaultConfig()
+		sipConfig = sip_infra.DefaultConfig()
 	}
 
 	callerID := fromURI
@@ -346,7 +346,7 @@ func (m *SIPManager) resolveCallContext(ctx context.Context, fromURI string) (ty
 
 // startCall starts the SIP conversation with the assistant
 // Multi-tenant: receives config specific to this call/tenant
-func (m *SIPManager) startCall(ctx context.Context, session *internal_sip.Session, auth types.SimplePrinciple, assistant *internal_assistant_entity.Assistant, conversation *internal_conversation_entity.AssistantConversation, callerID string, sipConfig *internal_sip.Config) {
+func (m *SIPManager) startCall(ctx context.Context, session *sip_infra.Session, auth types.SimplePrinciple, assistant *internal_assistant_entity.Assistant, conversation *internal_conversation_entity.AssistantConversation, callerID string, sipConfig *sip_infra.Config) {
 	callCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -355,7 +355,7 @@ func (m *SIPManager) startCall(ctx context.Context, session *internal_sip.Sessio
 
 	// Store session with tenant-specific config
 	m.mu.Lock()
-	m.sessions[callID] = &internal_sip.SIPSession{
+	m.sessions[callID] = &sip_infra.SIPSession{
 		CallID:      callID,
 		AssistantID: assistant.Id,
 		TenantID:    tenantID,
@@ -373,7 +373,7 @@ func (m *SIPManager) startCall(ctx context.Context, session *internal_sip.Sessio
 
 	// Create SIP streamer for this inbound call (uses existing session, no new server)
 	streamer, err := internal_telephony.Telephony(internal_telephony.SIP).SipStreamer()
-	// 	allCtx, &internal_sip_telephony.InboundStreamerConfig{
+	// 	allCtx, &sip_telephony.InboundStreamerConfig{
 	// 	Config:       sipConfig,
 	// 	Logger:       m.logger,
 	// 	Session:      session,
@@ -419,7 +419,7 @@ func (m *SIPManager) startCall(ctx context.Context, session *internal_sip.Sessio
 }
 
 // handleBye processes SIP BYE requests
-func (m *SIPManager) handleBye(session *internal_sip.Session) error {
+func (m *SIPManager) handleBye(session *sip_infra.Session) error {
 	callID := session.GetInfo().CallID
 	m.logger.Info("SIP BYE received", "call_id", callID)
 
@@ -437,7 +437,7 @@ func (m *SIPManager) handleBye(session *internal_sip.Session) error {
 }
 
 // handleCancel processes SIP CANCEL requests
-func (m *SIPManager) handleCancel(session *internal_sip.Session) error {
+func (m *SIPManager) handleCancel(session *sip_infra.Session) error {
 	callID := session.GetInfo().CallID
 	m.logger.Info("SIP CANCEL received", "call_id", callID)
 
@@ -461,7 +461,7 @@ func (m *SIPManager) HandleIncomingCall(
 	auth types.SimplePrinciple,
 	assistantID uint64,
 	callerID string,
-	sipConfig *internal_sip.Config,
+	sipConfig *sip_infra.Config,
 ) error {
 	m.logger.Info("Incoming SIP call",
 		"assistant", assistantID,
@@ -490,7 +490,7 @@ func (m *SIPManager) HandleIncomingCall(
 	// Create SIP streamer
 	sipCtx, cancel := context.WithCancel(ctx)
 	streamer, err := internal_telephony.Telephony(internal_telephony.SIP).SipStreamer()
-	// streamer, err := internal_sip_telephony.NewStreamer(sipCtx, &internal_sip_telephony.StreamerConfig{
+	// streamer, err := sip_telephony.NewStreamer(sipCtx, &sip_telephony.StreamerConfig{
 	// 	Config:       sipConfig,
 	// 	Logger:       m.logger,
 	// 	TenantID:     fmt.Sprintf("%d", *auth.GetCurrentOrganizationId()),
@@ -532,7 +532,7 @@ func (m *SIPManager) HandleIncomingCall(
 	tenantID := fmt.Sprintf("%d", *auth.GetCurrentOrganizationId())
 	callID := fmt.Sprintf("sip-%s-%d-%d", tenantID, assistantID, conversation.Id)
 	m.mu.Lock()
-	m.sessions[callID] = &internal_sip.SIPSession{
+	m.sessions[callID] = &sip_infra.SIPSession{
 		CallID:      callID,
 		AssistantID: assistantID,
 		TenantID:    tenantID,
@@ -623,9 +623,9 @@ func (m *SIPManager) Close(ctx context.Context) error {
 }
 
 // GetSIPConfigFromDeployment extracts SIP configuration from assistant deployment
-func GetSIPConfigFromDeployment(opts map[string]interface{}) (*internal_sip.Config, error) {
-	config := &internal_sip.Config{
-		Transport:         internal_sip.TransportUDP,
+func GetSIPConfigFromDeployment(opts map[string]interface{}) (*sip_infra.Config, error) {
+	config := &sip_infra.Config{
+		Transport:         sip_infra.TransportUDP,
 		RTPPortRangeStart: 10000,
 		RTPPortRangeEnd:   20000,
 	}
@@ -637,7 +637,7 @@ func GetSIPConfigFromDeployment(opts map[string]interface{}) (*internal_sip.Conf
 		config.Port = int(port)
 	}
 	if transport, ok := opts["sip_transport"].(string); ok {
-		config.Transport = internal_sip.Transport(transport)
+		config.Transport = sip_infra.Transport(transport)
 	}
 	if username, ok := opts["sip_username"].(string); ok {
 		config.Username = username
@@ -662,7 +662,7 @@ func GetSIPConfigFromDeployment(opts map[string]interface{}) (*internal_sip.Conf
 // // This is similar to telephony providers like Twilio that use webhooks for call events
 // // Multi-tenant: Config is passed per-call, resolved from assistant's deployment settings
 // // Note: This doesn't start a SIP server - it handles webhook-based calls where the provider manages SIP
-// func (cApi *ConversationApi) SIPCallReceiver(ctx context.Context, auth types.SimplePrinciple, assistantID uint64, callerID string, sipConfig *internal_sip.Config) error {
+// func (cApi *ConversationApi) SIPCallReceiver(ctx context.Context, auth types.SimplePrinciple, assistantID uint64, callerID string, sipConfig *sip_infra.Config) error {
 // 	manager := NewSIPManager(cApi)
 // 	manager.ctx, manager.cancel = context.WithCancel(ctx)
 // 	return manager.HandleIncomingCall(ctx, auth, assistantID, callerID, sipConfig)
