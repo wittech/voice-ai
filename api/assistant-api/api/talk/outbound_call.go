@@ -10,8 +10,8 @@ import (
 	"fmt"
 
 	internal_adapter "github.com/rapidaai/api/assistant-api/internal/adapters"
+	telephony "github.com/rapidaai/api/assistant-api/internal/channel/telephony"
 	internal_services "github.com/rapidaai/api/assistant-api/internal/services"
-	telephony "github.com/rapidaai/api/assistant-api/internal/telephony"
 	"github.com/rapidaai/pkg/types"
 	type_enums "github.com/rapidaai/pkg/types/enums"
 	"github.com/rapidaai/pkg/utils"

@@ -4,7 +4,7 @@
 // Licensed under GPL-2.0 with Rapida Additional Terms.
 // See LICENSE.md or contact sales@rapida.ai for commercial usage.
 
-package internal_telephony
+package channel_telephony
 
 import (
 	"bufio"
@@ -14,15 +14,15 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/rapidaai/api/assistant-api/config"
+	internal_asterisk_telephony "github.com/rapidaai/api/assistant-api/internal/channel/telephony/internal/asterisk"
+	internal_asterisk_audiosocket "github.com/rapidaai/api/assistant-api/internal/channel/telephony/internal/asterisk/audiosocket"
+	internal_asterisk_websocket "github.com/rapidaai/api/assistant-api/internal/channel/telephony/internal/asterisk/websocket"
+	internal_exotel_telephony "github.com/rapidaai/api/assistant-api/internal/channel/telephony/internal/exotel"
+	internal_sip_telephony "github.com/rapidaai/api/assistant-api/internal/channel/telephony/internal/sip"
+	internal_twilio_telephony "github.com/rapidaai/api/assistant-api/internal/channel/telephony/internal/twilio"
+	internal_vonage_telephony "github.com/rapidaai/api/assistant-api/internal/channel/telephony/internal/vonage"
 	internal_assistant_entity "github.com/rapidaai/api/assistant-api/internal/entity/assistants"
 	internal_conversation_entity "github.com/rapidaai/api/assistant-api/internal/entity/conversations"
-	internal_asterisk_telephony "github.com/rapidaai/api/assistant-api/internal/telephony/internal/asterisk"
-	internal_asterisk_audiosocket "github.com/rapidaai/api/assistant-api/internal/telephony/internal/asterisk/audiosocket"
-	internal_asterisk_websocket "github.com/rapidaai/api/assistant-api/internal/telephony/internal/asterisk/websocket"
-	internal_exotel_telephony "github.com/rapidaai/api/assistant-api/internal/telephony/internal/exotel"
-	internal_sip_telephony "github.com/rapidaai/api/assistant-api/internal/telephony/internal/sip"
-	internal_twilio_telephony "github.com/rapidaai/api/assistant-api/internal/telephony/internal/twilio"
-	internal_vonage_telephony "github.com/rapidaai/api/assistant-api/internal/telephony/internal/vonage"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 	"github.com/rapidaai/pkg/commons"
 	"github.com/rapidaai/protos"

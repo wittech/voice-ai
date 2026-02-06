@@ -10,7 +10,7 @@ import (
 
 	"github.com/rapidaai/api/assistant-api/config"
 	internal_adapter "github.com/rapidaai/api/assistant-api/internal/adapters"
-	internal_grpc "github.com/rapidaai/api/assistant-api/internal/grpc"
+	internal_grpc "github.com/rapidaai/api/assistant-api/internal/channel/grpc"
 	internal_services "github.com/rapidaai/api/assistant-api/internal/services"
 	internal_assistant_service "github.com/rapidaai/api/assistant-api/internal/services/assistant"
 	web_client "github.com/rapidaai/pkg/clients/web"

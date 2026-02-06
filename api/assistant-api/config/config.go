@@ -73,7 +73,6 @@ func GetApplicationConfig(v *viper.Viper) (*AssistantConfig, error) {
 		log.Printf("%+v\n", err)
 		return nil, err
 	}
-
 	// valdating the app config
 	validate := validator.New()
 	err = validate.Struct(&config)

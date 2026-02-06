@@ -17,9 +17,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"github.com/rapidaai/api/assistant-api/config"
+	internal_exotel "github.com/rapidaai/api/assistant-api/internal/channel/telephony/internal/exotel/internal"
 	internal_assistant_entity "github.com/rapidaai/api/assistant-api/internal/entity/assistants"
 	internal_conversation_entity "github.com/rapidaai/api/assistant-api/internal/entity/conversations"
-	internal_exotel "github.com/rapidaai/api/assistant-api/internal/telephony/internal/exotel/internal"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 
 	"github.com/rapidaai/pkg/commons"

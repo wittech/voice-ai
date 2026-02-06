@@ -16,8 +16,8 @@ import (
 	internal_conversation_entity "github.com/rapidaai/api/assistant-api/internal/entity/conversations"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 
-	internal_telephony_base "github.com/rapidaai/api/assistant-api/internal/telephony/internal/base"
-	internal_exotel "github.com/rapidaai/api/assistant-api/internal/telephony/internal/exotel/internal"
+	internal_telephony_base "github.com/rapidaai/api/assistant-api/internal/channel/telephony/internal/base"
+	internal_exotel "github.com/rapidaai/api/assistant-api/internal/channel/telephony/internal/exotel/internal"
 	"github.com/rapidaai/pkg/commons"
 	"github.com/rapidaai/protos"
 )

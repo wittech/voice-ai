@@ -13,10 +13,10 @@ import (
 	"sync"
 
 	"github.com/gorilla/websocket"
+	internal_telephony_base "github.com/rapidaai/api/assistant-api/internal/channel/telephony/internal/base"
+	internal_twilio "github.com/rapidaai/api/assistant-api/internal/channel/telephony/internal/twilio/internal"
 	internal_assistant_entity "github.com/rapidaai/api/assistant-api/internal/entity/assistants"
 	internal_conversation_entity "github.com/rapidaai/api/assistant-api/internal/entity/conversations"
-	internal_telephony_base "github.com/rapidaai/api/assistant-api/internal/telephony/internal/base"
-	internal_twilio "github.com/rapidaai/api/assistant-api/internal/telephony/internal/twilio/internal"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 	"github.com/rapidaai/pkg/commons"
 	"github.com/rapidaai/protos"

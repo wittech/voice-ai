@@ -4,7 +4,7 @@
 // Licensed under GPL-2.0 with Rapida Additional Terms.
 // See LICENSE.md or contact sales@rapida.ai for commercial usage.
 
-package internal_webrtc
+package channel_webrtc
 
 import (
 	"context"
@@ -18,8 +18,8 @@ import (
 	"github.com/pion/interceptor/pkg/intervalpli"
 	pionwebrtc "github.com/pion/webrtc/v4"
 	internal_audio "github.com/rapidaai/api/assistant-api/internal/audio"
+	webrtc_internal "github.com/rapidaai/api/assistant-api/internal/channel/webrtc/internal"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
-	webrtc_internal "github.com/rapidaai/api/assistant-api/internal/webrtc/internal"
 	"github.com/rapidaai/pkg/commons"
 	"github.com/rapidaai/protos"
 	"google.golang.org/grpc"

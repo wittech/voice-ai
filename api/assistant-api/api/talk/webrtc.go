@@ -10,7 +10,7 @@ import (
 	"errors"
 
 	internal_adapter "github.com/rapidaai/api/assistant-api/internal/adapters"
-	internal_webrtc "github.com/rapidaai/api/assistant-api/internal/webrtc"
+	internal_webrtc "github.com/rapidaai/api/assistant-api/internal/channel/webrtc"
 	"github.com/rapidaai/pkg/types"
 	"github.com/rapidaai/pkg/utils"
 	assistant_api "github.com/rapidaai/protos"

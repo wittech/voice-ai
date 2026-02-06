@@ -14,10 +14,10 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	internal_adapter "github.com/rapidaai/api/assistant-api/internal/adapters"
+	telephony "github.com/rapidaai/api/assistant-api/internal/channel/telephony"
 	internal_assistant_entity "github.com/rapidaai/api/assistant-api/internal/entity/assistants"
 	internal_conversation_entity "github.com/rapidaai/api/assistant-api/internal/entity/conversations"
 	internal_services "github.com/rapidaai/api/assistant-api/internal/services"
-	telephony "github.com/rapidaai/api/assistant-api/internal/telephony"
 	"github.com/rapidaai/pkg/types"
 	type_enums "github.com/rapidaai/pkg/types/enums"
 	"github.com/rapidaai/pkg/utils"
