@@ -23,9 +23,10 @@ import (
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/improbable-eng/grpc-web/go/grpcweb"
-	assistant_talk_api "github.com/rapidaai/api/assistant-api/api/talk"
 	"github.com/rapidaai/api/assistant-api/config"
 	router "github.com/rapidaai/api/assistant-api/router"
+	assistant_sip "github.com/rapidaai/api/assistant-api/sip"
+	assistant_socket "github.com/rapidaai/api/assistant-api/socket"
 	"github.com/rapidaai/pkg/authenticators"
 	web_client "github.com/rapidaai/pkg/clients/web"
 	"github.com/rapidaai/pkg/commons"
@@ -271,32 +272,24 @@ func (app *AppRunner) Init(ctx context.Context) error {
 	app.Closeable = append(app.Closeable, app.Postgres.Disconnect)
 	app.Closeable = append(app.Closeable, app.Redis.Disconnect)
 
-	if app.Cfg.AudioSocketConfig.Enabled {
-		cApi := assistant_talk_api.NewConversationApi(app.Cfg, app.Logger, app.Postgres, app.Redis, app.Opensearch, app.Opensearch)
-		audioManager := assistant_talk_api.NewAudioSocketManager(cApi, &app.Cfg.AudioSocketConfig)
+	if app.Cfg.AudioSocketConfig != nil {
+		audioManager := assistant_socket.NewAudioSocketManager(app.Cfg, app.Logger, app.Postgres, app.Redis, app.Opensearch, app.Opensearch)
 		if err := audioManager.Start(ctx); err != nil {
 			return err
 		}
 		app.Closeable = append(app.Closeable, audioManager.Close)
 	}
 
-	// Start SIP server for inbound calls
-	if app.Cfg.SIPConfig.Enabled {
-		cApi := assistant_talk_api.NewConversationApi(app.Cfg, app.Logger, app.Postgres, app.Redis, app.Opensearch, app.Opensearch)
-		sipConfig := assistant_talk_api.NewSIPConfigFromAppConfig(
-			app.Cfg.SIPConfig.Server,
-			app.Cfg.SIPConfig.Port,
-			app.Cfg.SIPConfig.Transport,
-			app.Cfg.SIPConfig.RTPPortRangeStart,
-			app.Cfg.SIPConfig.RTPPortRangeEnd,
-		)
-		sipManager := assistant_talk_api.NewSIPManager(cApi, sipConfig)
+	// Start SIP server for inbound calls (multi-tenant)
+	// Server listens on shared address, tenant config resolved per-call from assistant deployment
+	if app.Cfg.SIPConfig != nil {
+		sipManager := assistant_sip.NewSIPManager(app.Cfg, app.Logger, app.Postgres, app.Redis, app.Opensearch, app.Opensearch)
 		if err := sipManager.Start(ctx); err != nil {
 			app.Logger.Errorf("Failed to start SIP server: %v", err)
 			return err
 		}
 		app.Closeable = append(app.Closeable, sipManager.Close)
-		app.Logger.Info("SIP server started", "port", app.Cfg.SIPConfig.Port)
+		app.Logger.Info("SIP server started (multi-tenant)", "address", app.Cfg.SIPConfig.Server, "port", app.Cfg.SIPConfig.Port)
 	}
 	return nil
 }

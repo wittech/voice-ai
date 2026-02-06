@@ -13,10 +13,8 @@ import (
 	"net/url"
 
 	"github.com/gin-gonic/gin"
-	"github.com/gorilla/websocket"
 	"github.com/rapidaai/api/assistant-api/config"
-	internal_assistant_entity "github.com/rapidaai/api/assistant-api/internal/entity/assistants"
-	internal_conversation_entity "github.com/rapidaai/api/assistant-api/internal/entity/conversations"
+	internal_asterisk "github.com/rapidaai/api/assistant-api/internal/telephony/internal/asterisk/internal"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 	"github.com/rapidaai/pkg/commons"
 	"github.com/rapidaai/pkg/types"
@@ -36,17 +34,6 @@ func NewAsteriskTelephony(config *config.AssistantConfig, logger commons.Logger)
 		appCfg: config,
 		logger: logger,
 	}, nil
-}
-
-// Streamer creates a new WebSocket streamer for Asterisk chan_websocket
-func (apt *asteriskTelephony) Streamer(
-	c *gin.Context,
-	connection *websocket.Conn,
-	assistant *internal_assistant_entity.Assistant,
-	conversation *internal_conversation_entity.AssistantConversation,
-	vlt *protos.VaultCredential,
-) internal_type.TelephonyStreamer {
-	return NewAsteriskWebsocketStreamer(apt.logger, connection, assistant, conversation, vlt)
 }
 
 // StatusCallback handles status callback events from Asterisk
@@ -225,6 +212,12 @@ func (apt *asteriskTelephony) OutboundCall(
 		params.Add("variables", fmt.Sprintf("RAPIDA_ORG_ID=%d", *auth.GetCurrentOrganizationId()))
 	}
 
+	// Build and add WebSocket URL for Asterisk dialplan to use with AudioSocket
+	// This allows the dialplan to connect directly: AudioSocket(${RAPIDA_WEBSOCKET_URL})
+	wsPath := internal_type.GetAnswerPath("asterisk", auth, assistantId, assistantConversationId, toPhone)
+	wsURL := fmt.Sprintf("wss://%s/%s", apt.appCfg.PublicAssistantHost, wsPath)
+	params.Add("variables", fmt.Sprintf("RAPIDA_WEBSOCKET_URL=%s", wsURL))
+
 	// Create HTTP request
 	reqURL := fmt.Sprintf("%s?%s", ariURL, params.Encode())
 	req, err := http.NewRequest("POST", reqURL, nil)
@@ -275,7 +268,8 @@ func (apt *asteriskTelephony) OutboundCall(
 }
 
 // InboundCall handles inbound call setup for Asterisk
-// This returns the WebSocket connection URL for Asterisk to connect to
+// This returns the WebSocket connection URL as plain text for Asterisk to connect to
+// Asterisk AudioSocket or chan_websocket expects a plain WebSocket URL
 func (apt *asteriskTelephony) InboundCall(
 	c *gin.Context,
 	auth types.SimplePrinciple,
@@ -283,17 +277,14 @@ func (apt *asteriskTelephony) InboundCall(
 	clientNumber string,
 	assistantConversationId uint64,
 ) error {
-	// Return WebSocket connection URL for Asterisk
+	// Build WebSocket connection URL for Asterisk
 	wsPath := internal_type.GetAnswerPath("asterisk", auth, assistantId, assistantConversationId, clientNumber)
+	wsURL := fmt.Sprintf("wss://%s/%s", apt.appCfg.PublicAssistantHost, wsPath)
 
-	response := map[string]interface{}{
-		"websocket_url": fmt.Sprintf("wss://%s/%s", apt.appCfg.PublicAssistantHost, wsPath),
-		"protocol":      "media",
-		"assistant_id":  assistantId,
-		"client_number": clientNumber,
-	}
-
-	c.JSON(http.StatusOK, response)
+	// Return plain text WebSocket URL for Asterisk dialplan to use
+	// This can be used directly in Asterisk dialplan with AudioSocket or chan_websocket:
+	// same = n,AudioSocket(${CURL(https://api.rapida.ai/v1/talk/asterisk/call/${ASSISTANT_ID})})
+	c.String(http.StatusOK, wsURL)
 	return nil
 }
 
@@ -311,7 +302,7 @@ func (apt *asteriskTelephony) InboundCall(
 //   - ari_app: rapida
 //   - sip_endpoint: PJSIP
 //   - sip_context: from-internal
-func (apt *asteriskTelephony) getARIConfig(vaultCredential *protos.VaultCredential) (*ARIConfig, error) {
+func (apt *asteriskTelephony) getARIConfig(vaultCredential *protos.VaultCredential) (*internal_asterisk.ARIConfig, error) {
 	if vaultCredential == nil {
 		return nil, fmt.Errorf("vault credential is nil")
 	}
@@ -319,7 +310,7 @@ func (apt *asteriskTelephony) getARIConfig(vaultCredential *protos.VaultCredenti
 	credMap := vaultCredential.GetValue().AsMap()
 
 	// Start with defaults for optional fields
-	config := &ARIConfig{
+	config := &internal_asterisk.ARIConfig{
 		ARIPort:     8088,            // default ARI port
 		ARIScheme:   "http",          // default scheme
 		ARIApp:      "rapida",        // default app name
@@ -394,16 +385,4 @@ func parsePort(s string) (int, error) {
 		port = port*10 + int(c-'0')
 	}
 	return port, nil
-}
-
-// ARIConfig holds ARI configuration extracted from vault
-type ARIConfig struct {
-	ARIHost     string // Asterisk ARI host
-	ARIPort     int    // Asterisk ARI port
-	ARIScheme   string // http or https
-	ARIApp      string // Stasis application name
-	ARIUser     string // ARI username
-	ARIPassword string // ARI password
-	SIPEndpoint string // SIP endpoint type (PJSIP, SIP)
-	SIPContext  string // Dialplan context
 }

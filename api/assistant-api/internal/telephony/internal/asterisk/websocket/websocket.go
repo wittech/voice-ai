@@ -4,7 +4,7 @@
 // Licensed under GPL-2.0 with Rapida Additional Terms.
 // See LICENSE.md or contact sales@rapida.ai for commercial usage.
 
-package internal_asterisk_telephony
+package internal_asterisk_websocket
 
 import (
 	"context"
@@ -28,7 +28,7 @@ type asteriskWebsocketStreamer struct {
 	channelName    string
 	streamer       internal_telephony_base.BaseTelephonyStreamer
 	logger         commons.Logger
-	audioProcessor *internal_asterisk.AudioProcessor
+	audioProcessor *AudioProcessor
 
 	// Output sender state
 	outputSenderStarted bool
@@ -49,7 +49,7 @@ func NewAsteriskWebsocketStreamer(
 	conversation *internal_conversation_entity.AssistantConversation,
 	vlt *protos.VaultCredential,
 ) internal_type.TelephonyStreamer {
-	audioProcessor, err := internal_asterisk.NewAudioProcessor(logger)
+	audioProcessor, err := NewAudioProcessor(logger)
 	if err != nil {
 		logger.Error("Failed to create audio processor", "error", err)
 		return nil
@@ -77,7 +77,7 @@ func (aws *asteriskWebsocketStreamer) sendProcessedInputAudio(audio []byte) {
 }
 
 // sendAudioChunk sends an audio chunk to Asterisk
-func (aws *asteriskWebsocketStreamer) sendAudioChunk(chunk *internal_asterisk.AudioChunk) error {
+func (aws *asteriskWebsocketStreamer) sendAudioChunk(chunk *AudioChunk) error {
 	if aws.streamer.Connection() == nil {
 		return nil
 	}
@@ -351,14 +351,12 @@ func (aws *asteriskWebsocketStreamer) hangupViaARI() error {
 }
 
 // getARIConfig extracts ARI configuration from vault credential
-func (aws *asteriskWebsocketStreamer) getARIConfig(vaultCredential *protos.VaultCredential) (*ARIConfig, error) {
+func (aws *asteriskWebsocketStreamer) getARIConfig(vaultCredential *protos.VaultCredential) (*internal_asterisk.ARIConfig, error) {
 	if vaultCredential == nil {
 		return nil, fmt.Errorf("vault credential is nil")
 	}
-
 	credMap := vaultCredential.GetValue().AsMap()
-
-	config := &ARIConfig{
+	config := &internal_asterisk.ARIConfig{
 		ARIHost:   "localhost",
 		ARIPort:   8088,
 		ARIScheme: "http",

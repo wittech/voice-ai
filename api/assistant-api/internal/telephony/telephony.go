@@ -4,18 +4,27 @@
 // Licensed under GPL-2.0 with Rapida Additional Terms.
 // See LICENSE.md or contact sales@rapida.ai for commercial usage.
 
-package internal_telephony_factory
+package internal_telephony
 
 import (
+	"bufio"
+	"context"
 	"errors"
+	"net"
 
+	"github.com/gorilla/websocket"
 	"github.com/rapidaai/api/assistant-api/config"
+	internal_assistant_entity "github.com/rapidaai/api/assistant-api/internal/entity/assistants"
+	internal_conversation_entity "github.com/rapidaai/api/assistant-api/internal/entity/conversations"
 	internal_asterisk_telephony "github.com/rapidaai/api/assistant-api/internal/telephony/internal/asterisk"
+	internal_asterisk_audiosocket "github.com/rapidaai/api/assistant-api/internal/telephony/internal/asterisk/audiosocket"
+	internal_asterisk_websocket "github.com/rapidaai/api/assistant-api/internal/telephony/internal/asterisk/websocket"
 	internal_exotel_telephony "github.com/rapidaai/api/assistant-api/internal/telephony/internal/exotel"
 	internal_twilio_telephony "github.com/rapidaai/api/assistant-api/internal/telephony/internal/twilio"
 	internal_vonage_telephony "github.com/rapidaai/api/assistant-api/internal/telephony/internal/vonage"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 	"github.com/rapidaai/pkg/commons"
+	"github.com/rapidaai/protos"
 )
 
 type Telephony string
@@ -25,6 +34,7 @@ const (
 	Exotel   Telephony = "exotel"
 	Vonage   Telephony = "vonage"
 	Asterisk Telephony = "asterisk"
+	SIP      Telephony = "sip"
 )
 
 func (at Telephony) String() string {
@@ -44,4 +54,60 @@ func GetTelephony(at Telephony, cfg *config.AssistantConfig, logger commons.Logg
 	default:
 		return nil, errors.New("illegal telephony provider")
 	}
+}
+
+// streamer
+
+// Streamer creates a new WebSocket streamer for Asterisk chan_websocket
+func (at Telephony) Streamer(
+	ctx context.Context,
+	logger commons.Logger,
+	connection *websocket.Conn,
+	assistant *internal_assistant_entity.Assistant,
+	conversation *internal_conversation_entity.AssistantConversation,
+	vlt *protos.VaultCredential,
+) (internal_type.TelephonyStreamer, error) {
+	switch at {
+	case Twilio:
+		return internal_twilio_telephony.NewTwilioWebsocketStreamer(logger, connection, assistant, conversation, vlt), nil
+	case Exotel:
+		return internal_exotel_telephony.NewExotelWebsocketStreamer(logger, connection, assistant, conversation, vlt), nil
+	case Vonage:
+		return internal_vonage_telephony.NewVonageWebsocketStreamer(logger, connection, assistant, conversation, vlt), nil
+	case Asterisk:
+		return internal_asterisk_websocket.NewAsteriskWebsocketStreamer(logger, connection, assistant, conversation, vlt), nil
+	default:
+		return nil, errors.New("illegal telephony provider")
+	}
+
+}
+
+func (at Telephony) AudioSocketStreamer(
+	logger commons.Logger,
+	conn net.Conn,
+	reader *bufio.Reader,
+	writer *bufio.Writer,
+	assistant *internal_assistant_entity.Assistant,
+	conversation *internal_conversation_entity.AssistantConversation,
+	vlt *protos.VaultCredential,
+) (internal_type.TelephonyStreamer, error) {
+	switch at {
+	case Asterisk:
+		return internal_asterisk_audiosocket.NewStreamer(logger, conn, reader, writer, assistant, conversation, vlt)
+	}
+	return nil, errors.New("illegal telephony provider")
+}
+
+func (at Telephony) SipStreamer() (internal_type.TelephonyStreamer, error) {
+	// switch at {
+	// case SIP:
+	// 	return internal_sip_telephony.NewInboundStreamer(callCtx, &internal_sip_telephony.InboundStreamerConfig{
+	// 		Config:       sipConfig,
+	// 		Logger:       m.logger,
+	// 		Session:      session,
+	// 		Assistant:    assistant,
+	// 		Conversation: conversation,
+	// 	})
+	// }
+	return nil, errors.New("illegal telephony provider")
 }

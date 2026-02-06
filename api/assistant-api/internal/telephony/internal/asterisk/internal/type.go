@@ -236,3 +236,15 @@ func DefaultAsteriskConfig() *AsteriskConfig {
 		SIPContext:  "from-internal",
 	}
 }
+
+// ARIConfig holds ARI configuration extracted from vault
+type ARIConfig struct {
+	ARIHost     string // Asterisk ARI host
+	ARIPort     int    // Asterisk ARI port
+	ARIScheme   string // http or https
+	ARIApp      string // Stasis application name
+	ARIUser     string // ARI username
+	ARIPassword string // ARI password
+	SIPEndpoint string // SIP endpoint type (PJSIP, SIP)
+	SIPContext  string // Dialplan context
+}

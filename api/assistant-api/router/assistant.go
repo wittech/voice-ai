@@ -93,7 +93,7 @@ func TalkCallbackApiRoute(
 		// SIP - native SIP/RTP voice communication
 		// These endpoints are for SIP trunks that support webhooks (Telnyx, SignalWire, etc.)
 		// Audio flows via RTP, not HTTP
-		apiv1.POST("/sip/call/:assistantId", talkRpcApi.SIPCallWebhook)
-		apiv1.POST("/sip/event/:assistantId/:conversationId", talkRpcApi.SIPEventWebhook)
+		// apiv1.POST("/sip/call/:assistantId", talkRpcApi.SIPCallWebhook)
+		// apiv1.POST("/sip/event/:assistantId/:conversationId", talkRpcApi.SIPEventWebhook)
 	}
 }

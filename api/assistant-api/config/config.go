@@ -17,22 +17,18 @@ import (
 
 // SIPConfig holds the SIP server configuration
 type SIPConfig struct {
-	Enabled           bool   `mapstructure:"enabled"`
 	Server            string `mapstructure:"server"`
 	Port              int    `mapstructure:"port"`
-	Transport         string `mapstructure:"transport"` // udp, tcp, tls
+	Transport         string `mapstructure:"transport"`
 	RTPPortRangeStart int    `mapstructure:"rtp_port_range_start"`
 	RTPPortRangeEnd   int    `mapstructure:"rtp_port_range_end"`
 }
 
-// AudioSocketConfig holds the AudioSocket server configuration
 type AudioSocketConfig struct {
-	Enabled bool   `mapstructure:"enabled"`
-	Host    string `mapstructure:"host"`
-	Port    int    `mapstructure:"port"`
+	Host string `mapstructure:"host"`
+	Port int    `mapstructure:"port"`
 }
 
-// Application config structure
 type AssistantConfig struct {
 	config.AppConfig    `mapstructure:",squash"`
 	PostgresConfig      configs.PostgresConfig   `mapstructure:"postgres" validate:"required"`
@@ -41,8 +37,8 @@ type AssistantConfig struct {
 	WeaviateConfig      configs.WeaviateConfig   `mapstructure:"weaviate"`
 	AssetStoreConfig    configs.AssetStoreConfig `mapstructure:"asset_store" validate:"required"`
 	PublicAssistantHost string                   `mapstructure:"public_assistant_host" validate:"required"`
-	SIPConfig           SIPConfig                `mapstructure:"sip"`
-	AudioSocketConfig   AudioSocketConfig        `mapstructure:"audiosocket"`
+	SIPConfig           *SIPConfig               `mapstructure:"sip"`
+	AudioSocketConfig   *AudioSocketConfig       `mapstructure:"audiosocket"`
 }
 
 // reading config and intializing configs for application
@@ -62,19 +58,11 @@ func InitConfig() (*viper.Viper, error) {
 		log.Printf("Error while reading the config")
 	}
 
-	//
-	setDefault(vConfig)
 	if err := vConfig.ReadInConfig(); err != nil && !os.IsNotExist(err) {
 		log.Printf("Reading from env varaibles.")
 	}
 
 	return vConfig, nil
-}
-
-func setDefault(v *viper.Viper) {
-	v.SetDefault("audiosocket.enabled", false)
-	v.SetDefault("audiosocket.host", "0.0.0.0")
-	v.SetDefault("audiosocket.port", 4573)
 }
 
 // Getting application config from viper

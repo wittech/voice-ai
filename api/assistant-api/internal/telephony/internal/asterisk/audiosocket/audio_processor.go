@@ -4,7 +4,7 @@
 // Licensed under GPL-2.0 with Rapida Additional Terms.
 // See LICENSE.md or contact sales@rapida.ai for commercial usage.
 
-package audiosocket
+package internal_asterisk_audiosocket
 
 import (
 	"bytes"
@@ -23,7 +23,7 @@ import (
 // AudioSocket audio constants (SLIN 16-bit 8kHz)
 const (
 	chunkDuration           = 20 * time.Millisecond
-	slinBytesPerMs          = 16 // 8000 Hz * 2 bytes / 1000
+	slinBytesPerMs          = 16  // 8000 Hz * 2 bytes / 1000
 	defaultOptimalFrameSize = 320 // 20ms at 8kHz 16-bit = 320 bytes
 	outputChunkSize         = slinBytesPerMs * 20
 	inputBufferThreshold    = 32 * 60

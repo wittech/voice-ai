@@ -216,13 +216,6 @@ func (cApi *ConversationApi) CallTalker(c *gin.Context) {
 
 	identifier := c.Param("identifier")
 	tlp := c.Param("telephony")
-	_telephony, err := telephony.GetTelephony(telephony.Telephony(tlp), cApi.cfg, cApi.logger)
-	if err != nil {
-		cApi.assistantConversationService.ApplyConversationMetrics(c, auth, assistantId, conversationId, []*types.Metric{{Name: type_enums.STATUS.String(), Value: type_enums.RECORD_FAILED.String(), Description: "Invalid telephony"}})
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid telephony"})
-		return
-	}
-
 	var (
 		wg                    errgroup.Group
 		vltC                  *protos.VaultCredential
@@ -266,8 +259,13 @@ func (cApi *ConversationApi) CallTalker(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid phone deployment"})
 		return
 	}
-
-	talker, err := internal_adapter.GetTalker(utils.PhoneCall, c, cApi.cfg, cApi.logger, cApi.postgres, cApi.opensearch, cApi.redis, cApi.storage, _telephony.Streamer(c, websocketConnection, assistant, assistantConversation, vltC))
+	streamer, err := telephony.Telephony(tlp).Streamer(c, cApi.logger, websocketConnection, assistant, assistantConversation, vltC)
+	if err != nil {
+		cApi.logger.Errorf("error while creating streamer %v", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid telephony streamer"})
+		return
+	}
+	talker, err := internal_adapter.GetTalker(utils.PhoneCall, c, cApi.cfg, cApi.logger, cApi.postgres, cApi.opensearch, cApi.redis, cApi.storage, streamer)
 	if err != nil {
 		cApi.logger.Errorf("error while recieving call %v", err)
 		cApi.assistantConversationService.ApplyConversationMetrics(c, auth, assistantId, conversationId, []*types.Metric{{Name: type_enums.STATUS.String(), Value: type_enums.RECORD_FAILED.String(), Description: "Internal server error"}})

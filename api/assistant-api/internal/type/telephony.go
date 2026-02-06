@@ -10,9 +10,6 @@ import (
 	"fmt"
 
 	"github.com/gin-gonic/gin"
-	"github.com/gorilla/websocket"
-	internal_assistant_entity "github.com/rapidaai/api/assistant-api/internal/entity/assistants"
-	internal_conversation_entity "github.com/rapidaai/api/assistant-api/internal/entity/conversations"
 	"github.com/rapidaai/pkg/types"
 	"github.com/rapidaai/pkg/utils"
 	"github.com/rapidaai/protos"
@@ -20,8 +17,7 @@ import (
 
 // any telephony integration must impliment this interface to provide consistent behaviour
 type Telephony interface {
-	// streamer
-	Streamer(c *gin.Context, connection *websocket.Conn, assistant *internal_assistant_entity.Assistant, assistantConversation *internal_conversation_entity.AssistantConversation, vltC *protos.VaultCredential) TelephonyStreamer
+
 	//  event callback for a conversation
 	StatusCallback(ctx *gin.Context, auth types.SimplePrinciple, assistantId, assistantConversationId uint64) ([]types.Telemetry, error)
 	// catch all event callback
