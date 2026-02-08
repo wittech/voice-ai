@@ -119,7 +119,7 @@ func (m *AudioSocketManager) handleConnection(ctx context.Context, conn net.Conn
 	reader := bufio.NewReader(conn)
 	writer := bufio.NewWriter(conn)
 
-	auth, assistant, conversation, callerID, err := m.resolveCallContext(connCtx, "channelID")
+	auth, assistant, conversation, err := m.resolveCallContext(connCtx, "channelID")
 	if err != nil {
 		m.logger.Warn("AudioSocket context resolution failed", "error", err)
 		return
@@ -134,7 +134,6 @@ func (m *AudioSocketManager) handleConnection(ctx context.Context, conn net.Conn
 	// if s, ok := streamer.(*internal_telephony.Streamer); ok {
 	// 	s.SetInitialUUID("channelID")
 
-	identifier := internal_adapter.Identifier(utils.PhoneCall, connCtx, auth, callerID)
 	talker, err := internal_adapter.GetTalker(
 		utils.PhoneCall,
 		connCtx,
@@ -151,7 +150,7 @@ func (m *AudioSocketManager) handleConnection(ctx context.Context, conn net.Conn
 		return
 	}
 
-	if err := talker.Talk(connCtx, auth, identifier); err != nil {
+	if err := talker.Talk(connCtx, auth); err != nil {
 		m.logger.Warn("AudioSocket talker exited", "error", err)
 	}
 
@@ -159,7 +158,7 @@ func (m *AudioSocketManager) handleConnection(ctx context.Context, conn net.Conn
 
 // resolveCallContext parses the UUID which contains apiKey:assistantId format
 // Example: rpd-prj-xxx:123 or rpd-prj-xxx:123:callerID
-func (m *AudioSocketManager) resolveCallContext(ctx context.Context, uuidParam string) (types.SimplePrinciple, *internal_assistant_entity.Assistant, *internal_conversation_entity.AssistantConversation, string, error) {
+func (m *AudioSocketManager) resolveCallContext(ctx context.Context, uuidParam string) (types.SimplePrinciple, *internal_assistant_entity.Assistant, *internal_conversation_entity.AssistantConversation, error) {
 
 	auth := &types.ServiceScope{
 		ProjectId:      utils.Ptr(uint64(2257831930382778368)),
@@ -169,24 +168,23 @@ func (m *AudioSocketManager) resolveCallContext(ctx context.Context, uuidParam s
 
 	assistant, err := m.assistantService.Get(ctx, auth, 2263072539095859200, utils.GetVersionDefinition("latest"), &internal_services.GetAssistantOption{InjectPhoneDeployment: true})
 	if err != nil {
-		return nil, nil, nil, "", err
+		return nil, nil, nil, err
 	}
 
 	conversation, err := m.assistantConversationService.CreateConversation(
 		ctx,
 		auth,
-		internal_adapter.Identifier(utils.PhoneCall, ctx, auth, "2263072539095859200"),
+		uuidParam,
 		assistant.Id,
 		assistant.AssistantProviderId,
 		type_enums.DIRECTION_INBOUND,
 		utils.PhoneCall,
 	)
 	if err != nil {
-		return nil, nil, nil, "", err
+		return nil, nil, nil, err
 	}
 
 	_, _ = m.assistantConversationService.ApplyConversationMetadata(ctx, auth, assistant.Id, conversation.Id,
 		[]*types.Metadata{types.NewMetadata("telephony.uuid", uuidParam)})
-
-	return auth, assistant, conversation, "2263072539095859200", nil
+	return auth, assistant, conversation, nil
 }

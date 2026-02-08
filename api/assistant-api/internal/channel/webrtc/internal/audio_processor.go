@@ -59,8 +59,8 @@ type AudioProcessor struct {
 	resampler internal_type.AudioResampler
 
 	// Audio configs
-	opusConfig   *protos.AudioConfig // 48kHz mono for Opus/WebRTC
-	sttTtsConfig *protos.AudioConfig // 16kHz mono for STT/TTS
+	opusConfig          *protos.AudioConfig // 48kHz mono for Opus/WebRTC
+	internalAudioConfig *protos.AudioConfig // 16kHz mono for STT/TTS
 
 	// Opus codec for encoding/decoding
 	opusCodec *OpusCodec
@@ -94,14 +94,14 @@ func NewAudioProcessor(logger commons.Logger, config *AudioProcessorConfig) (*Au
 	}
 
 	return &AudioProcessor{
-		logger:       logger,
-		config:       config,
-		resampler:    resampler,
-		opusConfig:   internal_audio.NewLinear48khzMonoAudioConfig(),
-		sttTtsConfig: internal_audio.NewLinear16khzMonoAudioConfig(),
-		opusCodec:    opusCodec,
-		inputBuffer:  new(bytes.Buffer),
-		outputBuffer: new(bytes.Buffer),
+		logger:              logger,
+		config:              config,
+		resampler:           resampler,
+		opusConfig:          internal_audio.NewLinear48khzMonoAudioConfig(),
+		internalAudioConfig: internal_audio.NewLinear16khzMonoAudioConfig(),
+		opusCodec:           opusCodec,
+		inputBuffer:         new(bytes.Buffer),
+		outputBuffer:        new(bytes.Buffer),
 	}, nil
 }
 
@@ -131,9 +131,7 @@ func (p *AudioProcessor) ProcessRemoteTrack(ctx context.Context, track *pionwebr
 		p.logger.Error("Failed to create Opus decoder", "error", err)
 		return
 	}
-
 	consecutiveErrors := 0
-
 	for {
 		select {
 		case <-ctx.Done():
@@ -185,7 +183,7 @@ func (p *AudioProcessor) ProcessRemoteTrack(ctx context.Context, track *pionwebr
 
 // ResampleInput resamples audio from 48kHz (Opus/WebRTC) to 16kHz (STT)
 func (p *AudioProcessor) ResampleInput(audio []byte) ([]byte, error) {
-	return p.resampler.Resample(audio, p.opusConfig, p.sttTtsConfig)
+	return p.resampler.Resample(audio, p.opusConfig, p.internalAudioConfig)
 }
 
 // bufferAndSendInput buffers input audio and sends when threshold is reached
@@ -243,7 +241,7 @@ func (p *AudioProcessor) ProcessOutputAudio(audio []byte) error {
 
 // ResampleOutput resamples audio from 16kHz (TTS) to 48kHz (Opus/WebRTC)
 func (p *AudioProcessor) ResampleOutput(audio []byte) ([]byte, error) {
-	return p.resampler.Resample(audio, p.sttTtsConfig, p.opusConfig)
+	return p.resampler.Resample(audio, p.internalAudioConfig, p.opusConfig)
 }
 
 // GetNextChunk retrieves the next audio chunk from the output buffer,
@@ -404,32 +402,4 @@ func (p *AudioProcessor) ClearOutputBuffer() {
 	p.outputBufferMu.Lock()
 	p.outputBuffer.Reset()
 	p.outputBufferMu.Unlock()
-}
-
-// ============================================================================
-// Utility Methods
-// ============================================================================
-
-// GetOpusConfig returns the Opus audio configuration (48kHz mono)
-func (p *AudioProcessor) GetOpusConfig() *protos.AudioConfig {
-	return p.opusConfig
-}
-
-// GetSTTTTSConfig returns the STT/TTS audio configuration (16kHz mono)
-func (p *AudioProcessor) GetSTTTTSConfig() *protos.AudioConfig {
-	return p.sttTtsConfig
-}
-
-// OutputBufferSize returns the current size of the output buffer
-func (p *AudioProcessor) OutputBufferSize() int {
-	p.outputBufferMu.Lock()
-	defer p.outputBufferMu.Unlock()
-	return p.outputBuffer.Len()
-}
-
-// InputBufferSize returns the current size of the input buffer
-func (p *AudioProcessor) InputBufferSize() int {
-	p.inputBufferMu.Lock()
-	defer p.inputBufferMu.Unlock()
-	return p.inputBuffer.Len()
 }

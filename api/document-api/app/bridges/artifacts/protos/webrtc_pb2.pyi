@@ -1,4 +1,3 @@
-import app.bridges.artifacts.protos.common_pb2 as _common_pb2
 import app.bridges.artifacts.protos.talk_api_pb2 as _talk_api_pb2
 from google.protobuf.internal import containers as _containers
 from google.protobuf.internal import enum_type_wrapper as _enum_type_wrapper
@@ -88,23 +87,26 @@ class WebRTCConfig(_message.Message):
     def __init__(self, iceServers: _Optional[_Iterable[_Union[ICEServer, _Mapping]]] = ..., audioCodec: _Optional[str] = ..., sampleRate: _Optional[int] = ...) -> None: ...
 
 class WebTalkInput(_message.Message):
-    __slots__ = ("configuration", "message", "signaling", "metadata", "metrics")
+    __slots__ = ("initialization", "configuration", "message", "signaling", "metadata", "metrics")
+    INITIALIZATION_FIELD_NUMBER: _ClassVar[int]
     CONFIGURATION_FIELD_NUMBER: _ClassVar[int]
     MESSAGE_FIELD_NUMBER: _ClassVar[int]
     SIGNALING_FIELD_NUMBER: _ClassVar[int]
     METADATA_FIELD_NUMBER: _ClassVar[int]
     METRICS_FIELD_NUMBER: _ClassVar[int]
+    initialization: _talk_api_pb2.ConversationInitialization
     configuration: _talk_api_pb2.ConversationConfiguration
     message: _talk_api_pb2.ConversationUserMessage
     signaling: ClientSignaling
     metadata: _talk_api_pb2.ConversationMetadata
     metrics: _talk_api_pb2.ConversationMerics
-    def __init__(self, configuration: _Optional[_Union[_talk_api_pb2.ConversationConfiguration, _Mapping]] = ..., message: _Optional[_Union[_talk_api_pb2.ConversationUserMessage, _Mapping]] = ..., signaling: _Optional[_Union[ClientSignaling, _Mapping]] = ..., metadata: _Optional[_Union[_talk_api_pb2.ConversationMetadata, _Mapping]] = ..., metrics: _Optional[_Union[_talk_api_pb2.ConversationMerics, _Mapping]] = ...) -> None: ...
+    def __init__(self, initialization: _Optional[_Union[_talk_api_pb2.ConversationInitialization, _Mapping]] = ..., configuration: _Optional[_Union[_talk_api_pb2.ConversationConfiguration, _Mapping]] = ..., message: _Optional[_Union[_talk_api_pb2.ConversationUserMessage, _Mapping]] = ..., signaling: _Optional[_Union[ClientSignaling, _Mapping]] = ..., metadata: _Optional[_Union[_talk_api_pb2.ConversationMetadata, _Mapping]] = ..., metrics: _Optional[_Union[_talk_api_pb2.ConversationMerics, _Mapping]] = ...) -> None: ...
 
 class WebTalkOutput(_message.Message):
-    __slots__ = ("code", "success", "configuration", "interruption", "user", "assistant", "tool", "toolResult", "directive", "error", "signaling", "metadata", "metrics")
+    __slots__ = ("code", "success", "initialization", "configuration", "interruption", "user", "assistant", "tool", "toolResult", "directive", "error", "signaling", "metadata", "metrics")
     CODE_FIELD_NUMBER: _ClassVar[int]
     SUCCESS_FIELD_NUMBER: _ClassVar[int]
+    INITIALIZATION_FIELD_NUMBER: _ClassVar[int]
     CONFIGURATION_FIELD_NUMBER: _ClassVar[int]
     INTERRUPTION_FIELD_NUMBER: _ClassVar[int]
     USER_FIELD_NUMBER: _ClassVar[int]
@@ -118,6 +120,7 @@ class WebTalkOutput(_message.Message):
     METRICS_FIELD_NUMBER: _ClassVar[int]
     code: int
     success: bool
+    initialization: _talk_api_pb2.ConversationInitialization
     configuration: _talk_api_pb2.ConversationConfiguration
     interruption: _talk_api_pb2.ConversationInterruption
     user: _talk_api_pb2.ConversationUserMessage
@@ -125,8 +128,8 @@ class WebTalkOutput(_message.Message):
     tool: _talk_api_pb2.ConversationToolCall
     toolResult: _talk_api_pb2.ConversationToolResult
     directive: _talk_api_pb2.ConversationDirective
-    error: _common_pb2.Error
+    error: _talk_api_pb2.ConversationError
     signaling: ServerSignaling
     metadata: _talk_api_pb2.ConversationMetadata
     metrics: _talk_api_pb2.ConversationMerics
-    def __init__(self, code: _Optional[int] = ..., success: bool = ..., configuration: _Optional[_Union[_talk_api_pb2.ConversationConfiguration, _Mapping]] = ..., interruption: _Optional[_Union[_talk_api_pb2.ConversationInterruption, _Mapping]] = ..., user: _Optional[_Union[_talk_api_pb2.ConversationUserMessage, _Mapping]] = ..., assistant: _Optional[_Union[_talk_api_pb2.ConversationAssistantMessage, _Mapping]] = ..., tool: _Optional[_Union[_talk_api_pb2.ConversationToolCall, _Mapping]] = ..., toolResult: _Optional[_Union[_talk_api_pb2.ConversationToolResult, _Mapping]] = ..., directive: _Optional[_Union[_talk_api_pb2.ConversationDirective, _Mapping]] = ..., error: _Optional[_Union[_common_pb2.Error, _Mapping]] = ..., signaling: _Optional[_Union[ServerSignaling, _Mapping]] = ..., metadata: _Optional[_Union[_talk_api_pb2.ConversationMetadata, _Mapping]] = ..., metrics: _Optional[_Union[_talk_api_pb2.ConversationMerics, _Mapping]] = ...) -> None: ...
+    def __init__(self, code: _Optional[int] = ..., success: bool = ..., initialization: _Optional[_Union[_talk_api_pb2.ConversationInitialization, _Mapping]] = ..., configuration: _Optional[_Union[_talk_api_pb2.ConversationConfiguration, _Mapping]] = ..., interruption: _Optional[_Union[_talk_api_pb2.ConversationInterruption, _Mapping]] = ..., user: _Optional[_Union[_talk_api_pb2.ConversationUserMessage, _Mapping]] = ..., assistant: _Optional[_Union[_talk_api_pb2.ConversationAssistantMessage, _Mapping]] = ..., tool: _Optional[_Union[_talk_api_pb2.ConversationToolCall, _Mapping]] = ..., toolResult: _Optional[_Union[_talk_api_pb2.ConversationToolResult, _Mapping]] = ..., directive: _Optional[_Union[_talk_api_pb2.ConversationDirective, _Mapping]] = ..., error: _Optional[_Union[_talk_api_pb2.ConversationError, _Mapping]] = ..., signaling: _Optional[_Union[ServerSignaling, _Mapping]] = ..., metadata: _Optional[_Union[_talk_api_pb2.ConversationMetadata, _Mapping]] = ..., metrics: _Optional[_Union[_talk_api_pb2.ConversationMerics, _Mapping]] = ...) -> None: ...

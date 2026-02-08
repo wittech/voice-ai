@@ -33,17 +33,11 @@ type AsteriskMediaEvent struct {
 // ParseAsteriskEvent parses an Asterisk event from string or JSON
 func ParseAsteriskEvent(data string) (*AsteriskMediaEvent, error) {
 	event := &AsteriskMediaEvent{}
-
-	// Try JSON parsing first
 	if err := json.Unmarshal([]byte(data), event); err == nil && (event.Event != "" || event.Command != "") {
 		return event, nil
 	}
-
-	// Parse legacy text format: "EVENT_TYPE key:value key:value ..."
 	event.RawMessage = data
 	event.Event = parseEventType(data)
-
-	// Parse key-value pairs
 	params := parseKeyValuePairs(data)
 	if v, ok := params["channel"]; ok {
 		event.Channel = v
@@ -54,7 +48,6 @@ func ParseAsteriskEvent(data string) (*AsteriskMediaEvent, error) {
 			event.OptimalFrameSize = size
 		}
 	}
-
 	return event, nil
 }
 

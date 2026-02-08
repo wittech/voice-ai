@@ -14,6 +14,7 @@ import (
 	"time"
 
 	internal_audio "github.com/rapidaai/api/assistant-api/internal/audio"
+	internal_telephony_base "github.com/rapidaai/api/assistant-api/internal/channel/telephony/internal/base"
 	internal_assistant_entity "github.com/rapidaai/api/assistant-api/internal/entity/assistants"
 	internal_conversation_entity "github.com/rapidaai/api/assistant-api/internal/entity/conversations"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
@@ -35,17 +36,14 @@ const (
 // Streamer implements the TelephonyStreamer interface using native SIP signaling and RTP
 // No WebSocket needed - uses sipgo for signaling, RTP/UDP for audio
 type Streamer struct {
-	mu     sync.RWMutex
-	closed atomic.Bool
-
+	streamer   internal_telephony_base.BaseTelephonyStreamer
+	mu         sync.RWMutex
+	closed     atomic.Bool
 	logger     commons.Logger
 	config     *sip_infra.Config
 	session    *sip_infra.Session
 	server     *sip_infra.Server
 	rtpHandler *sip_infra.RTPHandler
-
-	assistant    *internal_assistant_entity.Assistant
-	conversation *internal_conversation_entity.AssistantConversation
 
 	codec *sip_infra.Codec
 
@@ -64,7 +62,8 @@ func NewInboundStreamer(ctx context.Context,
 	session *sip_infra.Session,
 	assistant *internal_assistant_entity.Assistant,
 	conversation *internal_conversation_entity.AssistantConversation,
-) (internal_type.TelephonyStreamer, error) {
+	vlt *protos.VaultCredential,
+) (internal_type.Streamer, error) {
 
 	// Get the RTP handler from the session (created by server.handleInvite)
 	rtpHandler := session.GetRTPHandler()
@@ -80,17 +79,15 @@ func NewInboundStreamer(ctx context.Context,
 		pcmu := sip_infra.CodecPCMU
 		codec = &pcmu
 	}
-
 	s := &Streamer{
-		logger:       logger,
-		config:       config,
-		session:      session,
-		rtpHandler:   rtpHandler,
-		assistant:    assistant,
-		conversation: conversation,
-		codec:        codec,
-		ctx:          streamerCtx,
-		cancel:       cancel,
+		logger:     logger,
+		config:     config,
+		session:    session,
+		rtpHandler: rtpHandler,
+		codec:      codec,
+		ctx:        streamerCtx,
+		cancel:     cancel,
+		streamer:   internal_telephony_base.NewBaseTelephonyStreamer(logger, assistant, conversation, vlt),
 	}
 
 	// Start audio forwarding from RTP handler
@@ -114,18 +111,16 @@ func NewOutboundStreamer(ctx context.Context,
 	tenantID string,
 	assistant *internal_assistant_entity.Assistant,
 	conversation *internal_conversation_entity.AssistantConversation,
-) (internal_type.TelephonyStreamer, error) {
+) (internal_type.Streamer, error) {
 	streamerCtx, cancel := context.WithCancel(ctx)
 
 	pcmu := sip_infra.CodecPCMU
 	s := &Streamer{
-		logger:       logger,
-		config:       config,
-		assistant:    assistant,
-		conversation: conversation,
-		codec:        &pcmu,
-		ctx:          streamerCtx,
-		cancel:       cancel,
+		logger: logger,
+		config: config,
+		codec:  &pcmu,
+		ctx:    streamerCtx,
+		cancel: cancel,
 	}
 
 	// Initialize SIP server for outbound calls.
@@ -281,17 +276,14 @@ func (s *Streamer) Context() context.Context {
 	return s.ctx
 }
 
-func (s *Streamer) Recv() (*protos.AssistantTalkInput, error) {
+func (s *Streamer) Recv() (internal_type.Stream, error) {
 	if s.closed.Load() {
 		return nil, io.EOF
 	}
 
 	// Send connection/config request on first call
 	if s.configSent.CompareAndSwap(false, true) {
-		s.logger.Infow("SIP streamer sending connection request",
-			"assistant_id", s.assistant.Id,
-			"conversation_id", s.conversation.Id)
-		return s.createConnectionRequest()
+		return s.streamer.CreateConnectionRequest(), nil
 	}
 
 	// Calculate buffer threshold based on codec sample rate
@@ -322,13 +314,9 @@ func (s *Streamer) Recv() (*protos.AssistantTalkInput, error) {
 			s.inputBuffer = s.inputBuffer[bufferSizeThreshold:]
 			s.mu.Unlock()
 
-			return &protos.AssistantTalkInput{
-				Request: &protos.AssistantTalkInput_Message{
-					Message: &protos.ConversationUserMessage{
-						Message: &protos.ConversationUserMessage_Audio{
-							Audio: audioData,
-						},
-					},
+			return &protos.ConversationUserMessage{
+				Message: &protos.ConversationUserMessage_Audio{
+					Audio: audioData,
 				},
 			}, nil
 		}
@@ -345,43 +333,43 @@ func (s *Streamer) Recv() (*protos.AssistantTalkInput, error) {
 }
 
 // createConnectionRequest creates the initial connection request for the talker
-func (s *Streamer) createConnectionRequest() (*protos.AssistantTalkInput, error) {
-	inputConfig, outputConfig := s.GetAudioConfig()
-	return &protos.AssistantTalkInput{
-		Request: &protos.AssistantTalkInput_Configuration{
-			Configuration: &protos.ConversationConfiguration{
-				AssistantConversationId: s.conversation.Id,
-				Assistant: &protos.AssistantDefinition{
-					AssistantId: s.assistant.Id,
-					Version:     "latest",
-				},
-				InputConfig:  &protos.StreamConfig{Audio: inputConfig},
-				OutputConfig: &protos.StreamConfig{Audio: outputConfig},
-			},
-		},
-	}, nil
-}
+// func (s *Streamer) createConnectionRequest() (internal_type.Stream, error) {
+// 	inputConfig, outputConfig := s.GetAudioConfig()
+// 	return &protos.AssistantTalkInput{
+// 		Request: &protos.AssistantTalkInput_Configuration{
+// 			Configuration: &protos.ConversationConfiguration{
+// 				AssistantConversationId: s.conversation.Id,
+// 				Assistant: &protos.AssistantDefinition{
+// 					AssistantId: s.assistant.Id,
+// 					Version:     "latest",
+// 				},
+// 				InputConfig:  &protos.StreamConfig{Audio: inputConfig},
+// 				OutputConfig: &protos.StreamConfig{Audio: outputConfig},
+// 			},
+// 		},
+// 	}, nil
+// }
 
-func (s *Streamer) Send(response *protos.AssistantTalkOutput) error {
+func (s *Streamer) Send(response internal_type.Stream) error {
 	if s.closed.Load() {
 		return sip_infra.ErrSessionClosed
 	}
 
-	switch data := response.GetData().(type) {
-	case *protos.AssistantTalkOutput_Assistant:
-		switch content := data.Assistant.Message.(type) {
+	switch data := response.(type) {
+	case *protos.ConversationAssistantMessage:
+		switch content := data.Message.(type) {
 		case *protos.ConversationAssistantMessage_Audio:
 			s.logger.Debug("Send: Received audio output from assistant", "audio_size", len(content.Audio))
 			return s.sendAudio(content.Audio)
 		}
-	case *protos.AssistantTalkOutput_Interruption:
-		s.logger.Debug("Send: Received interruption", "type", data.Interruption.Type)
-		if data.Interruption.Type == protos.ConversationInterruption_INTERRUPTION_TYPE_WORD {
+	case *protos.ConversationInterruption:
+		s.logger.Debug("Send: Received interruption", "type", data.Type)
+		if data.Type == protos.ConversationInterruption_INTERRUPTION_TYPE_WORD {
 			return s.handleInterruption()
 		}
-	case *protos.AssistantTalkOutput_Directive:
-		s.logger.Debug("Send: Received directive", "type", data.Directive.GetType())
-		if data.Directive.GetType() == protos.ConversationDirective_END_CONVERSATION {
+	case *protos.ConversationDirective:
+		s.logger.Debug("Send: Received directive", "type", data.GetType())
+		if data.GetType() == protos.ConversationDirective_END_CONVERSATION {
 			return s.Close()
 		}
 	}
@@ -443,11 +431,6 @@ func (s *Streamer) Close() error {
 	if !s.closed.CompareAndSwap(false, true) {
 		return nil // Already closed
 	}
-
-	s.logger.Infow("Closing SIP streamer",
-		"assistant_id", s.assistant.Id,
-		"conversation_id", s.conversation.Id)
-
 	// Cancel context first
 	s.cancel()
 

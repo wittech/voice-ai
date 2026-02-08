@@ -17,7 +17,6 @@ import (
 	"github.com/pion/interceptor"
 	"github.com/pion/interceptor/pkg/intervalpli"
 	pionwebrtc "github.com/pion/webrtc/v4"
-	internal_audio "github.com/rapidaai/api/assistant-api/internal/audio"
 	webrtc_internal "github.com/rapidaai/api/assistant-api/internal/channel/webrtc/internal"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 	"github.com/rapidaai/pkg/commons"
@@ -55,7 +54,7 @@ type GrpcStreamer struct {
 	audioProcessor *webrtc_internal.AudioProcessor
 
 	// Single channel for all inputs to downstream
-	inputCh chan *protos.WebTalkInput
+	inputCh chan internal_type.Stream
 	errCh   chan error
 
 	// Output sender state
@@ -77,7 +76,7 @@ func NewWebRTCStreamer(
 	ctx context.Context,
 	logger commons.Logger,
 	grpcStream grpc.BidiStreamingServer[protos.WebTalkInput, protos.WebTalkOutput],
-) (internal_type.WebRTCStreamer, error) {
+) (internal_type.Streamer, error) {
 	streamerCtx, cancel := context.WithCancel(ctx)
 	audioProcessor, err := webrtc_internal.NewAudioProcessor(logger, nil)
 	if err != nil {
@@ -92,12 +91,12 @@ func NewWebRTCStreamer(
 		cancel:         cancel,
 		sessionID:      uuid.New().String(),
 		audioProcessor: audioProcessor,
-		inputCh:        make(chan *protos.WebTalkInput, webrtc_internal.InputChannelSize),
-		errCh:          make(chan error, webrtc_internal.ErrorChannelSize),
+		// inputCh:        make(chan internal_type.Stream, webrtc_internal.InputChannelSize),
+		errCh: make(chan error, webrtc_internal.ErrorChannelSize),
 	}
 
 	// Set callback for processed input audio
-	s.audioProcessor.SetInputAudioCallback(s.sendProcessedInputAudio)
+	// s.audioProcessor.SetInputAudioCallback(s.sendProcessedInputAudio)
 
 	// Create peer connection
 	if err := s.createPeerConnection(); err != nil {
@@ -111,19 +110,8 @@ func NewWebRTCStreamer(
 		return nil, fmt.Errorf("failed to initiate WebRTC handshake: %w", err)
 	}
 	// Start gRPC message reader
-	go s.readGrpcMessages()
+	go s.Recv()
 	return s, nil
-}
-
-// sendProcessedInputAudio is the callback for the audio processor
-func (s *GrpcStreamer) sendProcessedInputAudio(audio []byte) {
-	s.sendInput(&protos.WebTalkInput{
-		Request: &protos.WebTalkInput_Message{
-			Message: &protos.ConversationUserMessage{
-				Message: &protos.ConversationUserMessage_Audio{Audio: audio},
-			},
-		},
-	})
 }
 
 // ============================================================================
@@ -164,8 +152,6 @@ func (s *GrpcStreamer) createPeerConnection() error {
 	}, pionwebrtc.RTPCodecTypeAudio); err != nil {
 		return fmt.Errorf("failed to register Opus: %w", err)
 	}
-
-	// Note: Only Opus codec registered. PCMU/PCMA removed for simplicity.
 
 	// Interceptors
 	registry := &interceptor.Registry{}
@@ -391,24 +377,36 @@ func (s *GrpcStreamer) Context() context.Context {
 }
 
 // readGrpcMessages reads from gRPC stream and routes messages
-func (s *GrpcStreamer) readGrpcMessages() {
+func (s *GrpcStreamer) Recv() (internal_type.Stream, error) {
 	for {
-		select {
-		case <-s.ctx.Done():
-			return
-		default:
-		}
 		msg, err := s.grpcStream.Recv()
 		if err != nil {
 			if errors.Is(err, io.EOF) {
-				s.sendError(io.EOF)
-				return
+				return nil, io.EOF
 			}
-			s.sendError(err)
-			return
 		}
-
-		s.handleGrpcMessage(msg)
+		switch msg.GetRequest().(type) {
+		case *protos.WebTalkInput_Initialization:
+			s.handleGrpcInitialization(msg.GetInitialization())
+			return msg.GetInitialization(), nil
+		case *protos.WebTalkInput_Configuration:
+			return msg.GetConfiguration(), nil
+		case *protos.WebTalkInput_Message:
+			//s.sendInput(&protos.WebTalkInput{
+			// 	Request: &protos.WebTalkInput_Message{
+			// 		Message: &protos.ConversationUserMessage{
+			// 			Message: &protos.ConversationUserMessage_Audio{Audio: audio},
+			// 		},
+			// 	},
+			// })
+			return msg.GetMessage(), nil
+		case *protos.WebTalkInput_Signaling:
+			// do not send signaling messages downstream
+			s.handleClientSignaling(msg.GetSignaling())
+			continue
+		default:
+			s.logger.Warn("Unknown gRPC message type received")
+		}
 	}
 }
 
@@ -418,56 +416,6 @@ func (s *GrpcStreamer) sendError(err error) {
 	case s.errCh <- err:
 	default:
 		s.logger.Debug("Error channel full, dropping error", "error", err)
-	}
-}
-
-// sendInput sends input to inputCh
-func (s *GrpcStreamer) sendInput(input *protos.WebTalkInput) {
-	select {
-	case s.inputCh <- input:
-	case <-s.ctx.Done():
-	}
-}
-
-// sendConfigUpstream sends configuration to upstream immediately
-func (s *GrpcStreamer) sendConfigUpstream(config *protos.ConversationConfiguration) {
-	audioConfig := internal_audio.NewLinear16khzMonoAudioConfig()
-	config.InputConfig = &protos.StreamConfig{Audio: audioConfig}
-	config.OutputConfig = &protos.StreamConfig{Audio: audioConfig}
-	s.sendInput(&protos.WebTalkInput{
-		Request: &protos.WebTalkInput_Configuration{
-			Configuration: config,
-		},
-	})
-}
-
-// bufferAndSendAudio is now handled by AudioProcessor via callback
-
-// handleGrpcMessage processes incoming gRPC message
-func (s *GrpcStreamer) handleGrpcMessage(msg *protos.WebTalkInput) {
-	switch msg.GetRequest().(type) {
-	case *protos.WebTalkInput_Message:
-		s.sendInput(msg)
-		return
-	case *protos.WebTalkInput_Signaling:
-		s.handleClientSignaling(msg.GetSignaling())
-		return
-	case *protos.WebTalkInput_Configuration:
-		s.handleGrpcConnect(msg.GetConfiguration())
-	default:
-		s.logger.Warn("Unknown gRPC message type received")
-	}
-}
-
-// Recv receives the next input - simple channel read
-func (s *GrpcStreamer) Recv() (*protos.WebTalkInput, error) {
-	select {
-	case <-s.ctx.Done():
-		return nil, io.EOF
-	case err := <-s.errCh:
-		return nil, err
-	case input := <-s.inputCh:
-		return input, nil
 	}
 }
 
@@ -518,91 +466,66 @@ func (s *GrpcStreamer) handleClientSignaling(signaling *protos.ClientSignaling) 
 	}
 }
 
-func (s *GrpcStreamer) handleGrpcConnect(config *protos.ConversationConfiguration) {
-	// Send config to upstream (talker)
-	s.sendConfigUpstream(config)
-
-	// Check if audio is requested based on InputConfig.Audio
-	wantsAudio := config.GetInputConfig() != nil && config.GetInputConfig().GetAudio() != nil
-
-	s.mu.Lock()
-	isFirstConfig := !s.firstConfigReceived
-	s.firstConfigReceived = true
-	isAudioConnected := s.pc != nil && s.pc.ConnectionState() == pionwebrtc.PeerConnectionStateConnected
-	s.mu.Unlock()
-
-	// First configuration: PC already created and handshake initiated in NewGrpcStreamer
+func (s *GrpcStreamer) handleGrpcInitialization(config *protos.ConversationInitialization) {
+	isFirstConfig, isAudioConnected := s.captureConnectState()
 	if isFirstConfig {
-		if wantsAudio {
-			// Audio requested and handshake already in progress - nothing to do
+		if config.GetStreamMode() == protos.StreamMode_STREAM_MODE_AUDIO {
 			s.logger.Info("First configuration received, WebRTC handshake already in progress",
 				"session", s.sessionID)
 			return
 		}
-		// First config but no audio requested - clean up unnecessary PC
 		s.logger.Info("First configuration received without audio, cleaning up WebRTC",
 			"session", s.sessionID)
-		s.stopAudioProcessing()
-		s.mu.Lock()
-		if s.pc != nil {
-			s.pc.Close()
-			s.pc = nil
-		}
-		s.localTrack = nil
-		s.outputStarted = false
-		s.mu.Unlock()
+		s.resetAudioSession()
 		return
 	}
 
 	s.logger.Info("Mode switch requested",
 		"session", s.sessionID,
-		"wantsAudio", wantsAudio,
+		"wantsAudio", config.GetStreamMode() == protos.StreamMode_STREAM_MODE_AUDIO,
 		"isAudioConnected", isAudioConnected)
 
-	if wantsAudio {
+	if config.GetStreamMode() == protos.StreamMode_STREAM_MODE_AUDIO {
 		if isAudioConnected {
 			return
 		}
-		s.stopAudioProcessing()
-		s.mu.Lock()
-		if s.pc != nil {
-			s.pc.Close()
-			s.pc = nil
-		}
-		s.localTrack = nil
-		s.outputStarted = false
-		s.mu.Unlock()
-
-		// Create new peer connection
+		s.resetAudioSession()
 		if err := s.createPeerConnection(); err != nil {
 			s.logger.Error("Failed to create peer connection", "error", err)
 			return
 		}
-
-		// Initiate WebRTC handshake (send config and SDP offer)
 		if err := s.initiateWebRTCHandshake(); err != nil {
 			s.logger.Error("Failed to initiate WebRTC handshake", "error", err)
 		}
-	} else {
-		// Client wants text mode - disconnect audio if connected
-		if isAudioConnected {
-			s.logger.Info("Disconnecting audio for text mode", "session", s.sessionID)
-
-			// Stop audio processing goroutines
-			s.stopAudioProcessing()
-
-			s.mu.Lock()
-			if s.pc != nil {
-				s.pc.Close()
-				s.pc = nil
-			}
-			s.localTrack = nil
-			s.outputStarted = false
-			s.mu.Unlock()
-		} else {
-			s.logger.Info("Audio not connected, no action needed for text mode", "session", s.sessionID)
-		}
+		return
 	}
+	if isAudioConnected {
+		s.logger.Info("Disconnecting audio for text mode", "session", s.sessionID)
+		s.resetAudioSession()
+		return
+	}
+	s.logger.Info("Audio not connected, no action needed for text mode", "session", s.sessionID)
+}
+
+func (s *GrpcStreamer) captureConnectState() (bool, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	isFirstConfig := !s.firstConfigReceived
+	s.firstConfigReceived = true
+	isAudioConnected := s.pc != nil && s.pc.ConnectionState() == pionwebrtc.PeerConnectionStateConnected
+	return isFirstConfig, isAudioConnected
+}
+
+func (s *GrpcStreamer) resetAudioSession() {
+	s.stopAudioProcessing()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.pc != nil {
+		s.pc.Close()
+		s.pc = nil
+	}
+	s.localTrack = nil
+	s.outputStarted = false
 }
 
 // initiateWebRTCHandshake sends config and creates/sends SDP offer.
@@ -638,49 +561,71 @@ func (s *GrpcStreamer) createAndSetLocalOffer() (*pionwebrtc.SessionDescription,
 
 // Send sends output to the client
 
-func (s *GrpcStreamer) Send(response *protos.WebTalkOutput) error {
-	switch data := response.GetData().(type) {
-	case *protos.WebTalkOutput_Assistant:
-		switch content := data.Assistant.Message.(type) {
+func (s *GrpcStreamer) Send(response internal_type.Stream) error {
+	switch data := response.(type) {
+	case *protos.ConversationAssistantMessage:
+		switch content := data.Message.(type) {
 		case *protos.ConversationAssistantMessage_Audio:
 			return s.sendAudio(content.Audio)
 		case *protos.ConversationAssistantMessage_Text:
-			// Send text via gRPC
 			return s.grpcStream.Send(&protos.WebTalkOutput{
 				Code:    200,
 				Success: true,
-				Data:    response.GetData(),
+				Data:    &protos.WebTalkOutput_Assistant{Assistant: data},
 			})
 		}
+	case *protos.ConversationConfiguration:
+		return s.grpcStream.Send(&protos.WebTalkOutput{
+			Code:    200,
+			Success: true,
+			Data:    &protos.WebTalkOutput_Configuration{Configuration: data},
+		})
+	case *protos.ConversationInitialization:
+		return s.grpcStream.Send(&protos.WebTalkOutput{
+			Code:    200,
+			Success: true,
+			Data:    &protos.WebTalkOutput_Initialization{Initialization: data},
+		})
+	case *protos.ConversationUserMessage:
+		return s.grpcStream.Send(&protos.WebTalkOutput{
+			Code:    200,
+			Success: true,
+			Data:    &protos.WebTalkOutput_User{User: data},
+		})
 
-	case *protos.WebTalkOutput_Configuration:
-		return s.grpcStream.Send(response)
-
-	case *protos.WebTalkOutput_User:
-		return s.grpcStream.Send(response)
-
-	case *protos.WebTalkOutput_Interruption:
-		if data.Interruption.Type == protos.ConversationInterruption_INTERRUPTION_TYPE_WORD {
+	case *protos.ConversationInterruption:
+		if data.Type == protos.ConversationInterruption_INTERRUPTION_TYPE_WORD {
 			s.audioProcessor.ClearInputBuffer()
 			s.audioProcessor.ClearOutputBuffer()
-			// Send clear signal via WebRTC signaling
-			return s.sendClear()
+			s.sendClear()
 		}
+		return s.grpcStream.Send(&protos.WebTalkOutput{
+			Code:    200,
+			Success: true,
+			Data:    &protos.WebTalkOutput_Interruption{Interruption: data},
+		})
 
-	case *protos.WebTalkOutput_Directive:
-		s.grpcStream.Send(response)
-		if data.Directive.GetType() == protos.ConversationDirective_END_CONVERSATION {
+	case *protos.ConversationDirective:
+		s.grpcStream.Send(&protos.WebTalkOutput{
+			Code:    200,
+			Success: true,
+			Data:    &protos.WebTalkOutput_Directive{Directive: data},
+		})
+		if data.GetType() == protos.ConversationDirective_END_CONVERSATION {
 			return s.Close()
 		}
 		return nil
-	case *protos.WebTalkOutput_Error:
-		return s.grpcStream.Send(response)
+	case *protos.ConversationError:
+		return s.grpcStream.Send(&protos.WebTalkOutput{
+			Code:    200,
+			Success: true,
+			Data:    &protos.WebTalkOutput_Error{Error: data},
+		})
 	}
 	return nil
 }
 
 func (s *GrpcStreamer) sendAudio(audio []byte) error {
-	// Delegate to audio processor for resampling and buffering
 	return s.audioProcessor.ProcessOutputAudio(audio)
 }
 

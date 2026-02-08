@@ -15,14 +15,14 @@ import (
 )
 
 type unidirectionalStreamer struct {
-	server grpc.BidiStreamingServer[protos.AssistantTalkInput, protos.AssistantTalkOutput]
+	server grpc.BidiStreamingServer[protos.AssistantTalkRequest, protos.AssistantTalkResponse]
 }
 
 func NewGrpcStreamer(
 	ctx context.Context,
 	logger commons.Logger,
 	server protos.TalkService_AssistantTalkServer,
-) (internal_type.GrpcStreamer, error) {
+) (internal_type.Streamer, error) {
 	return &unidirectionalStreamer{
 		server: server,
 	}, nil
@@ -32,12 +32,107 @@ func (uds *unidirectionalStreamer) Context() context.Context {
 	return uds.server.Context()
 }
 
-func (uds *unidirectionalStreamer) Recv() (*protos.AssistantTalkInput, error) {
-	return uds.server.Recv()
+func (uds *unidirectionalStreamer) Recv() (internal_type.Stream, error) {
+	req, err := uds.server.Recv()
+	if err != nil {
+		return nil, err
+	}
+	switch in := req.Request.(type) {
+	case *protos.AssistantTalkRequest_Initialization:
+		return in.Initialization, nil
+	case *protos.AssistantTalkRequest_Configuration:
+		return in.Configuration, nil
+	case *protos.AssistantTalkRequest_Message:
+		return in.Message, nil
+	case *protos.AssistantTalkRequest_Metadata:
+		return in.Metadata, nil
+	case *protos.AssistantTalkRequest_Metrics:
+		return in.Metrics, nil
+	}
+	return nil, nil
 }
 
 // Send sends an output value to the stream.
 // It returns an error if the send operation fails.
-func (uds *unidirectionalStreamer) Send(out *protos.AssistantTalkOutput) error {
-	return uds.server.Send(out)
+
+func (uds *unidirectionalStreamer) Send(out internal_type.Stream) error {
+	switch out := out.(type) {
+	case *protos.ConversationInitialization:
+		return uds.server.Send(&protos.AssistantTalkResponse{
+			Code:    200,
+			Success: true,
+			Data:    &protos.AssistantTalkResponse_Initialization{Initialization: out},
+		})
+
+	case *protos.ConversationConfiguration:
+		return uds.server.Send(&protos.AssistantTalkResponse{
+			Code:    200,
+			Success: true,
+			Data:    &protos.AssistantTalkResponse_Configuration{Configuration: out},
+		})
+
+	case *protos.ConversationInterruption:
+		return uds.server.Send(&protos.AssistantTalkResponse{
+			Code:    200,
+			Success: true,
+			Data:    &protos.AssistantTalkResponse_Interruption{Interruption: out},
+		})
+
+	case *protos.ConversationUserMessage:
+		return uds.server.Send(&protos.AssistantTalkResponse{
+			Code:    200,
+			Success: true,
+			Data:    &protos.AssistantTalkResponse_User{User: out},
+		})
+
+	case *protos.ConversationAssistantMessage:
+		return uds.server.Send(&protos.AssistantTalkResponse{
+			Code:    200,
+			Success: true,
+			Data:    &protos.AssistantTalkResponse_Assistant{Assistant: out},
+		})
+
+	case *protos.ConversationToolCall:
+		return uds.server.Send(&protos.AssistantTalkResponse{
+			Code:    200,
+			Success: true,
+			Data:    &protos.AssistantTalkResponse_ToolCall{ToolCall: out},
+		})
+
+	case *protos.ConversationToolResult:
+		return uds.server.Send(&protos.AssistantTalkResponse{
+			Code:    200,
+			Success: true,
+			Data:    &protos.AssistantTalkResponse_ToolResult{ToolResult: out},
+		})
+
+	case *protos.ConversationDirective:
+		return uds.server.Send(&protos.AssistantTalkResponse{
+			Code:    200,
+			Success: true,
+			Data:    &protos.AssistantTalkResponse_Directive{Directive: out},
+		})
+
+	case *protos.ConversationMetadata:
+		return uds.server.Send(&protos.AssistantTalkResponse{
+			Code:    200,
+			Success: true,
+			Data:    &protos.AssistantTalkResponse_Metadata{Metadata: out},
+		})
+
+	case *protos.ConversationMerics:
+		return uds.server.Send(&protos.AssistantTalkResponse{
+			Code:    200,
+			Success: true,
+			Data:    &protos.AssistantTalkResponse_Metrics{Metrics: out},
+		})
+
+	case *protos.ConversationError:
+		return uds.server.Send(&protos.AssistantTalkResponse{
+			Code:    500,
+			Success: false,
+			Data:    &protos.AssistantTalkResponse_Error{Error: out},
+		})
+	}
+	return nil
 }

@@ -11,10 +11,7 @@ import (
 	"net/url"
 
 	"github.com/gin-gonic/gin"
-	"github.com/gorilla/websocket"
 	"github.com/rapidaai/api/assistant-api/config"
-	internal_assistant_entity "github.com/rapidaai/api/assistant-api/internal/entity/assistants"
-	internal_conversation_entity "github.com/rapidaai/api/assistant-api/internal/entity/conversations"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 	"github.com/rapidaai/pkg/commons"
 	"github.com/rapidaai/pkg/types"
@@ -168,10 +165,6 @@ func (tpc *twilioTelephony) InboundCall(c *gin.Context, auth types.SimplePrincip
 			assistantId, clientNumber),
 	))
 	return nil
-}
-
-func (tpc *twilioTelephony) Streamer(c *gin.Context, connection *websocket.Conn, assistant *internal_assistant_entity.Assistant, conversation *internal_conversation_entity.AssistantConversation, vlt *protos.VaultCredential) internal_type.TelephonyStreamer {
-	return NewTwilioWebsocketStreamer(tpc.logger, connection, assistant, conversation, vlt)
 }
 
 func (tpc *twilioTelephony) ReceiveCall(c *gin.Context) (*string, []types.Telemetry, error) {

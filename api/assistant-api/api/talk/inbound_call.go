@@ -54,7 +54,7 @@ func (cApi *ConversationApi) Callback(c *gin.Context) {
 	}
 
 	tlp := c.Param("telephony")
-	_telephony, err := telephony.GetTelephony(telephony.Telephony(tlp), cApi.cfg, cApi.logger, cApi.sipServer)
+	_telephony, err := telephony.GetTelephony(telephony.Telephony(tlp), cApi.cfg, cApi.logger)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid telephony"})
 		return
@@ -99,7 +99,7 @@ func (cApi *ConversationApi) CallReciever(c *gin.Context) {
 	}
 
 	tlp := c.Param("telephony")
-	_telephony, err := telephony.GetTelephony(telephony.Telephony(tlp), cApi.cfg, cApi.logger, cApi.sipServer)
+	_telephony, err := telephony.GetTelephony(telephony.Telephony(tlp), cApi.cfg, cApi.logger)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Telephony is not connected"})
 		return
@@ -129,7 +129,7 @@ func (cApi *ConversationApi) CallReciever(c *gin.Context) {
 		return
 	}
 
-	conversation, err := cApi.assistantConversationService.CreateConversation(c, iAuth, internal_adapter.Identifier(utils.PhoneCall, c, iAuth, *clientNumber), assistant.Id, assistant.AssistantProviderId, type_enums.DIRECTION_INBOUND, utils.PhoneCall)
+	conversation, err := cApi.assistantConversationService.CreateConversation(c, iAuth, *clientNumber, assistant.Id, assistant.AssistantProviderId, type_enums.DIRECTION_INBOUND, utils.PhoneCall)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "unable to initiate talker"})
 		return
@@ -214,7 +214,6 @@ func (cApi *ConversationApi) CallTalker(c *gin.Context) {
 		return
 	}
 
-	identifier := c.Param("identifier")
 	tlp := c.Param("telephony")
 	var (
 		wg                    errgroup.Group
@@ -273,7 +272,7 @@ func (cApi *ConversationApi) CallTalker(c *gin.Context) {
 		return
 	}
 
-	if err := talker.Talk(c, auth, internal_adapter.Identifier(utils.PhoneCall, c, auth, identifier)); err != nil {
+	if err := talker.Talk(c, auth); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid talk"})
 	}
 }

@@ -46,13 +46,11 @@ func (c *OpusCodec) Encode(pcm []byte) ([]byte, error) {
 	if len(pcm) == 0 {
 		return nil, nil
 	}
-
 	numSamples := len(pcm) / 2
 	samples := make([]int16, numSamples)
 	for i := 0; i < numSamples; i++ {
 		samples[i] = int16(binary.LittleEndian.Uint16(pcm[i*2 : i*2+2]))
 	}
-
 	output := make([]byte, 1000)
 	n, err := c.encoder.Encode(samples, output)
 	if err != nil {

@@ -29,7 +29,7 @@ type asteriskWebsocketStreamer struct {
 	streamer       internal_telephony_base.BaseTelephonyStreamer
 	logger         commons.Logger
 	audioProcessor *AudioProcessor
-
+	connection     *websocket.Conn
 	// Output sender state
 	outputSenderStarted bool
 	outputSenderMu      sync.Mutex
@@ -48,7 +48,7 @@ func NewAsteriskWebsocketStreamer(
 	assistant *internal_assistant_entity.Assistant,
 	conversation *internal_conversation_entity.AssistantConversation,
 	vlt *protos.VaultCredential,
-) internal_type.TelephonyStreamer {
+) internal_type.Streamer {
 	audioProcessor, err := NewAudioProcessor(logger)
 	if err != nil {
 		logger.Error("Failed to create audio processor", "error", err)
@@ -58,14 +58,14 @@ func NewAsteriskWebsocketStreamer(
 	aws := &asteriskWebsocketStreamer{
 		logger:         logger,
 		channelName:    "",
-		streamer:       internal_telephony_base.NewBaseTelephonyStreamer(logger, connection, assistant, conversation, vlt),
+		streamer:       internal_telephony_base.NewBaseTelephonyStreamer(logger, assistant, conversation, vlt),
 		audioProcessor: audioProcessor,
+		connection:     connection,
 	}
 
 	// Set up callbacks
 	audioProcessor.SetInputAudioCallback(aws.sendProcessedInputAudio)
 	audioProcessor.SetOutputChunkCallback(aws.sendAudioChunk)
-
 	return aws
 }
 
@@ -78,12 +78,12 @@ func (aws *asteriskWebsocketStreamer) sendProcessedInputAudio(audio []byte) {
 
 // sendAudioChunk sends an audio chunk to Asterisk
 func (aws *asteriskWebsocketStreamer) sendAudioChunk(chunk *AudioChunk) error {
-	if aws.streamer.Connection() == nil {
+	if aws.connection == nil {
 		return nil
 	}
 
 	// Send binary audio data directly to Asterisk
-	return aws.streamer.Connection().WriteMessage(websocket.BinaryMessage, chunk.Data)
+	return aws.connection.WriteMessage(websocket.BinaryMessage, chunk.Data)
 }
 
 // Context returns the streamer context
@@ -92,31 +92,67 @@ func (aws *asteriskWebsocketStreamer) Context() context.Context {
 }
 
 // Recv receives and processes messages from Asterisk WebSocket
-func (aws *asteriskWebsocketStreamer) Recv() (*protos.AssistantTalkInput, error) {
-	if aws.streamer.Connection() == nil {
+func (aws *asteriskWebsocketStreamer) Recv() (internal_type.Stream, error) {
+	if aws.connection == nil {
 		return nil, aws.handleError("WebSocket connection is nil", io.EOF)
 	}
-
-	messageType, message, err := aws.streamer.Connection().ReadMessage()
+	messageType, message, err := aws.connection.ReadMessage()
 	if err != nil {
 		return nil, aws.handleWebSocketError(err)
 	}
 
-	// Handle binary audio data
-	if messageType == websocket.BinaryMessage {
+	switch messageType {
+	case websocket.BinaryMessage:
 		return aws.handleAudioData(message)
-	}
+	case websocket.TextMessage:
+		event, err := internal_asterisk.ParseAsteriskEvent(string(message))
+		if err != nil {
+			aws.logger.Warn("Failed to parse Asterisk event", "error", err.Error(), "message", message)
+			return nil, nil
+		}
+		switch event.Event {
+		case "MEDIA_START":
+			aws.channelName = event.Channel
+			aws.logger.Info("Asterisk media started", "channel", aws.channelName, "optimal_frame_size", event.OptimalFrameSize)
+			if event.OptimalFrameSize > 0 {
+				aws.audioProcessor.SetOptimalFrameSize(event.OptimalFrameSize)
+			}
+			aws.startOutputSender()
+			return aws.streamer.CreateConnectionRequest(), nil
+		case "MEDIA_STOP":
+			aws.logger.Info("Asterisk media stopped")
+			aws.stopAudioProcessing()
+			aws.Cancel()
+			return nil, io.EOF
 
-	// Handle text messages (events/commands)
-	if messageType == websocket.TextMessage {
-		return aws.handleTextMessage(string(message))
+		case "MEDIA_XON":
+			// Resume audio output (flow control)
+			aws.audioProcessor.SetXON()
+
+		case "MEDIA_XOFF":
+			// Pause audio output (flow control)
+			aws.audioProcessor.SetXOFF()
+		case "MEDIA_BUFFERING_COMPLETED":
+			aws.setMediaBuffering(false)
+		default:
+			// Handle JSON command responses
+			if event.Command != "" {
+				aws.logger.Debug("Received Asterisk command response", "command", event.Command)
+			} else if event.RawMessage != "" {
+				aws.logger.Debug("Received unhandled Asterisk message", "message", event.RawMessage)
+			}
+		}
+	case websocket.CloseMessage:
+		return nil, io.EOF
+	default:
+		aws.logger.Warn("Received unsupported WebSocket message type", "type", messageType)
 	}
 
 	return nil, nil
 }
 
 // handleAudioData processes incoming binary audio data from Asterisk
-func (aws *asteriskWebsocketStreamer) handleAudioData(audio []byte) (*protos.AssistantTalkInput, error) {
+func (aws *asteriskWebsocketStreamer) handleAudioData(audio []byte) (*protos.ConversationUserMessage, error) {
 	// Process input audio through audio processor (converts ulaw 8kHz -> linear16 16kHz)
 	if err := aws.audioProcessor.ProcessInputAudio(audio); err != nil {
 		aws.logger.Debug("Failed to process input audio", "error", err.Error())
@@ -136,72 +172,11 @@ func (aws *asteriskWebsocketStreamer) handleAudioData(audio []byte) (*protos.Ass
 	return nil, nil
 }
 
-// handleTextMessage processes text messages (events/commands) from Asterisk
-func (aws *asteriskWebsocketStreamer) handleTextMessage(message string) (*protos.AssistantTalkInput, error) {
-	event, err := internal_asterisk.ParseAsteriskEvent(message)
-	if err != nil {
-		aws.logger.Warn("Failed to parse Asterisk event", "error", err.Error(), "message", message)
-		return nil, nil
-	}
-
-	switch event.Event {
-	case "MEDIA_START":
-		return aws.handleMediaStart(event)
-
-	case "MEDIA_STOP":
-		aws.logger.Info("Asterisk media stopped")
-		aws.stopAudioProcessing()
-		aws.streamer.Cancel()
-		return nil, io.EOF
-
-	case "MEDIA_XON":
-		// Resume audio output (flow control)
-		aws.audioProcessor.SetXON()
-		return nil, nil
-
-	case "MEDIA_XOFF":
-		// Pause audio output (flow control)
-		aws.audioProcessor.SetXOFF()
-		return nil, nil
-
-	case "MEDIA_BUFFERING_COMPLETED":
-		aws.setMediaBuffering(false)
-		return nil, nil
-
-	default:
-		// Handle JSON command responses
-		if event.Command != "" {
-			aws.logger.Debug("Received Asterisk command response", "command", event.Command)
-		} else if event.RawMessage != "" {
-			aws.logger.Debug("Received unhandled Asterisk message", "message", event.RawMessage)
-		}
-		return nil, nil
-	}
-}
-
-// handleMediaStart handles the MEDIA_START event from Asterisk
-func (aws *asteriskWebsocketStreamer) handleMediaStart(event *internal_asterisk.AsteriskMediaEvent) (*protos.AssistantTalkInput, error) {
-	aws.channelName = event.Channel
-	aws.logger.Info("Asterisk media started", "channel", aws.channelName, "optimal_frame_size", event.OptimalFrameSize)
-
-	// Set optimal frame size if provided
-	if event.OptimalFrameSize > 0 {
-		aws.audioProcessor.SetOptimalFrameSize(event.OptimalFrameSize)
-	}
-
-	// Start the consistent output sender when stream starts
-	aws.startOutputSender()
-
-	// Return downstream config (16kHz linear16) for STT/TTS
-	downstreamConfig := aws.audioProcessor.GetDownstreamConfig()
-	return aws.streamer.CreateConnectionRequest(downstreamConfig, downstreamConfig)
-}
-
 // Send sends output to Asterisk
-func (aws *asteriskWebsocketStreamer) Send(response *protos.AssistantTalkOutput) error {
-	switch data := response.GetData().(type) {
-	case *protos.AssistantTalkOutput_Assistant:
-		switch content := data.Assistant.Message.(type) {
+func (aws *asteriskWebsocketStreamer) Send(response internal_type.Stream) error {
+	switch data := response.(type) {
+	case *protos.ConversationAssistantMessage:
+		switch content := data.Message.(type) {
 		case *protos.ConversationAssistantMessage_Audio:
 			// Process audio through the audio processor (converts 16kHz -> 8kHz ulaw)
 			// The audio will be sent at consistent 20ms intervals by RunOutputSender
@@ -211,8 +186,8 @@ func (aws *asteriskWebsocketStreamer) Send(response *protos.AssistantTalkOutput)
 			}
 		}
 
-	case *protos.AssistantTalkOutput_Interruption:
-		if data.Interruption.Type == protos.ConversationInterruption_INTERRUPTION_TYPE_WORD {
+	case *protos.ConversationInterruption:
+		if data.Type == protos.ConversationInterruption_INTERRUPTION_TYPE_WORD {
 			// Clear both input and output buffers
 			aws.audioProcessor.ClearInputBuffer()
 			aws.audioProcessor.ClearOutputBuffer()
@@ -224,22 +199,18 @@ func (aws *asteriskWebsocketStreamer) Send(response *protos.AssistantTalkOutput)
 			}
 		}
 
-	case *protos.AssistantTalkOutput_Directive:
-		if data.Directive.GetType() == protos.ConversationDirective_END_CONVERSATION {
+	case *protos.ConversationDirective:
+		if data.GetType() == protos.ConversationDirective_END_CONVERSATION {
 			aws.stopAudioProcessing()
-
-			// Try to hangup via WebSocket command first
 			if err := aws.sendCommand("HANGUP"); err != nil {
 				aws.logger.Warn("Failed to send HANGUP via WebSocket, trying ARI API", "error", err)
-				// Fallback to ARI API if channel name is available
 				if aws.channelName != "" {
 					if err := aws.hangupViaARI(); err != nil {
 						aws.logger.Error("Failed to hangup via ARI API", "error", err)
 					}
 				}
 			}
-
-			if err := aws.streamer.Cancel(); err != nil {
+			if err := aws.Cancel(); err != nil {
 				aws.logger.Errorf("Error disconnecting:", err)
 			}
 		}
@@ -274,10 +245,10 @@ func (aws *asteriskWebsocketStreamer) startOutputSender() {
 
 // sendCommand sends a text command to Asterisk
 func (aws *asteriskWebsocketStreamer) sendCommand(command string) error {
-	if aws.streamer.Connection() == nil {
+	if aws.connection == nil {
 		return nil
 	}
-	return aws.streamer.Connection().WriteMessage(websocket.TextMessage, []byte(command))
+	return aws.connection.WriteMessage(websocket.TextMessage, []byte(command))
 }
 
 // setMediaBuffering sets the media buffering state
@@ -307,7 +278,7 @@ func (aws *asteriskWebsocketStreamer) handleWebSocketError(err error) error {
 	} else {
 		aws.logger.Error("Failed to read message from WebSocket", "error", err.Error())
 	}
-	aws.streamer.Cancel()
+	aws.Cancel()
 	return io.EOF
 }
 
@@ -345,5 +316,11 @@ func (aws *asteriskWebsocketStreamer) hangupViaARI() error {
 	}
 
 	aws.logger.Info("Successfully hung up call via ARI API", "channel", aws.channelName)
+	return nil
+}
+
+func (tws *asteriskWebsocketStreamer) Cancel() error {
+	tws.connection.Close()
+	tws.connection = nil
 	return nil
 }

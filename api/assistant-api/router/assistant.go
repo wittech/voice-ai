@@ -6,7 +6,6 @@ import (
 	assistantDeploymentApi "github.com/rapidaai/api/assistant-api/api/assistant-deployment"
 	assistantTalkApi "github.com/rapidaai/api/assistant-api/api/talk"
 	"github.com/rapidaai/api/assistant-api/config"
-	sip_infra "github.com/rapidaai/api/assistant-api/sip/infra"
 	"github.com/rapidaai/pkg/commons"
 	"github.com/rapidaai/pkg/connectors"
 	workflow_api "github.com/rapidaai/protos"
@@ -49,7 +48,6 @@ func AssistantConversationApiRoute(
 	Postgres connectors.PostgresConnector,
 	Redis connectors.RedisConnector,
 	Opensearch connectors.OpenSearchConnector,
-	sipServer *sip_infra.Server,
 ) {
 	workflow_api.RegisterTalkServiceServer(S,
 		assistantTalkApi.NewConversationGRPCApi(Cfg,
@@ -58,7 +56,6 @@ func AssistantConversationApiRoute(
 			Redis,
 			Opensearch,
 			Opensearch,
-			sipServer,
 		))
 	workflow_api.RegisterWebRTCServer(S,
 		assistantTalkApi.NewWebRtcApi(Cfg,
@@ -74,10 +71,9 @@ func TalkCallbackApiRoute(
 	cfg *config.AssistantConfig, engine *gin.Engine, logger commons.Logger,
 	postgres connectors.PostgresConnector,
 	redis connectors.RedisConnector,
-	opensearch connectors.OpenSearchConnector,
-	sipServer *sip_infra.Server) {
+	opensearch connectors.OpenSearchConnector) {
 	apiv1 := engine.Group("v1/talk")
-	talkRpcApi := assistantTalkApi.NewConversationApi(cfg, logger, postgres, redis, opensearch, opensearch, sipServer)
+	talkRpcApi := assistantTalkApi.NewConversationApi(cfg, logger, postgres, redis, opensearch, opensearch)
 	{
 		// global
 		apiv1.GET("/:telephony/event/:assistantId", talkRpcApi.UnviersalCallback)

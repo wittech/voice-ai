@@ -151,7 +151,7 @@ func (talking *genericRequestor) callDirective(ctx context.Context, vl internal_
 	anyArgs, _ := utils.InterfaceMapToAnyMap(vl.Arguments)
 	switch vl.Directive {
 	case protos.ConversationDirective_END_CONVERSATION:
-		if err := talking.Notify(ctx, &protos.AssistantTalkOutput_Directive{Directive: &protos.ConversationDirective{Id: vl.ContextID, Type: vl.Directive, Args: anyArgs, Time: timestamppb.Now()}}); err != nil {
+		if err := talking.Notify(ctx, &protos.ConversationDirective{Id: vl.ContextID, Type: vl.Directive, Args: anyArgs, Time: timestamppb.Now()}); err != nil {
 			talking.logger.Errorf("error notifying end conversation action: %v", err)
 		}
 		return nil

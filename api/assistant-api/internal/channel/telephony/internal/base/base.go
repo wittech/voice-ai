@@ -11,61 +11,65 @@ import (
 	"encoding/base64"
 	"sync"
 
-	"github.com/gorilla/websocket"
+	internal_audio "github.com/rapidaai/api/assistant-api/internal/audio"
+	internal_audio_resampler "github.com/rapidaai/api/assistant-api/internal/audio/resampler"
 	internal_assistant_entity "github.com/rapidaai/api/assistant-api/internal/entity/assistants"
 	internal_conversation_entity "github.com/rapidaai/api/assistant-api/internal/entity/conversations"
+	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 	"github.com/rapidaai/pkg/commons"
 	"github.com/rapidaai/pkg/utils"
 	"github.com/rapidaai/protos"
 )
 
+// internal rapida audio config
+var RAPIDA_AUDIO_CONFIG = internal_audio.NewLinear16khzMonoAudioConfig()
+
+//
+
 type BaseTelephonyStreamer struct {
 	logger commons.Logger
 
-	conn       *websocket.Conn
+	// conn       *websocket.Conn
 	ctx        context.Context
 	cancelFunc context.CancelFunc
 
 	assistant             *internal_assistant_entity.Assistant
 	assistantConversation *internal_conversation_entity.AssistantConversation
 	version               string
-	streamSid             string
 
 	//
-	// mutex
-	audioBufferLock   sync.Mutex
-	inputAudioBuffer  *bytes.Buffer
-	outputAudioBuffer *bytes.Buffer
-	encoder           *base64.Encoding
-	vaultCredential   *protos.VaultCredential
+	inputAudioBuffer      *bytes.Buffer
+	inputAudioBufferLock  sync.Mutex
+	outputAudioBuffer     *bytes.Buffer
+	outputAudioBufferLock sync.Mutex
+
+	resampler internal_type.AudioResampler
+	//
+	encoder         *base64.Encoding
+	vaultCredential *protos.VaultCredential
 }
 
-func NewBaseTelephonyStreamer(logger commons.Logger, conn *websocket.Conn, assistant *internal_assistant_entity.Assistant, assistantConversation *internal_conversation_entity.AssistantConversation, vlt *protos.VaultCredential) BaseTelephonyStreamer {
+func NewBaseTelephonyStreamer(logger commons.Logger, assistant *internal_assistant_entity.Assistant, assistantConversation *internal_conversation_entity.AssistantConversation, vlt *protos.VaultCredential) BaseTelephonyStreamer {
 	ctx, cancel := context.WithCancel(context.Background())
+	resampler, _ := internal_audio_resampler.GetResampler(logger)
 	return BaseTelephonyStreamer{
 		logger:                logger,
-		conn:                  conn,
 		ctx:                   ctx,
 		cancelFunc:            cancel,
 		assistant:             assistant,
+		resampler:             resampler,
 		assistantConversation: assistantConversation,
-
-		//
-		inputAudioBuffer:  new(bytes.Buffer),
-		outputAudioBuffer: new(bytes.Buffer),
-		encoder:           base64.StdEncoding,
-		vaultCredential:   vlt,
+		inputAudioBuffer:      new(bytes.Buffer),
+		outputAudioBuffer:     new(bytes.Buffer),
+		encoder:               base64.StdEncoding,
+		vaultCredential:       vlt,
 	}
 }
 
-func (base *BaseTelephonyStreamer) CreateVoiceRequest(audioData []byte) *protos.AssistantTalkInput {
-	return &protos.AssistantTalkInput{
-		Request: &protos.AssistantTalkInput_Message{
-			Message: &protos.ConversationUserMessage{
-				Message: &protos.ConversationUserMessage_Audio{
-					Audio: audioData,
-				},
-			},
+func (base *BaseTelephonyStreamer) CreateVoiceRequest(audioData []byte) *protos.ConversationUserMessage {
+	return &protos.ConversationUserMessage{
+		Message: &protos.ConversationUserMessage_Audio{
+			Audio: audioData,
 		},
 	}
 }
@@ -84,39 +88,39 @@ func (base *BaseTelephonyStreamer) Context() context.Context {
 	return base.ctx
 }
 
-func (base *BaseTelephonyStreamer) Connection() *websocket.Conn {
-	return base.conn
-}
+// func (base *BaseTelephonyStreamer) Connection() *websocket.Conn {
+// 	return base.conn
+// }
 
-func (base *BaseTelephonyStreamer) Cancel() error {
-	if base.conn != nil {
-		base.conn.Close()
-		base.conn = nil
-	}
-	base.cancelFunc()
-	return nil
-}
+// func (base *BaseTelephonyStreamer) Cancel() error {
+// 	if base.conn != nil {
+// 		base.conn.Close()
+// 		base.conn = nil
+// 	}
+// 	base.cancelFunc()
+// 	return nil
+// }
 
 // LockInputAudioBuffer locks the input audio buffer and returns it.
 // Caller MUST call UnlockInputAudioBuffer().
 func (base *BaseTelephonyStreamer) LockInputAudioBuffer() {
-	base.audioBufferLock.Lock()
+	base.inputAudioBufferLock.Lock()
 }
 
 // UnlockInputAudioBuffer unlocks the input audio buffer.
 func (base *BaseTelephonyStreamer) UnlockInputAudioBuffer() {
-	base.audioBufferLock.Unlock()
+	base.inputAudioBufferLock.Unlock()
 }
 
 // LockOutputAudioBuffer locks the output audio buffer and returns it.
 // Caller MUST call UnlockOutputAudioBuffer().
 func (base *BaseTelephonyStreamer) LockOutputAudioBuffer() {
-	base.audioBufferLock.Lock()
+	base.outputAudioBufferLock.Lock()
 }
 
 // UnlockOutputAudioBuffer unlocks the output audio buffer.
 func (base *BaseTelephonyStreamer) UnlockOutputAudioBuffer() {
-	base.audioBufferLock.Unlock()
+	base.outputAudioBufferLock.Unlock()
 }
 
 // Encoder returns the base64 encoder used by the streamer.
@@ -141,26 +145,14 @@ func (base *BaseTelephonyStreamer) VaultCredential() *protos.VaultCredential {
 	return base.vaultCredential
 }
 
-func (base *BaseTelephonyStreamer) GetUuid() string {
-	v, err := base.assistantConversation.GetMetadatas().GetString("telephony.uuid")
-	if err != nil {
-		return ""
+func (base *BaseTelephonyStreamer) CreateConnectionRequest() *protos.ConversationInitialization {
+	return &protos.ConversationInitialization{
+		AssistantConversationId: base.GetConversationId(),
+		Assistant:               base.GetAssistantDefinition(),
+		StreamMode:              protos.StreamMode_STREAM_MODE_AUDIO,
 	}
-	return v
 }
 
-func (base *BaseTelephonyStreamer) CreateConnectionRequest(in, out *protos.AudioConfig) (*protos.AssistantTalkInput, error) {
-	return &protos.AssistantTalkInput{
-		Request: &protos.AssistantTalkInput_Configuration{
-			Configuration: &protos.ConversationConfiguration{
-				AssistantConversationId: base.GetConversationId(),
-				Assistant:               base.GetAssistantDefinition(),
-				InputConfig: &protos.StreamConfig{
-					Audio: in,
-				},
-				OutputConfig: &protos.StreamConfig{
-					Audio: out,
-				},
-			},
-		}}, nil
+func (base *BaseTelephonyStreamer) GetAssistatntConversation() *internal_conversation_entity.AssistantConversation {
+	return base.assistantConversation
 }

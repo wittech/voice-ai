@@ -16,12 +16,10 @@ import (
 	"sync"
 	"time"
 
-	internal_adapter_request_customizers "github.com/rapidaai/api/assistant-api/internal/adapters/customizers"
 	internal_audio_recorder "github.com/rapidaai/api/assistant-api/internal/audio/recorder"
 	internal_assistant_entity "github.com/rapidaai/api/assistant-api/internal/entity/assistants"
 	internal_conversation_entity "github.com/rapidaai/api/assistant-api/internal/entity/conversations"
 	internal_telemetry "github.com/rapidaai/api/assistant-api/internal/telemetry"
-	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 	"github.com/rapidaai/pkg/types"
 	type_enums "github.com/rapidaai/pkg/types/enums"
 	"github.com/rapidaai/pkg/utils"
@@ -37,9 +35,6 @@ import (
 const (
 	// clientInfoMetadataKey is the metadata key used to store client information.
 	clientInfoMetadataKey = "talk.client_information"
-
-	// versionPrefix is the prefix used for assistant version identifiers.
-	versionPrefix = "vrsn_%d"
 )
 
 // =============================================================================
@@ -115,18 +110,10 @@ func (r *genericRequestor) Disconnect() {
 func (r *genericRequestor) Connect(
 	ctx context.Context,
 	auth types.SimplePrinciple,
-	identifier string,
-	config *protos.ConversationConfiguration,
+	config *protos.ConversationInitialization,
 ) error {
 	ctx, span, _ := r.Tracer().StartSpan(ctx, utils.AssistantConnectStage)
 	defer span.EndSpan(ctx, utils.AssistantConnectStage)
-
-	// Create request customizer from configuration
-	customizer, err := internal_adapter_request_customizers.NewRequestBaseCustomizer(config)
-	if err != nil {
-		r.logger.Errorf("failed to initialize request customizer: %+v", err)
-		return err
-	}
 
 	// Set authentication context
 	r.SetAuth(auth)
@@ -140,161 +127,12 @@ func (r *genericRequestor) Connect(
 
 	// Route to appropriate session handler based on conversation ID presence
 	if conversationID := config.GetAssistantConversationId(); conversationID > 0 {
-		span.AddAttributes(ctx,
-			internal_telemetry.KV{K: "conversation_initiation", V: internal_telemetry.StringValue("resume")},
-			internal_telemetry.KV{K: "conversation_id", V: internal_telemetry.IntValue(conversationID)},
-		)
-		return r.resumeSession(ctx, config, assistant, identifier, customizer)
+		span.AddAttributes(ctx, internal_telemetry.KV{K: "conversation_initiation", V: internal_telemetry.StringValue("resume")}, internal_telemetry.KV{K: "conversation_id", V: internal_telemetry.IntValue(conversationID)})
+		return r.resumeSession(ctx, config, assistant)
 	}
 
-	span.AddAttributes(ctx,
-		internal_telemetry.KV{K: "conversation_initiation", V: internal_telemetry.StringValue("new")},
-	)
-	return r.createSession(ctx, config, assistant, identifier, customizer)
-}
-
-// OnCreateSession initializes a new assistant conversation session.
-//
-// This method sets up all necessary components for a new voice conversation:
-//   - Creates a new conversation record in the database
-//   - Configures audio input/output modes based on stream settings
-//   - Initializes the LLM executor for message processing
-//   - Establishes speaker and listener connections
-//   - Starts audio recording if enabled
-//   - Sends initial configuration to the client
-//
-// Parameters:
-//   - ctx: Context for cancellation and deadline propagation
-//   - inputConfig: Stream configuration for audio input (microphone)
-//   - outputConfig: Stream configuration for audio output (speaker)
-//   - assistant: The assistant entity containing configuration details
-//   - identifier: Unique session identifier
-//   - customizer: Request customization options (args, metadata, options)
-//
-// Returns:
-//   - error: nil on success, or an error if session creation fails
-//
-// Concurrency: This method spawns multiple goroutines for parallel
-// initialization. Critical path operations run in the error group,
-// while non-critical operations run as background tasks.
-func (r *genericRequestor) OnCreateSession(
-	ctx context.Context,
-	config *protos.ConversationConfiguration,
-	assistant *internal_assistant_entity.Assistant,
-	identifier string,
-	customizer internal_type.Customization,
-) error {
-	ctx, span, _ := r.Tracer().StartSpan(ctx, utils.AssistantCreateConversationStage)
-	defer span.EndSpan(ctx, utils.AssistantCreateConversationStage)
-
-	// Create new conversation record
-	conversation, err := r.BeginConversation(
-		r.Auth(),
-		assistant,
-		type_enums.DIRECTION_INBOUND,
-		identifier,
-		customizer.GetArgs(),
-		customizer.GetMetadata(),
-		customizer.GetOptions(),
-	)
-	if err != nil {
-		r.logger.Errorf("failed to begin conversation: %+v", err)
-		return err
-	}
-
-	// Configure audio modes based on stream settings
-	audioInputConfig, audioOutputConfig := r.configureAudioModes(config.GetInputConfig(), config.GetOutputConfig())
-
-	// Initialize critical components concurrently
-	errGroup, _ := errgroup.WithContext(ctx)
-
-	errGroup.Go(func() error {
-		return r.initializeExecutor(ctx, config)
-	})
-
-	errGroup.Go(func() error {
-		r.notifyConfiguration(ctx, conversation, assistant)
-		return nil
-	})
-
-	errGroup.Go(func() error {
-		r.connectSpeakerAndInitializeBehavior(ctx, audioOutputConfig)
-		return nil
-	})
-
-	// Start non-critical background tasks
-	r.startBackgroundTasks(ctx, audioInputConfig, audioOutputConfig, true)
-
-	return errGroup.Wait()
-}
-
-// OnResumeSession resumes an existing assistant conversation session.
-//
-// This method restores a previously active conversation, allowing users
-// to continue where they left off. It re-establishes all necessary
-// connections while preserving conversation history and state.
-//
-// Parameters:
-//   - ctx: Context for cancellation and deadline propagation
-//   - inputConfig: Stream configuration for audio input (microphone)
-//   - outputConfig: Stream configuration for audio output (speaker)
-//   - assistant: The assistant entity containing configuration details
-//   - identifier: Unique session identifier
-//   - conversationID: The ID of the conversation to resume
-//   - customizer: Request customization options
-//
-// Returns:
-//   - error: nil on success, or an error if session resumption fails
-//
-// Note: The conversation must exist and be in a resumable state.
-// Attempting to resume a completed or cancelled conversation will fail.
-func (r *genericRequestor) OnResumeSession(
-	ctx context.Context,
-	config *protos.ConversationConfiguration,
-	assistant *internal_assistant_entity.Assistant,
-	identifier string,
-	conversationID uint64,
-	customizer internal_type.Customization,
-) error {
-	ctx, span, _ := r.Tracer().StartSpan(r.Context(), utils.AssistantResumeConverstaionStage)
-	defer span.EndSpan(ctx, utils.AssistantResumeConverstaionStage)
-
-	// Resume existing conversation
-	conversation, err := r.ResumeConversation(r.Auth(), assistant, conversationID, identifier)
-	if err != nil {
-		r.logger.Errorf("failed to resume conversation: %+v", err)
-		return err
-	}
-
-	// Configure audio modes based on stream settings
-	audioInputConfig, audioOutputConfig := r.configureAudioModes(config.GetInputConfig(), config.GetOutputConfig())
-
-	// Initialize critical components concurrently
-	errGroup, _ := errgroup.WithContext(ctx)
-
-	errGroup.Go(func() error {
-		return r.initializeExecutor(ctx, config)
-	})
-
-	errGroup.Go(func() error {
-		r.notifyConfiguration(ctx, conversation, assistant)
-		return nil
-	})
-
-	errGroup.Go(func() error {
-		r.connectSpeakerAndInitializeBehavior(ctx, audioOutputConfig)
-		return nil
-	})
-
-	// Start non-critical background tasks (not a new session)
-	r.startBackgroundTasks(ctx, audioInputConfig, audioOutputConfig, false)
-
-	// Trigger resume conversation hooks
-	if err := r.OnResumeConversation(); err != nil {
-		r.logger.Errorf("failed to execute resume conversation hooks: %v", err)
-	}
-
-	return errGroup.Wait()
+	span.AddAttributes(ctx, internal_telemetry.KV{K: "conversation_initiation", V: internal_telemetry.StringValue("new")})
+	return r.createSession(ctx, config, assistant)
 }
 
 // =============================================================================
@@ -364,12 +202,12 @@ func (r *genericRequestor) flushFinalMetrics() {
 func (r *genericRequestor) persistRecording(ctx context.Context) {
 	if r.recorder != nil {
 		utils.Go(r.Context(), func() {
-			audioData, err := r.recorder.Persist()
+			_, systemAudio, err := r.recorder.Persist()
 			if err != nil {
 				r.logger.Tracef(ctx, "failed to persist audio recording: %+v", err)
 				return
 			}
-			if err = r.CreateConversationRecording(audioData); err != nil {
+			if err = r.CreateConversationRecording(systemAudio); err != nil {
 				r.logger.Tracef(ctx, "failed to create conversation recording record: %+v", err)
 			}
 		})
@@ -414,36 +252,88 @@ func (r *genericRequestor) stopTimers() {
 // resumeSession delegates to OnResumeSession with extracted configuration values.
 func (r *genericRequestor) resumeSession(
 	ctx context.Context,
-	config *protos.ConversationConfiguration,
+	config *protos.ConversationInitialization,
 	assistant *internal_assistant_entity.Assistant,
-	identifier string,
-	customizer internal_type.Customization,
 ) error {
-	return r.OnResumeSession(
-		ctx,
-		config,
-		assistant,
-		identifier,
-		config.GetAssistantConversationId(),
-		customizer,
-	)
+	ctx, span, _ := r.Tracer().StartSpan(r.Context(), utils.AssistantResumeConverstaionStage)
+	defer span.EndSpan(ctx, utils.AssistantResumeConverstaionStage)
+
+	// Resume existing conversation
+	conversation, err := r.ResumeConversation(r.Auth(), assistant, config)
+	if err != nil {
+		r.logger.Errorf("failed to resume conversation: %+v", err)
+		return err
+	}
+	// Initialize critical components concurrently
+	errGroup, _ := errgroup.WithContext(ctx)
+
+	errGroup.Go(func() error {
+		return r.initializeExecutor(ctx, config)
+	})
+
+	errGroup.Go(func() error {
+		r.notifyConfiguration(ctx, config, conversation, assistant)
+		return nil
+	})
+
+	errGroup.Go(func() error {
+		r.connectSpeakerAndInitializeBehavior(ctx)
+		return nil
+	})
+
+	// Start non-critical background tasks (not a new session)
+	r.startBackgroundTasks(ctx, false)
+
+	// Trigger resume conversation hooks
+	if err := r.OnResumeConversation(); err != nil {
+		r.logger.Errorf("failed to execute resume conversation hooks: %v", err)
+	}
+
+	return errGroup.Wait()
 }
 
 // createSession delegates to OnCreateSession with extracted configuration values.
 func (r *genericRequestor) createSession(
 	ctx context.Context,
-	config *protos.ConversationConfiguration,
+	config *protos.ConversationInitialization,
 	assistant *internal_assistant_entity.Assistant,
-	identifier string,
-	customizer internal_type.Customization,
 ) error {
-	return r.OnCreateSession(
-		ctx,
-		config,
+	ctx, span, _ := r.Tracer().StartSpan(ctx, utils.AssistantCreateConversationStage)
+	defer span.EndSpan(ctx, utils.AssistantCreateConversationStage)
+
+	//
+	conversation, err := r.BeginConversation(
+		r.Auth(),
 		assistant,
-		identifier,
-		customizer,
+		type_enums.DIRECTION_INBOUND,
+		config,
 	)
+	if err != nil {
+		r.logger.Errorf("failed to begin conversation: %+v", err)
+		return err
+	}
+
+	// Initialize critical components concurrently
+	errGroup, _ := errgroup.WithContext(ctx)
+
+	errGroup.Go(func() error {
+		return r.initializeExecutor(ctx, config)
+	})
+
+	errGroup.Go(func() error {
+		r.notifyConfiguration(ctx, config, conversation, assistant)
+		return nil
+	})
+
+	errGroup.Go(func() error {
+		r.connectSpeakerAndInitializeBehavior(ctx)
+		return nil
+	})
+
+	// Start non-critical background tasks
+	r.startBackgroundTasks(ctx, true)
+
+	return errGroup.Wait()
 }
 
 // =============================================================================
@@ -471,7 +361,7 @@ func (r *genericRequestor) configureAudioModes(
 }
 
 // initializeExecutor sets up the LLM executor for processing conversation messages.
-func (r *genericRequestor) initializeExecutor(ctx context.Context, config *protos.ConversationConfiguration) error {
+func (r *genericRequestor) initializeExecutor(ctx context.Context, config *protos.ConversationInitialization) error {
 	if err := r.assistantExecutor.Initialize(ctx, r, config); err != nil {
 		r.logger.Tracef(ctx, "failed to initialize executor: %+v", err)
 		return err
@@ -485,27 +375,31 @@ func (r *genericRequestor) initializeExecutor(ctx context.Context, config *proto
 // allowing the client to track the session.
 func (r *genericRequestor) notifyConfiguration(
 	ctx context.Context,
+	config *protos.ConversationInitialization,
 	conversation *internal_conversation_entity.AssistantConversation,
 	assistant *internal_assistant_entity.Assistant,
 ) {
-	configNotification := &protos.ConversationConfiguration{
+	if err := r.Notify(ctx, &protos.ConversationInitialization{
 		AssistantConversationId: conversation.Id,
 		Assistant: &protos.AssistantDefinition{
 			AssistantId: assistant.Id,
-			Version:     fmt.Sprintf(versionPrefix, assistant.AssistantProviderId),
+			Version:     utils.GetVersionString(assistant.AssistantProviderId),
 		},
-		Time: timestamppb.Now(),
-	}
-
-	if err := r.Notify(ctx, configNotification); err != nil {
+		Args:         config.GetArgs(),
+		Metadata:     config.GetOptions(),
+		Options:      config.GetMetadata(),
+		StreamMode:   config.GetStreamMode(),
+		UserIdentity: config.GetUserIdentity(),
+		Time:         timestamppb.Now(),
+	}); err != nil {
 		r.logger.Errorf("failed to send configuration notification: %v", err)
 	}
 }
 
 // connectSpeakerAndInitializeBehavior establishes the speaker connection
 // and initializes assistant behavior (greeting, timeouts, etc.).
-func (r *genericRequestor) connectSpeakerAndInitializeBehavior(ctx context.Context, audioOutputConfig *protos.AudioConfig) {
-	if err := r.connectSpeaker(ctx, audioOutputConfig); err != nil {
+func (r *genericRequestor) connectSpeakerAndInitializeBehavior(ctx context.Context) {
+	if err := r.connectSpeaker(ctx); err != nil {
 		r.logger.Tracef(ctx, "failed to connect speaker: %+v", err)
 	}
 	if err := r.initializeBehavior(ctx); err != nil {
@@ -529,24 +423,21 @@ func (r *genericRequestor) connectSpeakerAndInitializeBehavior(ctx context.Conte
 //   - isNewSession: Whether this is a new session (triggers OnBeginConversation)
 func (r *genericRequestor) startBackgroundTasks(
 	ctx context.Context,
-	audioInputConfig, audioOutputConfig *protos.AudioConfig,
 	isNewSession bool,
 ) {
 	// Initialize audio recorder when both input and output are configured
 	utils.Go(ctx, func() {
-		if audioInputConfig != nil && audioOutputConfig != nil {
-			rc, err := internal_audio_recorder.GetRecorder(r.logger, audioInputConfig, audioOutputConfig)
-			if err != nil {
-				r.logger.Tracef(ctx, "failed to initialize audio recorder: %+v", err)
-				return
-			}
-			r.recorder = rc
+		rc, err := internal_audio_recorder.GetRecorder(r.logger)
+		if err != nil {
+			r.logger.Tracef(ctx, "failed to initialize audio recorder: %+v", err)
+			return
 		}
+		r.recorder = rc
 	})
 
 	// Establish speech-to-text listener connection
 	utils.Go(ctx, func() {
-		if err := r.connectMicrophone(ctx, audioInputConfig); err != nil {
+		if err := r.connectMicrophone(ctx); err != nil {
 			r.logger.Tracef(ctx, "failed to connect listener: %+v", err)
 		}
 	})

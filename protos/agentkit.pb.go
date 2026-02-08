@@ -29,6 +29,7 @@ type TalkInput struct {
 
 	// Types that are assignable to Request:
 	//
+	//	*TalkInput_Initialization
 	//	*TalkInput_Configuration
 	//	*TalkInput_Message
 	//	*TalkInput_Interruption
@@ -76,6 +77,13 @@ func (m *TalkInput) GetRequest() isTalkInput_Request {
 	return nil
 }
 
+func (x *TalkInput) GetInitialization() *ConversationInitialization {
+	if x, ok := x.GetRequest().(*TalkInput_Initialization); ok {
+		return x.Initialization
+	}
+	return nil
+}
+
 func (x *TalkInput) GetConfiguration() *ConversationConfiguration {
 	if x, ok := x.GetRequest().(*TalkInput_Configuration); ok {
 		return x.Configuration
@@ -115,6 +123,10 @@ type isTalkInput_Request interface {
 	isTalkInput_Request()
 }
 
+type TalkInput_Initialization struct {
+	Initialization *ConversationInitialization `protobuf:"bytes,1,opt,name=initialization,proto3,oneof"`
+}
+
 type TalkInput_Configuration struct {
 	// Configuration change notification
 	Configuration *ConversationConfiguration `protobuf:"bytes,2,opt,name=configuration,proto3,oneof"`
@@ -140,6 +152,8 @@ type TalkInput_Metrics struct {
 	Metrics *ConversationMerics `protobuf:"bytes,6,opt,name=metrics,proto3,oneof"`
 }
 
+func (*TalkInput_Initialization) isTalkInput_Request() {}
+
 func (*TalkInput_Configuration) isTalkInput_Request() {}
 
 func (*TalkInput_Message) isTalkInput_Request() {}
@@ -160,6 +174,7 @@ type TalkOutput struct {
 	Success bool  `protobuf:"varint,2,opt,name=success,proto3" json:"success,omitempty"`
 	// Types that are assignable to Data:
 	//
+	//	*TalkOutput_Initialization
 	//	*TalkOutput_Interruption
 	//	*TalkOutput_Assistant
 	//	*TalkOutput_Tool
@@ -222,6 +237,13 @@ func (m *TalkOutput) GetData() isTalkOutput_Data {
 	return nil
 }
 
+func (x *TalkOutput) GetInitialization() *ConversationInitialization {
+	if x, ok := x.GetData().(*TalkOutput_Initialization); ok {
+		return x.Initialization
+	}
+	return nil
+}
+
 func (x *TalkOutput) GetInterruption() *ConversationInterruption {
 	if x, ok := x.GetData().(*TalkOutput_Interruption); ok {
 		return x.Interruption
@@ -268,6 +290,11 @@ type isTalkOutput_Data interface {
 	isTalkOutput_Data()
 }
 
+type TalkOutput_Initialization struct {
+	// Acknowledgement of initialization
+	Initialization *ConversationInitialization `protobuf:"bytes,9,opt,name=initialization,proto3,oneof"`
+}
+
 type TalkOutput_Interruption struct {
 	// Interruption event
 	Interruption *ConversationInterruption `protobuf:"bytes,10,opt,name=interruption,proto3,oneof"`
@@ -298,6 +325,8 @@ type TalkOutput_Error struct {
 	Error *Error `protobuf:"bytes,15,opt,name=error,proto3,oneof"`
 }
 
+func (*TalkOutput_Initialization) isTalkOutput_Data() {}
+
 func (*TalkOutput_Interruption) isTalkOutput_Data() {}
 
 func (*TalkOutput_Assistant) isTalkOutput_Data() {}
@@ -316,8 +345,13 @@ var file_agentkit_proto_rawDesc = []byte{
 	0x0a, 0x0e, 0x61, 0x67, 0x65, 0x6e, 0x74, 0x6b, 0x69, 0x74, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f,
 	0x12, 0x08, 0x74, 0x61, 0x6c, 0x6b, 0x5f, 0x61, 0x70, 0x69, 0x1a, 0x0c, 0x63, 0x6f, 0x6d, 0x6d,
 	0x6f, 0x6e, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x1a, 0x0e, 0x74, 0x61, 0x6c, 0x6b, 0x2d, 0x61,
-	0x70, 0x69, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x22, 0xe4, 0x02, 0x0a, 0x09, 0x54, 0x61, 0x6c,
-	0x6b, 0x49, 0x6e, 0x70, 0x75, 0x74, 0x12, 0x4b, 0x0a, 0x0d, 0x63, 0x6f, 0x6e, 0x66, 0x69, 0x67,
+	0x70, 0x69, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x22, 0xb4, 0x03, 0x0a, 0x09, 0x54, 0x61, 0x6c,
+	0x6b, 0x49, 0x6e, 0x70, 0x75, 0x74, 0x12, 0x4e, 0x0a, 0x0e, 0x69, 0x6e, 0x69, 0x74, 0x69, 0x61,
+	0x6c, 0x69, 0x7a, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x24,
+	0x2e, 0x74, 0x61, 0x6c, 0x6b, 0x5f, 0x61, 0x70, 0x69, 0x2e, 0x43, 0x6f, 0x6e, 0x76, 0x65, 0x72,
+	0x73, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x49, 0x6e, 0x69, 0x74, 0x69, 0x61, 0x6c, 0x69, 0x7a, 0x61,
+	0x74, 0x69, 0x6f, 0x6e, 0x48, 0x00, 0x52, 0x0e, 0x69, 0x6e, 0x69, 0x74, 0x69, 0x61, 0x6c, 0x69,
+	0x7a, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x12, 0x4b, 0x0a, 0x0d, 0x63, 0x6f, 0x6e, 0x66, 0x69, 0x67,
 	0x75, 0x72, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x23, 0x2e,
 	0x74, 0x61, 0x6c, 0x6b, 0x5f, 0x61, 0x70, 0x69, 0x2e, 0x43, 0x6f, 0x6e, 0x76, 0x65, 0x72, 0x73,
 	0x61, 0x74, 0x69, 0x6f, 0x6e, 0x43, 0x6f, 0x6e, 0x66, 0x69, 0x67, 0x75, 0x72, 0x61, 0x74, 0x69,
@@ -339,10 +373,15 @@ var file_agentkit_proto_rawDesc = []byte{
 	0x6c, 0x6b, 0x5f, 0x61, 0x70, 0x69, 0x2e, 0x43, 0x6f, 0x6e, 0x76, 0x65, 0x72, 0x73, 0x61, 0x74,
 	0x69, 0x6f, 0x6e, 0x4d, 0x65, 0x72, 0x69, 0x63, 0x73, 0x48, 0x00, 0x52, 0x07, 0x6d, 0x65, 0x74,
 	0x72, 0x69, 0x63, 0x73, 0x42, 0x09, 0x0a, 0x07, 0x72, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x22,
-	0xaf, 0x03, 0x0a, 0x0a, 0x54, 0x61, 0x6c, 0x6b, 0x4f, 0x75, 0x74, 0x70, 0x75, 0x74, 0x12, 0x12,
+	0xff, 0x03, 0x0a, 0x0a, 0x54, 0x61, 0x6c, 0x6b, 0x4f, 0x75, 0x74, 0x70, 0x75, 0x74, 0x12, 0x12,
 	0x0a, 0x04, 0x63, 0x6f, 0x64, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x05, 0x52, 0x04, 0x63, 0x6f,
 	0x64, 0x65, 0x12, 0x18, 0x0a, 0x07, 0x73, 0x75, 0x63, 0x63, 0x65, 0x73, 0x73, 0x18, 0x02, 0x20,
-	0x01, 0x28, 0x08, 0x52, 0x07, 0x73, 0x75, 0x63, 0x63, 0x65, 0x73, 0x73, 0x12, 0x48, 0x0a, 0x0c,
+	0x01, 0x28, 0x08, 0x52, 0x07, 0x73, 0x75, 0x63, 0x63, 0x65, 0x73, 0x73, 0x12, 0x4e, 0x0a, 0x0e,
+	0x69, 0x6e, 0x69, 0x74, 0x69, 0x61, 0x6c, 0x69, 0x7a, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x18, 0x09,
+	0x20, 0x01, 0x28, 0x0b, 0x32, 0x24, 0x2e, 0x74, 0x61, 0x6c, 0x6b, 0x5f, 0x61, 0x70, 0x69, 0x2e,
+	0x43, 0x6f, 0x6e, 0x76, 0x65, 0x72, 0x73, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x49, 0x6e, 0x69, 0x74,
+	0x69, 0x61, 0x6c, 0x69, 0x7a, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x48, 0x00, 0x52, 0x0e, 0x69, 0x6e,
+	0x69, 0x74, 0x69, 0x61, 0x6c, 0x69, 0x7a, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x12, 0x48, 0x0a, 0x0c,
 	0x69, 0x6e, 0x74, 0x65, 0x72, 0x72, 0x75, 0x70, 0x74, 0x69, 0x6f, 0x6e, 0x18, 0x0a, 0x20, 0x01,
 	0x28, 0x0b, 0x32, 0x22, 0x2e, 0x74, 0x61, 0x6c, 0x6b, 0x5f, 0x61, 0x70, 0x69, 0x2e, 0x43, 0x6f,
 	0x6e, 0x76, 0x65, 0x72, 0x73, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x49, 0x6e, 0x74, 0x65, 0x72, 0x72,
@@ -393,36 +432,39 @@ var file_agentkit_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
 var file_agentkit_proto_goTypes = []any{
 	(*TalkInput)(nil),                    // 0: talk_api.TalkInput
 	(*TalkOutput)(nil),                   // 1: talk_api.TalkOutput
-	(*ConversationConfiguration)(nil),    // 2: talk_api.ConversationConfiguration
-	(*ConversationUserMessage)(nil),      // 3: talk_api.ConversationUserMessage
-	(*ConversationInterruption)(nil),     // 4: talk_api.ConversationInterruption
-	(*ConversationMetadata)(nil),         // 5: talk_api.ConversationMetadata
-	(*ConversationMerics)(nil),           // 6: talk_api.ConversationMerics
-	(*ConversationAssistantMessage)(nil), // 7: talk_api.ConversationAssistantMessage
-	(*ConversationToolCall)(nil),         // 8: talk_api.ConversationToolCall
-	(*ConversationToolResult)(nil),       // 9: talk_api.ConversationToolResult
-	(*ConversationDirective)(nil),        // 10: talk_api.ConversationDirective
-	(*Error)(nil),                        // 11: Error
+	(*ConversationInitialization)(nil),   // 2: talk_api.ConversationInitialization
+	(*ConversationConfiguration)(nil),    // 3: talk_api.ConversationConfiguration
+	(*ConversationUserMessage)(nil),      // 4: talk_api.ConversationUserMessage
+	(*ConversationInterruption)(nil),     // 5: talk_api.ConversationInterruption
+	(*ConversationMetadata)(nil),         // 6: talk_api.ConversationMetadata
+	(*ConversationMerics)(nil),           // 7: talk_api.ConversationMerics
+	(*ConversationAssistantMessage)(nil), // 8: talk_api.ConversationAssistantMessage
+	(*ConversationToolCall)(nil),         // 9: talk_api.ConversationToolCall
+	(*ConversationToolResult)(nil),       // 10: talk_api.ConversationToolResult
+	(*ConversationDirective)(nil),        // 11: talk_api.ConversationDirective
+	(*Error)(nil),                        // 12: Error
 }
 var file_agentkit_proto_depIdxs = []int32{
-	2,  // 0: talk_api.TalkInput.configuration:type_name -> talk_api.ConversationConfiguration
-	3,  // 1: talk_api.TalkInput.message:type_name -> talk_api.ConversationUserMessage
-	4,  // 2: talk_api.TalkInput.interruption:type_name -> talk_api.ConversationInterruption
-	5,  // 3: talk_api.TalkInput.metadata:type_name -> talk_api.ConversationMetadata
-	6,  // 4: talk_api.TalkInput.metrics:type_name -> talk_api.ConversationMerics
-	4,  // 5: talk_api.TalkOutput.interruption:type_name -> talk_api.ConversationInterruption
-	7,  // 6: talk_api.TalkOutput.assistant:type_name -> talk_api.ConversationAssistantMessage
-	8,  // 7: talk_api.TalkOutput.tool:type_name -> talk_api.ConversationToolCall
-	9,  // 8: talk_api.TalkOutput.toolResult:type_name -> talk_api.ConversationToolResult
-	10, // 9: talk_api.TalkOutput.directive:type_name -> talk_api.ConversationDirective
-	11, // 10: talk_api.TalkOutput.error:type_name -> Error
-	0,  // 11: talk_api.AgentKit.Talk:input_type -> talk_api.TalkInput
-	1,  // 12: talk_api.AgentKit.Talk:output_type -> talk_api.TalkOutput
-	12, // [12:13] is the sub-list for method output_type
-	11, // [11:12] is the sub-list for method input_type
-	11, // [11:11] is the sub-list for extension type_name
-	11, // [11:11] is the sub-list for extension extendee
-	0,  // [0:11] is the sub-list for field type_name
+	2,  // 0: talk_api.TalkInput.initialization:type_name -> talk_api.ConversationInitialization
+	3,  // 1: talk_api.TalkInput.configuration:type_name -> talk_api.ConversationConfiguration
+	4,  // 2: talk_api.TalkInput.message:type_name -> talk_api.ConversationUserMessage
+	5,  // 3: talk_api.TalkInput.interruption:type_name -> talk_api.ConversationInterruption
+	6,  // 4: talk_api.TalkInput.metadata:type_name -> talk_api.ConversationMetadata
+	7,  // 5: talk_api.TalkInput.metrics:type_name -> talk_api.ConversationMerics
+	2,  // 6: talk_api.TalkOutput.initialization:type_name -> talk_api.ConversationInitialization
+	5,  // 7: talk_api.TalkOutput.interruption:type_name -> talk_api.ConversationInterruption
+	8,  // 8: talk_api.TalkOutput.assistant:type_name -> talk_api.ConversationAssistantMessage
+	9,  // 9: talk_api.TalkOutput.tool:type_name -> talk_api.ConversationToolCall
+	10, // 10: talk_api.TalkOutput.toolResult:type_name -> talk_api.ConversationToolResult
+	11, // 11: talk_api.TalkOutput.directive:type_name -> talk_api.ConversationDirective
+	12, // 12: talk_api.TalkOutput.error:type_name -> Error
+	0,  // 13: talk_api.AgentKit.Talk:input_type -> talk_api.TalkInput
+	1,  // 14: talk_api.AgentKit.Talk:output_type -> talk_api.TalkOutput
+	14, // [14:15] is the sub-list for method output_type
+	13, // [13:14] is the sub-list for method input_type
+	13, // [13:13] is the sub-list for extension type_name
+	13, // [13:13] is the sub-list for extension extendee
+	0,  // [0:13] is the sub-list for field type_name
 }
 
 func init() { file_agentkit_proto_init() }
@@ -459,6 +501,7 @@ func file_agentkit_proto_init() {
 		}
 	}
 	file_agentkit_proto_msgTypes[0].OneofWrappers = []any{
+		(*TalkInput_Initialization)(nil),
 		(*TalkInput_Configuration)(nil),
 		(*TalkInput_Message)(nil),
 		(*TalkInput_Interruption)(nil),
@@ -466,6 +509,7 @@ func file_agentkit_proto_init() {
 		(*TalkInput_Metrics)(nil),
 	}
 	file_agentkit_proto_msgTypes[1].OneofWrappers = []any{
+		(*TalkOutput_Initialization)(nil),
 		(*TalkOutput_Interruption)(nil),
 		(*TalkOutput_Assistant)(nil),
 		(*TalkOutput_Tool)(nil),

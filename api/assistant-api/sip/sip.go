@@ -330,7 +330,7 @@ func (m *SIPManager) handleInvite(session *sip_infra.Session, fromURI, toURI str
 	callerID := fromURI
 	conversation, err := m.assistantConversationService.CreateConversation(
 		m.ctx, auth,
-		internal_adapter.Identifier(utils.SIP, m.ctx, auth, callerID),
+		callerID,
 		assistant.Id, assistant.AssistantProviderId,
 		type_enums.DIRECTION_INBOUND, utils.SIP,
 	)
@@ -409,9 +409,8 @@ func (m *SIPManager) handleOutboundAnswered(session *sip_infra.Session, fromURI,
 	}()
 
 	go func() {
-		identifier := internal_adapter.Identifier(utils.PhoneCall, m.ctx, auth, toPhone)
 		c, err := m.assistantConversationService.GetConversation(
-			m.ctx, auth, identifier, assistantID, conversationID,
+			m.ctx, auth, assistantID, conversationID,
 			&internal_services.GetConversationOption{InjectMetadata: true},
 		)
 		conversationCh <- conversationResult{c, err}
@@ -430,10 +429,9 @@ func (m *SIPManager) handleOutboundAnswered(session *sip_infra.Session, fromURI,
 			"call_id", callID,
 			"conversation_id", conversationID,
 			"error", cRes.err)
-		identifier := internal_adapter.Identifier(utils.PhoneCall, m.ctx, auth, toPhone)
 		var err error
 		conversation, err = m.assistantConversationService.CreateConversation(
-			m.ctx, auth, identifier, assistant.Id, assistant.AssistantProviderId,
+			m.ctx, auth, toPhone, assistant.Id, assistant.AssistantProviderId,
 			type_enums.DIRECTION_OUTBOUND, utils.PhoneCall,
 		)
 		if err != nil {
@@ -524,9 +522,10 @@ func (m *SIPManager) startCall(ctx context.Context, session *sip_infra.Session, 
 	}
 
 	// Create SIP streamer (uses existing session's RTP handler)
-	streamer, err := internal_telephony.Telephony(internal_telephony.SIP).SipStreamer(
-		callCtx, m.logger, session, sipConfig, assistant, conversation,
-	)
+	streamer, err := internal_telephony.Telephony(internal_telephony.SIP).
+		SipStreamer(
+			callCtx, m.logger, session, sipConfig, assistant, conversation,
+		)
 	if err != nil {
 		m.logger.Error("Failed to create SIP streamer", "error", err, "call_id", callID)
 		return
@@ -541,7 +540,6 @@ func (m *SIPManager) startCall(ctx context.Context, session *sip_infra.Session, 
 		return
 	}
 
-	identifier := internal_adapter.Identifier(source, callCtx, auth, callerID)
 	talker, err := internal_adapter.GetTalker(
 		utils.PhoneCall,
 		callCtx,
@@ -569,7 +567,7 @@ func (m *SIPManager) startCall(ctx context.Context, session *sip_infra.Session, 
 
 	// talker.Talk blocks for the call duration. If BYE cancels callCtx,
 	// Talk will observe it and return.
-	if err := talker.Talk(callCtx, auth, identifier); err != nil {
+	if err := talker.Talk(callCtx, auth); err != nil {
 		m.logger.Warnw("SIP talker exited", "error", err, "call_id", callID)
 	}
 
@@ -633,13 +631,13 @@ func (m *SIPManager) HandleIncomingCall(
 	}
 
 	// Create identifier for the conversation
-	identifier := internal_adapter.Identifier(utils.SIP, ctx, auth, callerID)
 
 	// Create new conversation for SIP session
-	conversation, err := m.assistantConversationService.CreateConversation(
-		ctx, auth, identifier, assistantID, assistant.AssistantProviderId,
-		type_enums.DIRECTION_INBOUND, utils.SIP,
-	)
+	conversation, err := m.assistantConversationService.
+		CreateConversation(
+			ctx, auth, callerID, assistantID, assistant.AssistantProviderId,
+			type_enums.DIRECTION_INBOUND, utils.SIP,
+		)
 	if err != nil {
 		m.logger.Errorf("Failed to create conversation for SIP call: %v", err)
 		return fmt.Errorf("failed to create conversation: %w", err)
@@ -708,7 +706,7 @@ func (m *SIPManager) HandleIncomingCall(
 			cancel()
 		}()
 
-		if err := talker.Talk(sipCtx, auth, identifier); err != nil {
+		if err := talker.Talk(sipCtx, auth); err != nil {
 			m.logger.Errorf("SIP conversation error: %v", err)
 		}
 

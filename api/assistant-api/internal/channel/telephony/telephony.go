@@ -43,7 +43,7 @@ func (at Telephony) String() string {
 	return string(at)
 }
 
-func GetTelephony(at Telephony, cfg *config.AssistantConfig, logger commons.Logger, sipServer *sip_infra.Server) (internal_type.Telephony, error) {
+func GetTelephony(at Telephony, cfg *config.AssistantConfig, logger commons.Logger) (internal_type.Telephony, error) {
 	switch at {
 	case Twilio:
 		return internal_twilio_telephony.NewTwilioTelephony(cfg, logger)
@@ -53,8 +53,8 @@ func GetTelephony(at Telephony, cfg *config.AssistantConfig, logger commons.Logg
 		return internal_vonage_telephony.NewVonageTelephony(cfg, logger)
 	case Asterisk:
 		return internal_asterisk_telephony.NewAsteriskTelephony(cfg, logger)
-	case SIP:
-		return internal_sip_telephony.NewSIPTelephony(cfg, logger, sipServer)
+	// case SIP:
+	// 	return internal_sip_telephony.NewSIPTelephony(cfg, logger, sipServer)
 	default:
 		return nil, errors.New("illegal telephony provider")
 	}
@@ -70,7 +70,7 @@ func (at Telephony) Streamer(
 	assistant *internal_assistant_entity.Assistant,
 	conversation *internal_conversation_entity.AssistantConversation,
 	vlt *protos.VaultCredential,
-) (internal_type.TelephonyStreamer, error) {
+) (internal_type.Streamer, error) {
 	switch at {
 	case Twilio:
 		return internal_twilio_telephony.NewTwilioWebsocketStreamer(logger, connection, assistant, conversation, vlt), nil
@@ -94,7 +94,7 @@ func (at Telephony) AudioSocketStreamer(
 	assistant *internal_assistant_entity.Assistant,
 	conversation *internal_conversation_entity.AssistantConversation,
 	vlt *protos.VaultCredential,
-) (internal_type.TelephonyStreamer, error) {
+) (internal_type.Streamer, error) {
 	switch at {
 	case Asterisk:
 		return internal_asterisk_audiosocket.NewStreamer(logger, conn, reader, writer, assistant, conversation, vlt)
@@ -109,10 +109,11 @@ func (at Telephony) SipStreamer(
 	config *sip_infra.Config,
 	assistant *internal_assistant_entity.Assistant,
 	conversation *internal_conversation_entity.AssistantConversation,
-) (internal_type.TelephonyStreamer, error) {
+	valt *protos.VaultCredential,
+) (internal_type.Streamer, error) {
 	switch at {
 	case SIP:
-		return internal_sip_telephony.NewInboundStreamer(ctx, config, logger, session, assistant, conversation)
+		return internal_sip_telephony.NewInboundStreamer(ctx, config, logger, session, assistant, conversation, valt)
 	}
 	return nil, errors.New("illegal telephony provider")
 }

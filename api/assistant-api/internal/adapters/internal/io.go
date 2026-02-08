@@ -12,6 +12,7 @@ import (
 	"time"
 
 	internal_sentence_aggregator "github.com/rapidaai/api/assistant-api/internal/aggregator/text"
+	internal_audio "github.com/rapidaai/api/assistant-api/internal/audio"
 	internal_denoiser "github.com/rapidaai/api/assistant-api/internal/denoiser"
 	internal_end_of_speech "github.com/rapidaai/api/assistant-api/internal/end_of_speech"
 	internal_assistant_entity "github.com/rapidaai/api/assistant-api/internal/entity/assistants"
@@ -40,14 +41,14 @@ func (io *genericRequestor) Input(message *protos.ConversationUserMessage) error
 // Init initializes the audio talking system for a given assistant persona.
 // It sets up both audio input and output transformer.
 // This function is typically called at the beginning of a communication session.
-func (listening *genericRequestor) connectMicrophone(ctx context.Context, audioConfig *protos.AudioConfig) error {
+func (listening *genericRequestor) connectMicrophone(ctx context.Context) error {
 	eGroup, ctx := errgroup.WithContext(ctx)
 	options := utils.Option{"microphone.eos.timeout": 500}
 	transformerConfig, _ := listening.GetSpeechToTextTransformer()
-	if transformerConfig != nil && audioConfig != nil {
+	if transformerConfig != nil {
 		options = utils.MergeMaps(options, transformerConfig.GetOptions())
 		eGroup.Go(func() error {
-			err := listening.initializeSpeechToText(ctx, transformerConfig, audioConfig, options)
+			err := listening.initializeSpeechToText(ctx, transformerConfig, options)
 			if err != nil {
 				listening.logger.Errorf("unable to initialize transformer %+v", err)
 			}
@@ -55,7 +56,7 @@ func (listening *genericRequestor) connectMicrophone(ctx context.Context, audioC
 		})
 
 		eGroup.Go(func() error {
-			err := listening.initializeVAD(ctx, audioConfig, options)
+			err := listening.initializeVAD(ctx, options)
 			if err != nil {
 				listening.logger.Errorf("illegal input audio transformer, check the config and re-init")
 			}
@@ -63,7 +64,7 @@ func (listening *genericRequestor) connectMicrophone(ctx context.Context, audioC
 		})
 
 		eGroup.Go(func() error {
-			err := listening.initializeDenoiser(ctx, audioConfig, options)
+			err := listening.initializeDenoiser(ctx, options)
 			if err != nil {
 				listening.logger.Errorf("illegal input audio transformer, check the config and re-init")
 			}
@@ -107,7 +108,7 @@ func (listening *genericRequestor) disconnectMicrophone(ctx context.Context) err
 	return nil
 }
 
-func (listening *genericRequestor) initializeSpeechToText(ctx context.Context, transformerConfig *internal_assistant_entity.AssistantDeploymentAudio, audioConfig *protos.AudioConfig, options utils.Option) error {
+func (listening *genericRequestor) initializeSpeechToText(ctx context.Context, transformerConfig *internal_assistant_entity.AssistantDeploymentAudio, options utils.Option) error {
 	ctx, span, _ := listening.Tracer().StartSpan(ctx, utils.AssistantListenConnectStage)
 	defer span.EndSpan(ctx, utils.AssistantListenConnectStage)
 
@@ -132,7 +133,7 @@ func (listening *genericRequestor) initializeSpeechToText(ctx context.Context, t
 		listening.logger,
 		transformerConfig.AudioProvider,
 		credential,
-		audioConfig,
+		internal_audio.NewLinear16khzMonoAudioConfig(),
 		func(pkt ...internal_type.Packet) error { return listening.OnPacket(ctx, pkt...) },
 		options)
 	if err != nil {
@@ -164,8 +165,8 @@ func (listening *genericRequestor) initializeEndOfSpeech(ctx context.Context, op
 	return nil
 }
 
-func (listening *genericRequestor) initializeDenoiser(ctx context.Context, audioConfig *protos.AudioConfig, options utils.Option) error {
-	denoise, err := internal_denoiser.GetDenoiser(listening.Context(), listening.logger, audioConfig, options)
+func (listening *genericRequestor) initializeDenoiser(ctx context.Context, options utils.Option) error {
+	denoise, err := internal_denoiser.GetDenoiser(listening.Context(), listening.logger, internal_audio.NewLinear16khzMonoAudioConfig(), options)
 	if err != nil {
 		listening.logger.Errorf("error wile intializing denoiser %+v", err)
 	}
@@ -173,10 +174,10 @@ func (listening *genericRequestor) initializeDenoiser(ctx context.Context, audio
 	return nil
 }
 
-func (listening *genericRequestor) initializeVAD(ctx context.Context, audioConfig *protos.AudioConfig, options utils.Option,
+func (listening *genericRequestor) initializeVAD(ctx context.Context, options utils.Option,
 ) error {
 	start := time.Now()
-	vad, err := internal_vad.GetVAD(listening.Context(), listening.logger, audioConfig, listening.OnPacket, options)
+	vad, err := internal_vad.GetVAD(listening.Context(), listening.logger, internal_audio.NewLinear16khzMonoAudioConfig(), listening.OnPacket, options)
 	if err != nil {
 		listening.logger.Errorf("error wile intializing vad %+v", err)
 		return err
@@ -189,17 +190,17 @@ func (listening *genericRequestor) initializeVAD(ctx context.Context, audioConfi
 // Init initializes the audio talking system for a given assistant persona.
 // It sets up both audio input and output transformer.
 // This function is typically called at the beginning of a communication session.
-func (spk *genericRequestor) connectSpeaker(ctx context.Context, audioOutConfig *protos.AudioConfig) error {
+func (spk *genericRequestor) connectSpeaker(ctx context.Context) error {
 	speakerOpts := spk.GetOptions()
 	var wg sync.WaitGroup
 	// initialize audio output transformer
 	outputTransformer, _ := spk.GetTextToSpeechTransformer()
-	if outputTransformer != nil && audioOutConfig != nil {
+	if outputTransformer != nil {
 		speakerOpts = utils.MergeMaps(outputTransformer.GetOptions())
 		wg.Add(1)
 		utils.Go(ctx, func() {
 			defer wg.Done()
-			if err := spk.initializeTextToSpeech(ctx, outputTransformer, audioOutConfig, speakerOpts); err != nil {
+			if err := spk.initializeTextToSpeech(ctx, outputTransformer, speakerOpts); err != nil {
 				spk.logger.Errorf("unable to initialize text to speech transformer with error %v", err)
 				return
 			}
@@ -232,7 +233,7 @@ func (spk *genericRequestor) disconnectSpeaker() error {
 	return nil
 }
 
-func (spk *genericRequestor) initializeTextToSpeech(context context.Context, transformerConfig *internal_assistant_entity.AssistantDeploymentAudio, audioConfig *protos.AudioConfig, speakerOpts utils.Option) error {
+func (spk *genericRequestor) initializeTextToSpeech(context context.Context, transformerConfig *internal_assistant_entity.AssistantDeploymentAudio, speakerOpts utils.Option) error {
 	context, span, _ := spk.Tracer().StartSpan(context, utils.AssistantSpeakConnectStage)
 	defer span.EndSpan(context, utils.AssistantSpeakConnectStage)
 	span.AddAttributes(context,
@@ -257,7 +258,7 @@ func (spk *genericRequestor) initializeTextToSpeech(context context.Context, tra
 	atransformer, err := internal_transformer.GetTextToSpeechTransformer(
 		context, spk.logger,
 		transformerConfig.GetName(),
-		credential, audioConfig,
+		credential, internal_audio.NewLinear16khzMonoAudioConfig(),
 		func(pkt ...internal_type.Packet) error { return spk.OnPacket(context, pkt...) },
 		speakerOpts)
 	if err != nil {

@@ -16,6 +16,7 @@ import (
 	"strings"
 	"sync"
 
+	internal_telephony_base "github.com/rapidaai/api/assistant-api/internal/channel/telephony/internal/base"
 	internal_assistant_entity "github.com/rapidaai/api/assistant-api/internal/entity/assistants"
 	internal_conversation_entity "github.com/rapidaai/api/assistant-api/internal/entity/conversations"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
@@ -27,6 +28,7 @@ import (
 // Streamer implements AudioSocket media streaming over TCP.
 type Streamer struct {
 	logger         commons.Logger
+	streamer       internal_telephony_base.BaseTelephonyStreamer
 	conn           net.Conn
 	reader         *bufio.Reader
 	writer         *bufio.Writer
@@ -55,12 +57,11 @@ func NewStreamer(
 	assistant *internal_assistant_entity.Assistant,
 	conversation *internal_conversation_entity.AssistantConversation,
 	vlt *protos.VaultCredential,
-) (internal_type.TelephonyStreamer, error) {
+) (internal_type.Streamer, error) {
 	audioProcessor, err := NewAudioProcessor(logger)
 	if err != nil {
 		return nil, err
 	}
-
 	if reader == nil {
 		reader = bufio.NewReader(conn)
 	}
@@ -73,6 +74,7 @@ func NewStreamer(
 	as := &Streamer{
 		logger:         logger,
 		conn:           conn,
+		streamer:       internal_telephony_base.NewBaseTelephonyStreamer(logger, assistant, conversation, vlt),
 		reader:         reader,
 		writer:         writer,
 		audioProcessor: audioProcessor,
@@ -87,9 +89,7 @@ func NewStreamer(
 
 	audioProcessor.SetInputAudioCallback(as.sendProcessedInputAudio)
 	audioProcessor.SetOutputChunkCallback(as.sendAudioChunk)
-
 	go audioProcessor.RunOutputSender(as.outputCtx)
-
 	return as, nil
 }
 
@@ -127,17 +127,22 @@ func (as *Streamer) Context() context.Context {
 }
 
 // Recv reads AudioSocket frames and returns input for the talker.
-func (as *Streamer) Recv() (*protos.AssistantTalkInput, error) {
+func (as *Streamer) Recv() (internal_type.Stream, error) {
 	if as.conn == nil {
 		return nil, io.EOF
 	}
-
 	if !as.configSent && as.initialUUID != "" {
 		as.configSent = true
-		downstreamConfig := as.audioProcessor.GetDownstreamConfig()
-		return as.createConnectionRequest(downstreamConfig, downstreamConfig)
+		return as.streamer.CreateConnectionRequest(), nil
+		// &protos.ConversationInitialization{
+		// 	AssistantConversationId: as.conversation.Id,
+		// 	Assistant: &protos.AssistantDefinition{
+		// 		AssistantId: as.assistant.Id,
+		// 		Version:     utils.GetVersionString(as.assistant.AssistantProviderId),
+		// 	},
+		// 	StreamMode: protos.StreamMode_STREAM_MODE_AUDIO,
+		// }, nil
 	}
-
 	for {
 		frame, err := ReadFrame(as.reader)
 		if err != nil {
@@ -152,8 +157,14 @@ func (as *Streamer) Recv() (*protos.AssistantTalkInput, error) {
 			as.initialUUID = strings.TrimSpace(string(frame.Payload))
 			if !as.configSent {
 				as.configSent = true
-				downstreamConfig := as.audioProcessor.GetDownstreamConfig()
-				return as.createConnectionRequest(downstreamConfig, downstreamConfig)
+				return &protos.ConversationInitialization{
+					AssistantConversationId: as.conversation.Id,
+					Assistant: &protos.AssistantDefinition{
+						AssistantId: as.assistant.Id,
+						Version:     utils.GetVersionString(as.assistant.AssistantProviderId),
+					},
+					StreamMode: protos.StreamMode_STREAM_MODE_AUDIO,
+				}, nil
 			}
 		case FrameTypeAudio:
 			if err := as.audioProcessor.ProcessInputAudio(frame.Payload); err != nil {
@@ -163,7 +174,7 @@ func (as *Streamer) Recv() (*protos.AssistantTalkInput, error) {
 
 			as.inputMu.Lock()
 			if as.inputBuffer.Len() > 0 {
-				audioRequest := as.createVoiceRequest(as.inputBuffer.Bytes())
+				audioRequest := &protos.ConversationUserMessage{Message: &protos.ConversationUserMessage_Audio{Audio: as.inputBuffer.Bytes()}}
 				as.inputBuffer.Reset()
 				as.inputMu.Unlock()
 				return audioRequest, nil
@@ -182,22 +193,22 @@ func (as *Streamer) Recv() (*protos.AssistantTalkInput, error) {
 }
 
 // Send writes audio/output frames back to Asterisk.
-func (as *Streamer) Send(response *protos.AssistantTalkOutput) error {
-	switch data := response.GetData().(type) {
-	case *protos.AssistantTalkOutput_Assistant:
-		switch content := data.Assistant.Message.(type) {
+func (as *Streamer) Send(response internal_type.Stream) error {
+	switch data := response.(type) {
+	case *protos.ConversationAssistantMessage:
+		switch content := data.GetMessage().(type) {
 		case *protos.ConversationAssistantMessage_Audio:
 			if err := as.audioProcessor.ProcessOutputAudio(content.Audio); err != nil {
 				return err
 			}
 		}
-	case *protos.AssistantTalkOutput_Interruption:
-		if data.Interruption.Type == protos.ConversationInterruption_INTERRUPTION_TYPE_WORD {
+	case *protos.ConversationInterruption:
+		if data.GetType() == protos.ConversationInterruption_INTERRUPTION_TYPE_WORD {
 			as.audioProcessor.ClearInputBuffer()
 			as.audioProcessor.ClearOutputBuffer()
 		}
-	case *protos.AssistantTalkOutput_Directive:
-		if data.Directive.GetType() == protos.ConversationDirective_END_CONVERSATION {
+	case *protos.ConversationDirective:
+		if data.GetType() == protos.ConversationDirective_END_CONVERSATION {
 			_ = as.writeFrame(FrameTypeHangup, nil)
 			return as.close()
 		}
@@ -218,32 +229,4 @@ func (as *Streamer) close() error {
 		as.conn = nil
 	}
 	return nil
-}
-
-func (as *Streamer) createVoiceRequest(audioData []byte) *protos.AssistantTalkInput {
-	return &protos.AssistantTalkInput{
-		Request: &protos.AssistantTalkInput_Message{
-			Message: &protos.ConversationUserMessage{
-				Message: &protos.ConversationUserMessage_Audio{
-					Audio: audioData,
-				},
-			},
-		},
-	}
-}
-
-func (as *Streamer) createConnectionRequest(in, out *protos.AudioConfig) (*protos.AssistantTalkInput, error) {
-	return &protos.AssistantTalkInput{
-		Request: &protos.AssistantTalkInput_Configuration{
-			Configuration: &protos.ConversationConfiguration{
-				AssistantConversationId: as.conversation.Id,
-				Assistant: &protos.AssistantDefinition{
-					AssistantId: as.assistant.Id,
-					Version:     utils.GetVersionString(as.assistant.AssistantProviderId),
-				},
-				InputConfig:  &protos.StreamConfig{Audio: in},
-				OutputConfig: &protos.StreamConfig{Audio: out},
-			},
-		},
-	}, nil
 }

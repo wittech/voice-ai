@@ -182,7 +182,6 @@ func (conversationService *assistantConversationService) Get(
 func (conversationService *assistantConversationService) GetConversation(
 	ctx context.Context,
 	auth types.SimplePrinciple,
-	identifier string,
 	assistantId uint64,
 	assistantConversationId uint64,
 	opts *internal_services.GetConversationOption) (*internal_conversation_entity.AssistantConversation, error) {
@@ -190,9 +189,8 @@ func (conversationService *assistantConversationService) GetConversation(
 	db := conversationService.postgres.DB(ctx)
 	var assistantConversation *internal_conversation_entity.AssistantConversation
 	qry := db.
-		Where("id = ? AND identifier = ? AND assistant_id = ? AND project_id = ? AND organization_id = ?",
+		Where("id = ? AND assistant_id = ? AND project_id = ? AND organization_id = ?",
 			assistantConversationId,
-			identifier,
 			assistantId,
 			*auth.GetCurrentProjectId(),
 			*auth.GetCurrentOrganizationId())

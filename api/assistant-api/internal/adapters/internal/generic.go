@@ -10,8 +10,10 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/rapidaai/api/assistant-api/config"
 	internal_adapter_request_customizers "github.com/rapidaai/api/assistant-api/internal/adapters/customizers"
+	"github.com/rapidaai/protos"
 
 	internal_assistant_telemetry "github.com/rapidaai/api/assistant-api/internal/telemetry/assistant"
 	internal_assistant_telemetry_exporters "github.com/rapidaai/api/assistant-api/internal/telemetry/assistant/exporters"
@@ -177,8 +179,8 @@ func (dm *genericRequestor) Tracer() internal_telemetry.VoiceAgentTracer {
 	return dm.tracer
 }
 
-func (gr *genericRequestor) GetAssistantConversation(auth types.SimplePrinciple, assistantId uint64, assistantConversationId uint64, identifier string) (*internal_conversation_entity.AssistantConversation, error) {
-	return gr.conversationService.GetConversation(gr.Context(), auth, identifier, assistantId, assistantConversationId, &internal_services.GetConversationOption{
+func (gr *genericRequestor) GetAssistantConversation(auth types.SimplePrinciple, assistantId uint64, assistantConversationId uint64) (*internal_conversation_entity.AssistantConversation, error) {
+	return gr.conversationService.GetConversation(gr.Context(), auth, assistantId, assistantConversationId, &internal_services.GetConversationOption{
 		InjectContext:  true,
 		InjectArgument: true,
 		InjectMetadata: true,
@@ -187,51 +189,57 @@ func (gr *genericRequestor) GetAssistantConversation(auth types.SimplePrinciple,
 	)
 }
 
-func (gr *genericRequestor) CreateAssistantConversation(auth types.SimplePrinciple, assistantId uint64, assistantProviderModelId uint64, identifier string, direction type_enums.ConversationDirection, arguments map[string]interface{}, metadata map[string]interface{}, options map[string]interface{}) (*internal_conversation_entity.AssistantConversation, error) {
-	conversation, err := gr.conversationService.CreateConversation(gr.Context(), auth, identifier, assistantId, assistantProviderModelId, direction, gr.Source())
+func (r *genericRequestor) identifier(config *protos.ConversationInitialization) string {
+	switch identity := config.GetUserIdentity().(type) {
+	case *protos.ConversationInitialization_Phone:
+		return identity.Phone.GetPhoneNumber()
+	case *protos.ConversationInitialization_Web:
+		return identity.Web.GetUserId()
+	default:
+		return uuid.NewString()
+	}
+}
+
+func (talking *genericRequestor) BeginConversation(auth types.SimplePrinciple, assistant *internal_assistant_entity.Assistant, direction type_enums.ConversationDirection, config *protos.ConversationInitialization) (*internal_conversation_entity.AssistantConversation, error) {
+	talking.assistant = assistant
+
+	conversation, err := talking.conversationService.CreateConversation(talking.Context(), auth, talking.identifier(config), assistant.Id, assistant.AssistantProviderId, direction, talking.Source())
 	if err != nil {
 		return conversation, err
 	}
-	utils.Go(gr.Context(), func() {
-		gr.conversationService.ApplyConversationArgument(gr.Context(), auth, assistantId, conversation.Id, arguments)
-	})
 
-	utils.Go(gr.Context(), func() {
-		gr.conversationService.ApplyConversationOption(gr.Context(), auth, assistantId, conversation.Id, options)
-	})
-
-	utils.Go(gr.Context(), func() {
-		gr.conversationService.ApplyConversationMetadata(gr.Context(), auth, assistantId, conversation.Id, types.NewMetadataList(metadata))
-	})
-
-	return conversation, err
-
-}
-
-func (talking *genericRequestor) BeginConversation(auth types.SimplePrinciple, assistant *internal_assistant_entity.Assistant, direction type_enums.ConversationDirection, identifier string, argument, metadata, options map[string]interface{}) (*internal_conversation_entity.AssistantConversation, error) {
-	talking.assistant = assistant
-	talking.args = argument
-	talking.options = options
-	talking.metadata = metadata
-	conversation, err := talking.CreateAssistantConversation(auth, assistant.Id, assistant.AssistantProviderId, identifier, direction, argument, metadata, options)
-	if err != nil {
-		talking.logger.Errorf("unable to initialize assistant %+v", err)
-		return nil, err
+	if arguments, err := utils.AnyMapToInterfaceMap(config.GetArgs()); err == nil {
+		talking.args = arguments
+		utils.Go(talking.Context(), func() {
+			talking.conversationService.ApplyConversationArgument(talking.Context(), auth, assistant.Id, conversation.Id, arguments)
+		})
+	}
+	if options, err := utils.AnyMapToInterfaceMap(config.GetOptions()); err == nil {
+		talking.options = options
+		utils.Go(talking.Context(), func() {
+			talking.conversationService.ApplyConversationOption(talking.Context(), auth, assistant.Id, conversation.Id, options)
+		})
+	}
+	if metadata, err := utils.AnyMapToInterfaceMap(config.GetMetadata()); err == nil {
+		talking.metadata = metadata
+		utils.Go(talking.Context(), func() {
+			talking.conversationService.ApplyConversationMetadata(talking.Context(), auth, assistant.Id, conversation.Id, types.NewMetadataList(metadata))
+		})
 	}
 	talking.assistantConversation = conversation
 	return conversation, err
 }
 
-func (talking *genericRequestor) ResumeConversation(auth types.SimplePrinciple, assistant *internal_assistant_entity.Assistant, conversationId uint64, identifier string) (*internal_conversation_entity.AssistantConversation, error) {
+func (talking *genericRequestor) ResumeConversation(auth types.SimplePrinciple, assistant *internal_assistant_entity.Assistant, config *protos.ConversationInitialization) (*internal_conversation_entity.AssistantConversation, error) {
 	talking.assistant = assistant
-	conversation, err := talking.GetAssistantConversation(auth, assistant.Id, conversationId, identifier)
+	conversation, err := talking.GetAssistantConversation(auth, assistant.Id, config.GetAssistantConversationId())
 	if err != nil {
 		talking.logger.Errorf("failed to get assistant conversation: %+v", err)
 		return nil, err
 	}
 	if conversation == nil {
-		talking.logger.Errorf("conversation not found: %d", conversationId)
-		return nil, fmt.Errorf("conversation not found: %d", conversationId)
+		talking.logger.Errorf("conversation not found: %d", config.GetAssistantConversationId())
+		return nil, fmt.Errorf("conversation not found: %d", config.GetAssistantConversationId())
 	}
 	talking.assistantConversation = conversation
 	talking.args = conversation.GetArguments()

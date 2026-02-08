@@ -305,6 +305,6 @@ type SIPSession struct {
 	TenantID    string
 	Auth        types.SimplePrinciple
 	Config      *Config
-	Streamer    internal_type.TelephonyStreamer
+	Streamer    internal_type.Streamer
 	Cancel      context.CancelFunc
 }

@@ -9,7 +9,6 @@ import (
 	"context"
 	"fmt"
 
-	internal_adapter "github.com/rapidaai/api/assistant-api/internal/adapters"
 	telephony "github.com/rapidaai/api/assistant-api/internal/channel/telephony"
 	internal_services "github.com/rapidaai/api/assistant-api/internal/services"
 	"github.com/rapidaai/pkg/types"
@@ -59,7 +58,7 @@ func (cApi *ConversationGrpcApi) CreatePhoneCall(ctx context.Context, ir *protos
 	}
 
 	// creating conversation
-	conversation, err := cApi.assistantConversationService.CreateConversation(ctx, auth, internal_adapter.Identifier(utils.PhoneCall, ctx, auth, toNumber), assistant.Id, assistant.AssistantProviderId, type_enums.DIRECTION_OUTBOUND, utils.PhoneCall)
+	conversation, err := cApi.assistantConversationService.CreateConversation(ctx, auth, toNumber, assistant.Id, assistant.AssistantProviderId, type_enums.DIRECTION_OUTBOUND, utils.PhoneCall)
 	if err != nil {
 		cApi.logger.Errorf("unable to create conversation %+v", err)
 		return utils.ErrorWithCode[protos.CreatePhoneCallResponse](200, err, "Unable to create conversation session, please check and try again.")
@@ -90,7 +89,7 @@ func (cApi *ConversationGrpcApi) CreatePhoneCall(ctx context.Context, ir *protos
 		return utils.ErrorWithCode[protos.CreatePhoneCallResponse](200, err, "Please check the credential for telephony, please check and try again.")
 	}
 
-	telephony, err := telephony.GetTelephony(telephony.Telephony(assistant.AssistantPhoneDeployment.TelephonyProvider), cApi.cfg, cApi.logger, cApi.sipServer)
+	telephony, err := telephony.GetTelephony(telephony.Telephony(assistant.AssistantPhoneDeployment.TelephonyProvider), cApi.cfg, cApi.logger)
 	if err != nil {
 		cApi.assistantConversationService.ApplyConversationMetrics(ctx, auth, assistant.Id, conversation.Id, []*types.Metric{types.NewStatusMetric(type_enums.RECORD_FAILED)})
 		return utils.ErrorWithCode[protos.CreatePhoneCallResponse](200, err, "Please check the configuration for telephony, please check and try again.")

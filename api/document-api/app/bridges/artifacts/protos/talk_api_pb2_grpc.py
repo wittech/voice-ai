@@ -6,7 +6,7 @@ import warnings
 import app.bridges.artifacts.protos.common_pb2 as common__pb2
 import app.bridges.artifacts.protos.talk_api_pb2 as talk__api__pb2
 
-GRPC_GENERATED_VERSION = '1.72.1'
+GRPC_GENERATED_VERSION = '1.78.0'
 GRPC_VERSION = grpc.__version__
 _version_not_supported = False
 
@@ -19,7 +19,7 @@ except ImportError:
 if _version_not_supported:
     raise RuntimeError(
         f'The grpc package installed is at version {GRPC_VERSION},'
-        + f' but the generated code in talk_api_pb2_grpc.py depends on'
+        + ' but the generated code in talk_api_pb2_grpc.py depends on'
         + f' grpcio>={GRPC_GENERATED_VERSION}.'
         + f' Please upgrade your grpc module to grpcio>={GRPC_GENERATED_VERSION}'
         + f' or downgrade your generated code using grpcio-tools<={GRPC_VERSION}.'
@@ -42,8 +42,8 @@ class TalkServiceStub(object):
         """
         self.AssistantTalk = channel.stream_stream(
                 '/talk_api.TalkService/AssistantTalk',
-                request_serializer=talk__api__pb2.AssistantTalkInput.SerializeToString,
-                response_deserializer=talk__api__pb2.AssistantTalkOutput.FromString,
+                request_serializer=talk__api__pb2.AssistantTalkRequest.SerializeToString,
+                response_deserializer=talk__api__pb2.AssistantTalkResponse.FromString,
                 _registered_method=True)
         self.GetAllAssistantConversation = channel.unary_unary(
                 '/talk_api.TalkService/GetAllAssistantConversation',
@@ -139,8 +139,8 @@ def add_TalkServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
             'AssistantTalk': grpc.stream_stream_rpc_method_handler(
                     servicer.AssistantTalk,
-                    request_deserializer=talk__api__pb2.AssistantTalkInput.FromString,
-                    response_serializer=talk__api__pb2.AssistantTalkOutput.SerializeToString,
+                    request_deserializer=talk__api__pb2.AssistantTalkRequest.FromString,
+                    response_serializer=talk__api__pb2.AssistantTalkResponse.SerializeToString,
             ),
             'GetAllAssistantConversation': grpc.unary_unary_rpc_method_handler(
                     servicer.GetAllAssistantConversation,
@@ -203,8 +203,8 @@ class TalkService(object):
             request_iterator,
             target,
             '/talk_api.TalkService/AssistantTalk',
-            talk__api__pb2.AssistantTalkInput.SerializeToString,
-            talk__api__pb2.AssistantTalkOutput.FromString,
+            talk__api__pb2.AssistantTalkRequest.SerializeToString,
+            talk__api__pb2.AssistantTalkResponse.FromString,
             options,
             channel_credentials,
             insecure,
