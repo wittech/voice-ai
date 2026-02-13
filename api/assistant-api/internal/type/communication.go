@@ -34,9 +34,9 @@ type InternalCaller interface {
 }
 
 type Logger interface {
-	CreateWebhookLog(webhookID uint64, httpUrl, httpMethod, event string, responseStatus int64, timeTaken int64, retryCount uint32, status type_enums.RecordState, request, response []byte) error
-	CreateToolLog(toolId uint64, messageId string, toolName string, executionMethod string, status type_enums.RecordState, timeTaken int64, request, response []byte) error
-	CreateConversationRecording(body []byte) error
+	CreateWebhookLog(ctx context.Context, webhookID uint64, httpUrl, httpMethod, event string, responseStatus int64, timeTaken int64, retryCount uint32, status type_enums.RecordState, request, response []byte) error
+	CreateToolLog(ctx context.Context, toolId uint64, messageId string, toolName string, executionMethod string, status type_enums.RecordState, timeTaken int64, request, response []byte) error
+	CreateConversationRecording(ctx context.Context, body []byte) error
 }
 
 type Communication interface {
@@ -49,9 +49,6 @@ type Communication interface {
 
 	// logging everything
 	Logger
-
-	// background context
-	Context() context.Context
 
 	// authentication
 	Auth() types.SimplePrinciple
@@ -82,9 +79,10 @@ type Communication interface {
 	GetOptions() utils.Option
 
 	//
-	GetKnowledge(knowledgeId uint64) (*internal_knowledge_gorm.Knowledge, error)
+	GetKnowledge(ctx context.Context, knowledgeId uint64) (*internal_knowledge_gorm.Knowledge, error)
 
 	RetrieveToolKnowledge(
+		ctx context.Context,
 		knowledge *internal_knowledge_gorm.Knowledge,
 		conversationMessageId string,
 		query string,

@@ -19,6 +19,7 @@ const (
 // Channel and buffer sizes
 const (
 	InputChannelSize     = 100  // Buffered channel for incoming messages
+	OutputChannelSize    = 200  // Buffered channel for outgoing Opus frames
 	ErrorChannelSize     = 1    // Error channel buffer
 	RTPBufferSize        = 1500 // Max RTP packet size (MTU)
 	MaxConsecutiveErrors = 50   // Max read errors before stopping

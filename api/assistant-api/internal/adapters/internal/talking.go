@@ -34,7 +34,7 @@ func (t *genericRequestor) Talk(ctx context.Context, auth types.SimplePrinciple)
 		select {
 		case <-ctx.Done():
 			if initialized {
-				t.Disconnect()
+				t.Disconnect(context.Background())
 			}
 			return ctx.Err()
 		default:
@@ -64,9 +64,11 @@ func (t *genericRequestor) Talk(ctx context.Context, auth types.SimplePrinciple)
 						t.messaging.SwitchMode(type_enums.TextMode)
 					case protos.StreamMode_STREAM_MODE_AUDIO:
 						utils.Go(ctx, func() {
+							t.logger.Debugf("connecting text to speech")
 							t.initializeTextToSpeech(ctx)
 						})
 						utils.Go(ctx, func() {
+							t.logger.Debugf("connecting speech to text")
 							t.initializeSpeechToText(ctx)
 						})
 						t.messaging.SwitchMode(type_enums.AudioMode)
@@ -74,16 +76,37 @@ func (t *genericRequestor) Talk(ctx context.Context, auth types.SimplePrinciple)
 				}
 			case *protos.ConversationUserMessage:
 				if initialized {
-					if err := t.Input(payload); err != nil {
-						t.logger.Errorf("error while accepting input %v", err)
+					switch msg := payload.GetMessage().(type) {
+					case *protos.ConversationUserMessage_Audio:
+						return t.OnPacket(ctx, internal_type.UserAudioPacket{Audio: msg.Audio})
+					case *protos.ConversationUserMessage_Text:
+						return t.OnPacket(ctx, internal_type.UserTextPacket{Text: msg.Text})
+					default:
+						return fmt.Errorf("illegal input from the user %+v", msg)
 					}
 				}
 			case *protos.ConversationMetadata:
+				if initialized {
+					if err := t.OnPacket(ctx,
+						internal_type.ConversationMetadataPacket{
+							ContextID: payload.GetAssistantConversationId(),
+							Metadata:  payload.GetMetadata(),
+						}); err != nil {
+						t.logger.Errorf("error while accepting input %v", err)
+					}
+				}
 				// might be used for future enhancements
-			case *protos.ConversationMerics:
+			case *protos.ConversationMetric:
+				if initialized {
+					if err := t.OnPacket(ctx,
+						internal_type.ConversationMetricPacket{
+							ContextID: payload.GetAssistantConversationId(),
+							Metrics:   payload.GetMetrics(),
+						}); err != nil {
+						t.logger.Errorf("error while accepting input %v", err)
+					}
+				}
 				// Handle metrics if needed
-			case *protos.ConversationDisconnection:
-				// Handle disconnection if needed
 			}
 		}
 	}

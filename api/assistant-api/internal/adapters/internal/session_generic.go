@@ -57,15 +57,61 @@ const (
 //
 // Thread Safety: This method is safe to call from any goroutine, but should
 // only be called once per session to avoid duplicate cleanup operations.
-func (r *genericRequestor) Disconnect() {
-	ctx, span, _ := r.Tracer().StartSpan(r.Context(), utils.AssistantDisconnectStage)
+func (r *genericRequestor) Disconnect(ctx context.Context) {
+	ctx, span, _ := r.Tracer().StartSpan(ctx, utils.AssistantDisconnectStage)
 	startTime := time.Now()
 
 	// Phase 1: Close all session resources concurrently
-	r.closeSessionResources(ctx)
+	var waitGroup sync.WaitGroup
+	waitGroup.Add(3)
+
+	// Flush final conversation metrics
+	utils.Go(ctx, func() {
+		defer waitGroup.Done()
+		conversationDuration := time.Since(r.StartedAt)
+		metrics := []*protos.Metric{
+			{
+				Name:        type_enums.TIME_TAKEN.String(),
+				Value:       fmt.Sprintf("%d", int64(conversationDuration)),
+				Description: "Total conversation duration in nanoseconds",
+			},
+			{
+				Name:        type_enums.STATUS.String(),
+				Value:       type_enums.RECORD_COMPLETE.String(),
+				Description: "Final conversation status",
+			},
+		}
+		r.onAddMetrics(ctx, metrics...)
+	})
+
+	// Close speech-to-text listener
+	utils.Go(ctx, func() {
+		defer waitGroup.Done()
+		if err := r.disconnectSpeechToText(ctx); err != nil {
+			r.logger.Tracef(ctx, "failed to close input transformer: %+v", err)
+		}
+
+		if err := r.disconnectEndOfSpeech(ctx); err != nil {
+			r.logger.Tracef(ctx, "failed to close end of speech: %+v", err)
+		}
+
+	})
+
+	// Close text-to-speech speaker
+	utils.Go(ctx, func() {
+		defer waitGroup.Done()
+		if err := r.disconnectTextToSpeech(ctx); err != nil {
+			r.logger.Tracef(ctx, "failed to close output transformer: %+v", err)
+		}
+
+		if err := r.disconnectTextAggregator(); err != nil {
+			r.logger.Tracef(ctx, "failed to close text aggregator: %+v", err)
+		}
+	})
+	waitGroup.Wait()
 
 	// Phase 2: Trigger end-of-conversation hooks
-	r.OnEndConversation()
+	r.OnEndConversation(ctx)
 
 	// Phase 3: Persist audio recording asynchronously
 	r.persistRecording(ctx)
@@ -75,9 +121,10 @@ func (r *genericRequestor) Disconnect() {
 
 	// Phase 5: Export telemetry and cleanup
 	r.exportTelemetry(ctx)
+
+	// Phase 6: Close assistant executor and stop timers
 	r.closeExecutor(ctx)
 	r.stopTimers()
-
 	r.logger.Benchmark("session.Disconnect", time.Since(startTime))
 }
 
@@ -119,7 +166,7 @@ func (r *genericRequestor) Connect(
 	r.SetAuth(auth)
 
 	// Retrieve assistant configuration
-	assistant, err := r.GetAssistant(auth, config.Assistant.AssistantId, config.Assistant.Version)
+	assistant, err := r.GetAssistant(ctx, auth, config.Assistant.AssistantId, config.Assistant.Version)
 	if err != nil {
 		r.logger.Errorf("failed to retrieve assistant configuration: %+v", err)
 		return err
@@ -135,73 +182,6 @@ func (r *genericRequestor) Connect(
 	return r.createSession(ctx, config, assistant)
 }
 
-// =============================================================================
-// Disconnect Helpers
-// =============================================================================
-
-// closeSessionResources performs concurrent cleanup of all session resources.
-//
-// This method closes listeners, speakers, and flushes final metrics in parallel
-// to minimize disconnection latency. It waits for all cleanup operations to
-// complete before returning.
-func (r *genericRequestor) closeSessionResources(ctx context.Context) {
-	var waitGroup sync.WaitGroup
-	waitGroup.Add(3)
-
-	// Flush final conversation metrics
-	utils.Go(r.Context(), func() {
-		defer waitGroup.Done()
-		r.flushFinalMetrics()
-	})
-
-	// Close speech-to-text listener
-	utils.Go(r.Context(), func() {
-		defer waitGroup.Done()
-		if err := r.disconnectSpeechToText(ctx); err != nil {
-			r.logger.Tracef(ctx, "failed to close input transformer: %+v", err)
-		}
-
-		if err := r.disconnectEndOfSpeech(ctx); err != nil {
-			r.logger.Tracef(ctx, "failed to close end of speech: %+v", err)
-		}
-
-	})
-
-	// Close text-to-speech speaker
-	utils.Go(r.Context(), func() {
-		defer waitGroup.Done()
-		if err := r.disconnectTextToSpeech(ctx); err != nil {
-			r.logger.Tracef(ctx, "failed to close output transformer: %+v", err)
-		}
-
-		if err := r.disconnectTextAggregator(); err != nil {
-			r.logger.Tracef(ctx, "failed to close text aggregator: %+v", err)
-		}
-	})
-
-	waitGroup.Wait()
-}
-
-// flushFinalMetrics records the final conversation metrics including
-// total duration and completion status.
-func (r *genericRequestor) flushFinalMetrics() {
-	conversationDuration := time.Since(r.StartedAt)
-	metrics := []*types.Metric{
-		{
-			Name:        type_enums.TIME_TAKEN.String(),
-			Value:       fmt.Sprintf("%d", int64(conversationDuration)),
-			Description: "Total conversation duration in nanoseconds",
-		},
-		{
-			Name:        type_enums.STATUS.String(),
-			Value:       type_enums.RECORD_COMPLETE.String(),
-			Description: "Final conversation status",
-		},
-	}
-
-	r.onAddMetrics(r.Auth(), metrics...)
-}
-
 // persistRecording saves the audio recording asynchronously.
 //
 // This method runs in a background goroutine to avoid blocking the
@@ -209,13 +189,13 @@ func (r *genericRequestor) flushFinalMetrics() {
 // disconnection process.
 func (r *genericRequestor) persistRecording(ctx context.Context) {
 	if r.recorder != nil {
-		utils.Go(r.Context(), func() {
+		utils.Go(ctx, func() {
 			_, systemAudio, err := r.recorder.Persist()
 			if err != nil {
 				r.logger.Tracef(ctx, "failed to persist audio recording: %+v", err)
 				return
 			}
-			if err = r.CreateConversationRecording(systemAudio); err != nil {
+			if err = r.CreateConversationRecording(ctx, systemAudio); err != nil {
 				r.logger.Tracef(ctx, "failed to create conversation recording record: %+v", err)
 			}
 		})
@@ -263,11 +243,11 @@ func (r *genericRequestor) resumeSession(
 	config *protos.ConversationInitialization,
 	assistant *internal_assistant_entity.Assistant,
 ) error {
-	ctx, span, _ := r.Tracer().StartSpan(r.Context(), utils.AssistantResumeConverstaionStage)
+	ctx, span, _ := r.Tracer().StartSpan(ctx, utils.AssistantResumeConverstaionStage)
 	defer span.EndSpan(ctx, utils.AssistantResumeConverstaionStage)
 
 	// Resume existing conversation
-	conversation, err := r.ResumeConversation(r.Auth(), assistant, config)
+	conversation, err := r.ResumeConversation(ctx, assistant, config)
 	if err != nil {
 		r.logger.Errorf("failed to resume conversation: %+v", err)
 		return err
@@ -329,7 +309,7 @@ func (r *genericRequestor) resumeSession(
 
 	// Update conversation status metric
 	utils.Go(ctx, func() {
-		r.onAddMetrics(r.Auth(), &types.Metric{
+		r.onAddMetrics(ctx, &protos.Metric{
 			Name:        type_enums.STATUS.String(),
 			Value:       type_enums.RECORD_IN_PROGRESS.String(),
 			Description: "Conversation is currently in progress",
@@ -343,13 +323,13 @@ func (r *genericRequestor) resumeSession(
 
 	// Trigger begin conversation hooks for new sessions only
 	utils.Go(ctx, func() {
-		if err := r.OnBeginConversation(); err != nil {
+		if err := r.OnBeginConversation(ctx); err != nil {
 			r.logger.Errorf("failed to execute begin conversation hooks: %+v", err)
 		}
 	})
 
 	// Trigger resume conversation hooks
-	if err := r.OnResumeConversation(); err != nil {
+	if err := r.OnResumeConversation(ctx); err != nil {
 		r.logger.Errorf("failed to execute resume conversation hooks: %v", err)
 	}
 
@@ -367,7 +347,7 @@ func (r *genericRequestor) createSession(
 
 	//
 	conversation, err := r.BeginConversation(
-		r.Auth(),
+		ctx,
 		assistant,
 		type_enums.DIRECTION_INBOUND,
 		config,
@@ -435,7 +415,7 @@ func (r *genericRequestor) createSession(
 
 	// Update conversation status metric
 	utils.Go(ctx, func() {
-		r.onAddMetrics(r.Auth(), &types.Metric{
+		r.onAddMetrics(ctx, &protos.Metric{
 			Name:        type_enums.STATUS.String(),
 			Value:       type_enums.RECORD_IN_PROGRESS.String(),
 			Description: "Conversation is currently in progress",
@@ -449,7 +429,7 @@ func (r *genericRequestor) createSession(
 
 	// Trigger begin conversation hooks for new sessions only
 	utils.Go(ctx, func() {
-		if err := r.OnBeginConversation(); err != nil {
+		if err := r.OnBeginConversation(ctx); err != nil {
 			r.logger.Errorf("failed to execute begin conversation hooks: %+v", err)
 		}
 	})
@@ -496,7 +476,7 @@ func (r *genericRequestor) storeClientInformation(ctx context.Context) {
 		r.logger.Tracef(ctx, "failed to serialize client information: %+v", err)
 		return
 	}
-	r.onSetMetadata(r.Auth(), map[string]interface{}{
+	r.onSetMetadata(ctx, r.Auth(), map[string]interface{}{
 		clientInfoMetadataKey: clientJSON,
 	})
 }

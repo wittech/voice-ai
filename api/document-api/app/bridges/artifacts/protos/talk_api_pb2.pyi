@@ -67,7 +67,7 @@ class ConversationToolResult(_message.Message):
     time: _timestamp_pb2.Timestamp
     def __init__(self, id: _Optional[str] = ..., toolId: _Optional[str] = ..., name: _Optional[str] = ..., args: _Optional[_Mapping[str, _any_pb2.Any]] = ..., success: bool = ..., time: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ...) -> None: ...
 
-class ConversationMerics(_message.Message):
+class ConversationMetric(_message.Message):
     __slots__ = ("assistantConversationId", "metrics")
     ASSISTANTCONVERSATIONID_FIELD_NUMBER: _ClassVar[int]
     METRICS_FIELD_NUMBER: _ClassVar[int]
@@ -301,21 +301,21 @@ class ConversationModeChange(_message.Message):
     def __init__(self, mode: _Optional[_Union[ConversationModeChange.ModeType, str]] = ..., time: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ...) -> None: ...
 
 class AssistantTalkRequest(_message.Message):
-    __slots__ = ("initialization", "configuration", "message", "metadata", "metrics")
+    __slots__ = ("initialization", "configuration", "message", "metadata", "metric")
     INITIALIZATION_FIELD_NUMBER: _ClassVar[int]
     CONFIGURATION_FIELD_NUMBER: _ClassVar[int]
     MESSAGE_FIELD_NUMBER: _ClassVar[int]
     METADATA_FIELD_NUMBER: _ClassVar[int]
-    METRICS_FIELD_NUMBER: _ClassVar[int]
+    METRIC_FIELD_NUMBER: _ClassVar[int]
     initialization: ConversationInitialization
     configuration: ConversationConfiguration
     message: ConversationUserMessage
     metadata: ConversationMetadata
-    metrics: ConversationMerics
-    def __init__(self, initialization: _Optional[_Union[ConversationInitialization, _Mapping]] = ..., configuration: _Optional[_Union[ConversationConfiguration, _Mapping]] = ..., message: _Optional[_Union[ConversationUserMessage, _Mapping]] = ..., metadata: _Optional[_Union[ConversationMetadata, _Mapping]] = ..., metrics: _Optional[_Union[ConversationMerics, _Mapping]] = ...) -> None: ...
+    metric: ConversationMetric
+    def __init__(self, initialization: _Optional[_Union[ConversationInitialization, _Mapping]] = ..., configuration: _Optional[_Union[ConversationConfiguration, _Mapping]] = ..., message: _Optional[_Union[ConversationUserMessage, _Mapping]] = ..., metadata: _Optional[_Union[ConversationMetadata, _Mapping]] = ..., metric: _Optional[_Union[ConversationMetric, _Mapping]] = ...) -> None: ...
 
 class AssistantTalkResponse(_message.Message):
-    __slots__ = ("code", "success", "initialization", "configuration", "interruption", "user", "assistant", "toolCall", "toolResult", "directive", "metadata", "metrics", "disconnection", "error")
+    __slots__ = ("code", "success", "initialization", "configuration", "interruption", "user", "assistant", "toolCall", "toolResult", "directive", "metadata", "metric", "disconnection", "error")
     CODE_FIELD_NUMBER: _ClassVar[int]
     SUCCESS_FIELD_NUMBER: _ClassVar[int]
     INITIALIZATION_FIELD_NUMBER: _ClassVar[int]
@@ -327,7 +327,7 @@ class AssistantTalkResponse(_message.Message):
     TOOLRESULT_FIELD_NUMBER: _ClassVar[int]
     DIRECTIVE_FIELD_NUMBER: _ClassVar[int]
     METADATA_FIELD_NUMBER: _ClassVar[int]
-    METRICS_FIELD_NUMBER: _ClassVar[int]
+    METRIC_FIELD_NUMBER: _ClassVar[int]
     DISCONNECTION_FIELD_NUMBER: _ClassVar[int]
     ERROR_FIELD_NUMBER: _ClassVar[int]
     code: int
@@ -341,10 +341,10 @@ class AssistantTalkResponse(_message.Message):
     toolResult: ConversationToolResult
     directive: ConversationDirective
     metadata: ConversationMetadata
-    metrics: ConversationMerics
+    metric: ConversationMetric
     disconnection: ConversationDisconnection
     error: ConversationError
-    def __init__(self, code: _Optional[int] = ..., success: bool = ..., initialization: _Optional[_Union[ConversationInitialization, _Mapping]] = ..., configuration: _Optional[_Union[ConversationConfiguration, _Mapping]] = ..., interruption: _Optional[_Union[ConversationInterruption, _Mapping]] = ..., user: _Optional[_Union[ConversationUserMessage, _Mapping]] = ..., assistant: _Optional[_Union[ConversationAssistantMessage, _Mapping]] = ..., toolCall: _Optional[_Union[ConversationToolCall, _Mapping]] = ..., toolResult: _Optional[_Union[ConversationToolResult, _Mapping]] = ..., directive: _Optional[_Union[ConversationDirective, _Mapping]] = ..., metadata: _Optional[_Union[ConversationMetadata, _Mapping]] = ..., metrics: _Optional[_Union[ConversationMerics, _Mapping]] = ..., disconnection: _Optional[_Union[ConversationDisconnection, _Mapping]] = ..., error: _Optional[_Union[ConversationError, _Mapping]] = ...) -> None: ...
+    def __init__(self, code: _Optional[int] = ..., success: bool = ..., initialization: _Optional[_Union[ConversationInitialization, _Mapping]] = ..., configuration: _Optional[_Union[ConversationConfiguration, _Mapping]] = ..., interruption: _Optional[_Union[ConversationInterruption, _Mapping]] = ..., user: _Optional[_Union[ConversationUserMessage, _Mapping]] = ..., assistant: _Optional[_Union[ConversationAssistantMessage, _Mapping]] = ..., toolCall: _Optional[_Union[ConversationToolCall, _Mapping]] = ..., toolResult: _Optional[_Union[ConversationToolResult, _Mapping]] = ..., directive: _Optional[_Union[ConversationDirective, _Mapping]] = ..., metadata: _Optional[_Union[ConversationMetadata, _Mapping]] = ..., metric: _Optional[_Union[ConversationMetric, _Mapping]] = ..., disconnection: _Optional[_Union[ConversationDisconnection, _Mapping]] = ..., error: _Optional[_Union[ConversationError, _Mapping]] = ...) -> None: ...
 
 class CreateMessageMetricRequest(_message.Message):
     __slots__ = ("assistantId", "assistantConversationId", "messageId", "metrics")

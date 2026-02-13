@@ -38,6 +38,7 @@ type Logger interface {
 
 	Error(args ...interface{})
 	Errorf(template string, args ...interface{})
+	Errorw(template string, args ...interface{})
 
 	// Panic levels
 	DPanic(args ...interface{})
@@ -348,6 +349,10 @@ func (l *applicationLogger) Error(args ...interface{}) {
 
 func (l *applicationLogger) Errorf(template string, args ...interface{}) {
 	l.sugarLogger.Errorf(template, args...)
+}
+
+func (l *applicationLogger) Errorw(template string, args ...interface{}) {
+	l.sugarLogger.Errorw(template, args...)
 }
 
 // ============================================================================

@@ -46,8 +46,8 @@ func (uds *unidirectionalStreamer) Recv() (internal_type.Stream, error) {
 		return in.Message, nil
 	case *protos.AssistantTalkRequest_Metadata:
 		return in.Metadata, nil
-	case *protos.AssistantTalkRequest_Metrics:
-		return in.Metrics, nil
+	case *protos.AssistantTalkRequest_Metric:
+		return in.Metric, nil
 	}
 	return nil, nil
 }
@@ -120,11 +120,11 @@ func (uds *unidirectionalStreamer) Send(out internal_type.Stream) error {
 			Data:    &protos.AssistantTalkResponse_Metadata{Metadata: out},
 		})
 
-	case *protos.ConversationMerics:
+	case *protos.ConversationMetric:
 		return uds.server.Send(&protos.AssistantTalkResponse{
 			Code:    200,
 			Success: true,
-			Data:    &protos.AssistantTalkResponse_Metrics{Metrics: out},
+			Data:    &protos.AssistantTalkResponse_Metric{Metric: out},
 		})
 
 	case *protos.ConversationError:

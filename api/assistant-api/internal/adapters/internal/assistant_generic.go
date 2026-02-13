@@ -15,6 +15,7 @@ import (
 	internal_services "github.com/rapidaai/api/assistant-api/internal/services"
 	"github.com/rapidaai/pkg/types"
 	"github.com/rapidaai/pkg/utils"
+	"github.com/rapidaai/protos"
 )
 
 func (dm *genericRequestor) Assistant() *internal_assistant_entity.Assistant {
@@ -79,6 +80,7 @@ func (gr *genericRequestor) GetTextToSpeechTransformer() (*internal_assistant_en
 }
 
 func (gr *genericRequestor) GetAssistant(
+	ctx context.Context,
 	auth types.SimplePrinciple,
 	assistantId uint64,
 	version string) (*internal_assistant_entity.Assistant, error) {
@@ -108,7 +110,7 @@ func (gr *genericRequestor) GetAssistant(
 	case utils.Debugger:
 		assistantOpts.InjectDebuggerDeployment = true
 	}
-	return gr.assistantService.Get(gr.ctx, auth, assistantId, versionId, assistantOpts)
+	return gr.assistantService.Get(ctx, auth, assistantId, versionId, assistantOpts)
 }
 
 /*
@@ -159,7 +161,7 @@ func (tc *genericRequestor) GetMetadata() map[string]interface{} {
 	return tc.metadata
 }
 
-func (tc *genericRequestor) onSetMetadata(auth types.SimplePrinciple, mt map[string]interface{}) {
+func (tc *genericRequestor) onSetMetadata(ctx context.Context, auth types.SimplePrinciple, mt map[string]interface{}) {
 	modified := make(map[string]interface{})
 	for k, v := range mt {
 		vl, ok := tc.metadata[k]
@@ -169,60 +171,46 @@ func (tc *genericRequestor) onSetMetadata(auth types.SimplePrinciple, mt map[str
 		tc.metadata[k] = v
 		modified[k] = v
 	}
-	utils.Go(tc.Context(), func() {
+	utils.Go(ctx, func() {
 		start := time.Now()
 		tc.conversationService.ApplyConversationMetadata(
-			tc.Context(),
+			ctx,
 			auth, tc.assistant.Id, tc.assistantConversation.Id, types.NewMetadataList(modified))
 		tc.logger.Benchmark("genericRequestor.SetMetadata", time.Since(start))
 	})
 
 }
 
-// for the conversation metrics
-// for adding another metrics
-// -----------------------------------------------------------------------------
-// Metrics Management
-// -----------------------------------------------------------------------------
-//
-// The following methods are responsible for managing metrics associated with
-// the genericRequestor. Metrics provide valuable insights into the
-// conversation's performance, usage, and other relevant statistics.
-//
-// GetMetrics retrieves the current set of metrics associated with this
-// conversation. It returns a slice of Metric pointers, allowing the caller
-// to access and analyze various aspects of the conversation's performance.
-//
-// AddMetrics allows for the addition of new metrics to the conversation.
-// This method can be used to update or extend the existing set of metrics
-// with new data points or measurements.
-//
-// These methods play a crucial role in monitoring and analyzing the behavior
-// and performance of the genericRequestor, enabling data-driven
-// improvements and optimizations.
-//
-// -----------------------------------------------------------------------------
-
-func (tc *genericRequestor) onAddMetrics(auth types.SimplePrinciple, metrics ...*types.Metric) {
-	utils.Go(tc.ctx, func() {
-		start := time.Now()
-		_, err := tc.conversationService.ApplyConversationMetrics(
-			tc.ctx,
-			auth,
-			tc.assistant.Id,
-			tc.assistantConversation.Id,
-			metrics,
-		)
-		tc.logger.Benchmark("genericRequestor.AddMetrics", time.Since(start))
-		if err != nil {
-			tc.logger.Errorf("unable to flush metrics for conversation %+v", err)
-		}
-	})
+func (tc *genericRequestor) onAddMetadata(ctx context.Context, metadata ...*protos.Metadata) error {
+	_, err := tc.conversationService.ApplyConversationMetadata(
+		ctx,
+		tc.auth,
+		tc.assistant.Id,
+		tc.assistantConversation.Id,
+		types.ToMetadatas(metadata),
+	)
+	if err != nil {
+		tc.logger.Errorf("unable to flush metadata for conversation %+v", err)
+	}
+	return err
 }
 
-func (deb *genericRequestor) onMessageMetric(ctx context.Context, messageId string, metrics []*types.Metric) error {
-	if _, err := deb.
-		conversationService.ApplyMessageMetrics(ctx, deb.Auth(), deb.Conversation().Id, messageId, metrics); err != nil {
+func (tc *genericRequestor) onAddMetrics(ctx context.Context, metrics ...*protos.Metric) error {
+	_, err := tc.conversationService.ApplyConversationMetrics(
+		ctx,
+		tc.auth,
+		tc.assistant.Id,
+		tc.assistantConversation.Id,
+		types.ToMetrics(metrics),
+	)
+	if err != nil {
+		tc.logger.Errorf("unable to flush metrics for conversation %+v", err)
+	}
+	return err
+}
+
+func (deb *genericRequestor) onMessageMetric(ctx context.Context, messageId string, metrics []*protos.Metric) error {
+	if _, err := deb.conversationService.ApplyMessageMetrics(ctx, deb.Auth(), deb.Conversation().Id, messageId, types.ToMetrics(metrics)); err != nil {
 		deb.logger.Errorf("error updating metrics for message: %v", err)
 		return err
 	}

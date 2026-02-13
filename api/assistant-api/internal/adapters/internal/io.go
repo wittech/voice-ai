@@ -7,7 +7,6 @@ package adapter_internal
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"time"
 
@@ -20,21 +19,8 @@ import (
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 	internal_vad "github.com/rapidaai/api/assistant-api/internal/vad"
 	"github.com/rapidaai/pkg/utils"
-	"github.com/rapidaai/protos"
 	"golang.org/x/sync/errgroup"
 )
-
-func (io *genericRequestor) Input(message *protos.ConversationUserMessage) error {
-	switch msg := message.GetMessage().(type) {
-	case *protos.ConversationUserMessage_Audio:
-		return io.OnPacket(io.Context(), internal_type.UserAudioPacket{Audio: msg.Audio})
-	case *protos.ConversationUserMessage_Text:
-		return io.OnPacket(io.Context(), internal_type.UserTextPacket{Text: msg.Text})
-	default:
-		return fmt.Errorf("illegal input from the user %+v", msg)
-	}
-
-}
 
 // Init initializes the audio talking system for a given assistant persona.
 // It sets up both audio input and output transformer.
@@ -68,7 +54,7 @@ func (listening *genericRequestor) initializeSpeechToText(ctx context.Context) e
 			}
 
 			atransformer, err := internal_transformer.GetSpeechToTextTransformer(
-				listening.Context(),
+				ctx,
 				listening.logger,
 				transformerConfig.AudioProvider,
 				credential,
@@ -163,7 +149,7 @@ func (listening *genericRequestor) disconnectEndOfSpeech(ctx context.Context) er
 }
 
 func (listening *genericRequestor) initializeDenoiser(ctx context.Context, options utils.Option) error {
-	denoise, err := internal_denoiser.GetDenoiser(listening.Context(), listening.logger, internal_audio.NewLinear16khzMonoAudioConfig(), options)
+	denoise, err := internal_denoiser.GetDenoiser(ctx, listening.logger, internal_audio.NewLinear16khzMonoAudioConfig(), options)
 	if err != nil {
 		listening.logger.Errorf("error wile intializing denoiser %+v", err)
 	}
@@ -173,7 +159,7 @@ func (listening *genericRequestor) initializeDenoiser(ctx context.Context, optio
 
 func (listening *genericRequestor) initializeVAD(ctx context.Context, options utils.Option,
 ) error {
-	vad, err := internal_vad.GetVAD(listening.Context(), listening.logger, internal_audio.NewLinear16khzMonoAudioConfig(), listening.OnPacket, options)
+	vad, err := internal_vad.GetVAD(ctx, listening.logger, internal_audio.NewLinear16khzMonoAudioConfig(), listening.OnPacket, options)
 	if err != nil {
 		listening.logger.Errorf("error wile intializing vad %+v", err)
 		return err
@@ -252,9 +238,9 @@ func (spk *genericRequestor) initializeTextAggregator(ctx context.Context) error
 	if outputTransformer != nil {
 		speakerOpts = utils.MergeMaps(outputTransformer.GetOptions())
 	}
-	if textAggregator, err := internal_sentence_aggregator.GetLLMTextAggregator(spk.Context(), spk.logger, speakerOpts); err == nil {
+	if textAggregator, err := internal_sentence_aggregator.GetLLMTextAggregator(ctx, spk.logger, speakerOpts); err == nil {
 		spk.textAggregator = textAggregator
-		go spk.onAssembleSentence(spk.Context())
+		go spk.onAssembleSentence(ctx)
 	}
 	return nil
 }
@@ -270,12 +256,9 @@ func (spk *genericRequestor) onAssembleSentence(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			spk.logger.Debugf("OnCompleteSentence stopped due to context cancellation")
 			return
-
 		case result, ok := <-spk.textAggregator.Result():
 			if !ok {
-				spk.logger.Debugf("speak: OnCompleteSentence tokenizer channel closed")
 				return
 			}
 			spk.callSpeaking(ctx, result)

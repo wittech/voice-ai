@@ -40,7 +40,6 @@ import {
 import { useEffect, useState } from 'react';
 import { Navigate, useParams, useSearchParams } from 'react-router-dom';
 import { PageLoader } from '@/app/components/loader/page-loader';
-import { e } from '@rapidaai/react/dist/device-selector-BmC12d-7';
 
 /**
  *
@@ -404,7 +403,6 @@ export const PreviewPhoneAgent = () => {
               </div>
             </div>
           </div>
-
           <div className="w-[500px] border-l h-dvh overflow-auto">
             <div className="px-4 py-4 text-sm leading-normal ">
               <div className="flex flex-row justify-between items-center text-sm tracking-wider">

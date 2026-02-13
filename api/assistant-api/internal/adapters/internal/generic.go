@@ -47,7 +47,6 @@ import (
 type genericRequestor struct {
 	logger   commons.Logger
 	config   *config.AssistantConfig
-	ctx      context.Context
 	source   utils.RapidaSource
 	auth     types.SimplePrinciple
 	streamer internal_type.Streamer
@@ -120,7 +119,6 @@ func NewGenericRequestor(
 	return &genericRequestor{
 		logger:   logger,
 		config:   config,
-		ctx:      ctx,
 		source:   source,
 		streamer: streamer,
 		// services
@@ -155,11 +153,6 @@ func NewGenericRequestor(
 	}
 }
 
-// Context implements internal_adapter_requests.Messaging.
-func (dm *genericRequestor) Context() context.Context {
-	return dm.ctx
-}
-
 // GetSource implements internal_adapter_requests.Messaging.
 func (dm *genericRequestor) Source() utils.RapidaSource {
 	return dm.source
@@ -179,8 +172,8 @@ func (dm *genericRequestor) Tracer() internal_telemetry.VoiceAgentTracer {
 	return dm.tracer
 }
 
-func (gr *genericRequestor) GetAssistantConversation(auth types.SimplePrinciple, assistantId uint64, assistantConversationId uint64) (*internal_conversation_entity.AssistantConversation, error) {
-	return gr.conversationService.GetConversation(gr.Context(), auth, assistantId, assistantConversationId, &internal_services.GetConversationOption{
+func (gr *genericRequestor) GetAssistantConversation(ctx context.Context, auth types.SimplePrinciple, assistantId uint64, assistantConversationId uint64) (*internal_conversation_entity.AssistantConversation, error) {
+	return gr.conversationService.GetConversation(ctx, auth, assistantId, assistantConversationId, &internal_services.GetConversationOption{
 		InjectContext:  true,
 		InjectArgument: true,
 		InjectMetadata: true,
@@ -200,39 +193,38 @@ func (r *genericRequestor) identifier(config *protos.ConversationInitialization)
 	}
 }
 
-func (talking *genericRequestor) BeginConversation(auth types.SimplePrinciple, assistant *internal_assistant_entity.Assistant, direction type_enums.ConversationDirection, config *protos.ConversationInitialization) (*internal_conversation_entity.AssistantConversation, error) {
+func (talking *genericRequestor) BeginConversation(ctx context.Context, assistant *internal_assistant_entity.Assistant, direction type_enums.ConversationDirection, config *protos.ConversationInitialization) (*internal_conversation_entity.AssistantConversation, error) {
 	talking.assistant = assistant
-
-	conversation, err := talking.conversationService.CreateConversation(talking.Context(), auth, talking.identifier(config), assistant.Id, assistant.AssistantProviderId, direction, talking.Source())
+	conversation, err := talking.conversationService.CreateConversation(ctx, talking.Auth(), talking.identifier(config), assistant.Id, assistant.AssistantProviderId, direction, talking.Source())
 	if err != nil {
 		return conversation, err
 	}
 
 	if arguments, err := utils.AnyMapToInterfaceMap(config.GetArgs()); err == nil {
 		talking.args = arguments
-		utils.Go(talking.Context(), func() {
-			talking.conversationService.ApplyConversationArgument(talking.Context(), auth, assistant.Id, conversation.Id, arguments)
+		utils.Go(ctx, func() {
+			talking.conversationService.ApplyConversationArgument(ctx, talking.Auth(), assistant.Id, conversation.Id, arguments)
 		})
 	}
 	if options, err := utils.AnyMapToInterfaceMap(config.GetOptions()); err == nil {
 		talking.options = options
-		utils.Go(talking.Context(), func() {
-			talking.conversationService.ApplyConversationOption(talking.Context(), auth, assistant.Id, conversation.Id, options)
+		utils.Go(ctx, func() {
+			talking.conversationService.ApplyConversationOption(ctx, talking.Auth(), assistant.Id, conversation.Id, options)
 		})
 	}
 	if metadata, err := utils.AnyMapToInterfaceMap(config.GetMetadata()); err == nil {
 		talking.metadata = metadata
-		utils.Go(talking.Context(), func() {
-			talking.conversationService.ApplyConversationMetadata(talking.Context(), auth, assistant.Id, conversation.Id, types.NewMetadataList(metadata))
+		utils.Go(ctx, func() {
+			talking.conversationService.ApplyConversationMetadata(ctx, talking.Auth(), assistant.Id, conversation.Id, types.NewMetadataList(metadata))
 		})
 	}
 	talking.assistantConversation = conversation
 	return conversation, err
 }
 
-func (talking *genericRequestor) ResumeConversation(auth types.SimplePrinciple, assistant *internal_assistant_entity.Assistant, config *protos.ConversationInitialization) (*internal_conversation_entity.AssistantConversation, error) {
+func (talking *genericRequestor) ResumeConversation(ctx context.Context, assistant *internal_assistant_entity.Assistant, config *protos.ConversationInitialization) (*internal_conversation_entity.AssistantConversation, error) {
 	talking.assistant = assistant
-	conversation, err := talking.GetAssistantConversation(auth, assistant.Id, config.GetAssistantConversationId())
+	conversation, err := talking.GetAssistantConversation(ctx, talking.Auth(), assistant.Id, config.GetAssistantConversationId())
 	if err != nil {
 		talking.logger.Errorf("failed to get assistant conversation: %+v", err)
 		return nil, err
@@ -261,8 +253,8 @@ func (talking *genericRequestor) DeploymentCaller() endpoint_client.DeploymentSe
 	return talking.deploymentClient
 }
 
-func (talking *genericRequestor) GetKnowledge(knowledgeId uint64) (*internal_knowledge_gorm.Knowledge, error) {
-	return talking.knowledgeService.Get(talking.ctx, talking.auth, knowledgeId)
+func (talking *genericRequestor) GetKnowledge(ctx context.Context, knowledgeId uint64) (*internal_knowledge_gorm.Knowledge, error) {
+	return talking.knowledgeService.Get(ctx, talking.auth, knowledgeId)
 }
 
 func (gr *genericRequestor) GetArgs() map[string]interface{} {
@@ -277,8 +269,8 @@ func (dm *genericRequestor) GetHistories() []internal_type.MessagePacket {
 	return dm.histories
 }
 
-func (gr *genericRequestor) CreateConversationRecording(body []byte) error {
-	if _, err := gr.conversationService.CreateConversationRecording(gr.ctx, gr.auth, gr.assistant.Id, gr.assistantConversation.Id, body); err != nil {
+func (gr *genericRequestor) CreateConversationRecording(ctx context.Context, body []byte) error {
+	if _, err := gr.conversationService.CreateConversationRecording(ctx, gr.auth, gr.assistant.Id, gr.assistantConversation.Id, body); err != nil {
 		gr.logger.Errorf("unable to create recording for the conversation id %d with error : %v", err)
 		return err
 	}

@@ -8,20 +8,20 @@ from typing import ClassVar as _ClassVar, Optional as _Optional, Union as _Union
 DESCRIPTOR: _descriptor.FileDescriptor
 
 class TalkInput(_message.Message):
-    __slots__ = ("initialization", "configuration", "message", "interruption", "metadata", "metrics")
+    __slots__ = ("initialization", "configuration", "message", "interruption", "metadata", "metric")
     INITIALIZATION_FIELD_NUMBER: _ClassVar[int]
     CONFIGURATION_FIELD_NUMBER: _ClassVar[int]
     MESSAGE_FIELD_NUMBER: _ClassVar[int]
     INTERRUPTION_FIELD_NUMBER: _ClassVar[int]
     METADATA_FIELD_NUMBER: _ClassVar[int]
-    METRICS_FIELD_NUMBER: _ClassVar[int]
+    METRIC_FIELD_NUMBER: _ClassVar[int]
     initialization: _talk_api_pb2.ConversationInitialization
     configuration: _talk_api_pb2.ConversationConfiguration
     message: _talk_api_pb2.ConversationUserMessage
     interruption: _talk_api_pb2.ConversationInterruption
     metadata: _talk_api_pb2.ConversationMetadata
-    metrics: _talk_api_pb2.ConversationMerics
-    def __init__(self, initialization: _Optional[_Union[_talk_api_pb2.ConversationInitialization, _Mapping]] = ..., configuration: _Optional[_Union[_talk_api_pb2.ConversationConfiguration, _Mapping]] = ..., message: _Optional[_Union[_talk_api_pb2.ConversationUserMessage, _Mapping]] = ..., interruption: _Optional[_Union[_talk_api_pb2.ConversationInterruption, _Mapping]] = ..., metadata: _Optional[_Union[_talk_api_pb2.ConversationMetadata, _Mapping]] = ..., metrics: _Optional[_Union[_talk_api_pb2.ConversationMerics, _Mapping]] = ...) -> None: ...
+    metric: _talk_api_pb2.ConversationMetric
+    def __init__(self, initialization: _Optional[_Union[_talk_api_pb2.ConversationInitialization, _Mapping]] = ..., configuration: _Optional[_Union[_talk_api_pb2.ConversationConfiguration, _Mapping]] = ..., message: _Optional[_Union[_talk_api_pb2.ConversationUserMessage, _Mapping]] = ..., interruption: _Optional[_Union[_talk_api_pb2.ConversationInterruption, _Mapping]] = ..., metadata: _Optional[_Union[_talk_api_pb2.ConversationMetadata, _Mapping]] = ..., metric: _Optional[_Union[_talk_api_pb2.ConversationMetric, _Mapping]] = ...) -> None: ...
 
 class TalkOutput(_message.Message):
     __slots__ = ("code", "success", "initialization", "interruption", "assistant", "tool", "toolResult", "directive", "error")

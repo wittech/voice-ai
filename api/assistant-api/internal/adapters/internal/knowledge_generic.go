@@ -24,9 +24,9 @@ const (
 	defaultScoreThreshold = 0.5
 )
 
-func (kr *genericRequestor) RetrieveToolKnowledge(knowledge *internal_knowledge_gorm.Knowledge, messageId string, query string, filter map[string]interface{}, kc *internal_type.KnowledgeRetrieveOption) ([]internal_type.KnowledgeContextResult, error) {
+func (kr *genericRequestor) RetrieveToolKnowledge(ctx context.Context, knowledge *internal_knowledge_gorm.Knowledge, messageId string, query string, filter map[string]interface{}, kc *internal_type.KnowledgeRetrieveOption) ([]internal_type.KnowledgeContextResult, error) {
 	start := time.Now()
-	result, err := kr.retrieve(kr.Context(), knowledge, query, filter, kc)
+	result, err := kr.retrieve(ctx, knowledge, query, filter, kc)
 	utils.Go(context.Background(), func() {
 		request, _ := json.Marshal(map[string]interface{}{
 			"query":  query,
@@ -43,6 +43,7 @@ func (kr *genericRequestor) RetrieveToolKnowledge(knowledge *internal_knowledge_
 			})
 		}
 		kr.CreateKnowledgeLog(
+			ctx,
 			knowledge.Id,
 			kc.RetrievalMethod,
 			kc.TopK,

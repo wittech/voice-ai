@@ -23,65 +23,65 @@ import (
 	"github.com/rapidaai/protos"
 )
 
-func (md *genericRequestor) OnBeginConversation() error {
-	utils.Go(md.Context(), func() {
+func (md *genericRequestor) OnBeginConversation(ctx context.Context) error {
+	utils.Go(ctx, func() {
 		for _, webhook := range md.assistant.AssistantWebhooks {
 			if slices.Contains(webhook.AssistantEvents, utils.ConversationBegin.Get()) {
 				arguments := md.Parse(utils.ConversationBegin, webhook.GetBody())
-				md.Webhook(utils.ConversationBegin.Get(), arguments, webhook)
+				md.Webhook(ctx, utils.ConversationBegin.Get(), arguments, webhook)
 			}
 		}
 	})
 	return nil
 }
 
-func (md *genericRequestor) OnResumeConversation() error {
+func (md *genericRequestor) OnResumeConversation(ctx context.Context) error {
 	for _, webhook := range md.assistant.AssistantWebhooks {
 		if slices.Contains(webhook.AssistantEvents, utils.ConversationBegin.Get()) {
 			arguments := md.Parse(utils.ConversationResume, webhook.GetBody())
-			md.Webhook(utils.ConversationBegin.Get(), arguments, webhook)
+			md.Webhook(ctx, utils.ConversationBegin.Get(), arguments, webhook)
 		}
 	}
 	return nil
 }
 
-func (md *genericRequestor) OnErrorConversation() error {
+func (md *genericRequestor) OnErrorConversation(ctx context.Context) error {
 	for _, webhook := range md.assistant.AssistantWebhooks {
 		if slices.Contains(webhook.AssistantEvents, utils.ConversationFailed.Get()) {
 			arguments := md.Parse(utils.ConversationFailed, webhook.GetBody())
-			md.Webhook(utils.ConversationFailed.Get(), arguments, webhook)
+			md.Webhook(ctx, utils.ConversationFailed.Get(), arguments, webhook)
 		}
 	}
 	return nil
 }
 
-func (md *genericRequestor) OnEndConversation() error {
-	utils.Go(md.Context(), func() {
+func (md *genericRequestor) OnEndConversation(ctx context.Context) error {
+	utils.Go(ctx, func() {
 		if len(md.assistant.AssistantAnalyses) > 0 {
 			output := make(map[string]interface{})
 			for _, a := range md.assistant.AssistantAnalyses {
 				aArgs := md.Parse(utils.ConversationCompleted, a.GetParameters())
-				o, err := md.Analysis(a.GetEndpointId(), a.GetEndpointVersion(), aArgs)
+				o, err := md.Analysis(ctx, a.GetEndpointId(), a.GetEndpointVersion(), aArgs)
 				if err != nil {
 					md.logger.Errorf("error while executing analysis, check the config")
 					continue
 				}
 				output[fmt.Sprintf("analysis.%s", a.GetName())] = o
 			}
-			md.onSetMetadata(md.Auth(), output)
+			md.onSetMetadata(ctx, md.Auth(), output)
 		}
 		for _, webhook := range md.assistant.AssistantWebhooks {
 			if slices.Contains(webhook.AssistantEvents, utils.ConversationCompleted.Get()) {
 				arguments := md.Parse(utils.ConversationCompleted, webhook.GetBody())
-				md.Webhook(utils.ConversationCompleted.Get(), arguments, webhook)
+				md.Webhook(ctx, utils.ConversationCompleted.Get(), arguments, webhook)
 			}
 		}
 	})
 	return nil
 }
-func (hk *genericRequestor) Analysis(endpointId uint64, endpointVersion string, arguments map[string]interface{}) (map[string]interface{}, error) {
+func (hk *genericRequestor) Analysis(ctx context.Context, endpointId uint64, endpointVersion string, arguments map[string]interface{}) (map[string]interface{}, error) {
 	ivk, err := hk.analyze(
-		hk.Context(),
+		ctx,
 		&protos.EndpointDefinition{
 			EndpointId: endpointId,
 			Version:    endpointVersion,
@@ -107,8 +107,8 @@ func (hk *genericRequestor) Analysis(endpointId uint64, endpointVersion string, 
 	return nil, fmt.Errorf("empty response from endpoint")
 }
 
-func (md *genericRequestor) Webhook(event string, arguments map[string]interface{}, webhook *internal_assistant_entity.AssistantWebhook) {
-	utils.Go(md.Context(), func() {
+func (md *genericRequestor) Webhook(ctx context.Context, event string, arguments map[string]interface{}, webhook *internal_assistant_entity.AssistantWebhook) {
+	utils.Go(ctx, func() {
 		startTime := time.Now()
 		var res *rest.APIResponse
 		var err error
@@ -119,7 +119,7 @@ func (md *genericRequestor) Webhook(event string, arguments map[string]interface
 		retryStatusCodes := webhook.GetRetryStatusCode()
 
 		for retryCount <= maxRetryCount {
-			res, err = md.webhook(md.Context(),
+			res, err = md.webhook(ctx,
 				webhook.GetTimeoutSecond(),
 				webhook.GetUrl(),
 				webhook.GetMethod(),
@@ -153,6 +153,7 @@ func (md *genericRequestor) Webhook(event string, arguments map[string]interface
 			md.logger.Error("Failed to convert response to JSON", "error", err)
 		}
 		logErr := md.CreateWebhookLog(
+			ctx,
 			webhook.Id,
 			webhook.HttpUrl,
 			webhook.HttpMethod,
