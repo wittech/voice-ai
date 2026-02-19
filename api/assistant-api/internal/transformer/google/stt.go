@@ -59,6 +59,7 @@ func NewGoogleSpeechToText(ctx context.Context, logger commons.Logger, credentia
 	}
 
 	xctx, contextCancel := context.WithCancel(ctx)
+	// Context for callback management
 	logger.Benchmark("google.NewGoogleSpeechToText", time.Since(start))
 	return &googleSpeechToText{
 		ctx:          xctx,
@@ -99,10 +100,6 @@ func (g *googleSpeechToText) speechToTextCallback(stram speechpb.Speech_Streamin
 			if err != nil {
 				if err == io.EOF {
 					g.logger.Infof("google-stt: stream ended (EOF)")
-					return
-				}
-				if ctx.Err() != nil {
-					g.logger.Infof("google-stt: stream closed")
 					return
 				}
 				g.logger.Errorf("google-stt: recv error: %v", err)
