@@ -10,10 +10,12 @@ import (
 	"bufio"
 	"context"
 	"errors"
+	"fmt"
 	"net"
 
 	"github.com/gorilla/websocket"
 	"github.com/rapidaai/api/assistant-api/config"
+	callcontext "github.com/rapidaai/api/assistant-api/internal/callcontext"
 	internal_asterisk_telephony "github.com/rapidaai/api/assistant-api/internal/channel/telephony/internal/asterisk"
 	internal_asterisk_audiosocket "github.com/rapidaai/api/assistant-api/internal/channel/telephony/internal/asterisk/audiosocket"
 	internal_asterisk_websocket "github.com/rapidaai/api/assistant-api/internal/channel/telephony/internal/asterisk/websocket"
@@ -21,14 +23,15 @@ import (
 	internal_sip_telephony "github.com/rapidaai/api/assistant-api/internal/channel/telephony/internal/sip"
 	internal_twilio_telephony "github.com/rapidaai/api/assistant-api/internal/channel/telephony/internal/twilio"
 	internal_vonage_telephony "github.com/rapidaai/api/assistant-api/internal/channel/telephony/internal/vonage"
-	internal_assistant_entity "github.com/rapidaai/api/assistant-api/internal/entity/assistants"
-	internal_conversation_entity "github.com/rapidaai/api/assistant-api/internal/entity/conversations"
+	internal_services "github.com/rapidaai/api/assistant-api/internal/services"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 	sip_infra "github.com/rapidaai/api/assistant-api/sip/infra"
+	web_client "github.com/rapidaai/pkg/clients/web"
 	"github.com/rapidaai/pkg/commons"
 	"github.com/rapidaai/protos"
 )
 
+// Telephony is a string type identifying a telephony provider.
 type Telephony string
 
 const (
@@ -43,7 +46,21 @@ func (at Telephony) String() string {
 	return string(at)
 }
 
-func GetTelephony(at Telephony, cfg *config.AssistantConfig, logger commons.Logger) (internal_type.Telephony, error) {
+// --------------------------------------------------------------------------
+// Factory — GetTelephony returns the right provider implementation
+// --------------------------------------------------------------------------
+
+// GetTelephony is the factory function that creates a telephony provider for the
+// given type. This follows the platform factory pattern — providers are created
+// per-request through a switch-based lookup.
+//
+// For SIP, the caller must supply the SIPServer via TelephonyOption.
+func GetTelephony(at Telephony, cfg *config.AssistantConfig, logger commons.Logger, opts ...TelephonyOption) (internal_type.Telephony, error) {
+	var opt TelephonyOption
+	if len(opts) > 0 {
+		opt = opts[0]
+	}
+
 	switch at {
 	case Twilio:
 		return internal_twilio_telephony.NewTwilioTelephony(cfg, logger)
@@ -53,67 +70,86 @@ func GetTelephony(at Telephony, cfg *config.AssistantConfig, logger commons.Logg
 		return internal_vonage_telephony.NewVonageTelephony(cfg, logger)
 	case Asterisk:
 		return internal_asterisk_telephony.NewAsteriskTelephony(cfg, logger)
-	// case SIP:
-	// 	return internal_sip_telephony.NewSIPTelephony(cfg, logger, sipServer)
+	case SIP:
+		if opt.SIPServer == nil {
+			return nil, errors.New("SIP server not available — SIP telephony requires a running SIP server")
+		}
+		return internal_sip_telephony.NewSIPTelephony(cfg, logger, opt.SIPServer)
 	default:
-		return nil, errors.New("illegal telephony provider")
+		return nil, fmt.Errorf("unknown telephony provider %q", at)
 	}
 }
 
-// streamer
+// --------------------------------------------------------------------------
+// Options & Deps
+// --------------------------------------------------------------------------
 
-// Streamer creates a new WebSocket streamer for Asterisk chan_websocket
-func (at Telephony) Streamer(
-	ctx context.Context,
+// TelephonyOption configures optional dependencies for telephony providers.
+type TelephonyOption struct {
+	SIPServer *sip_infra.Server
+}
+
+// TelephonyDispatcherDeps contains the shared dependencies used by both
+// InboundDispatcher and OutboundDispatcher.
+type TelephonyDispatcherDeps struct {
+	Cfg                 *config.AssistantConfig
+	Logger              commons.Logger
+	Store               callcontext.Store
+	VaultClient         web_client.VaultClient
+	AssistantService    internal_services.AssistantService
+	ConversationService internal_services.AssistantConversationService
+	TelephonyOpt        TelephonyOption
+}
+
+// --------------------------------------------------------------------------
+// Streamer factory — unified per-connection factory
+// --------------------------------------------------------------------------
+
+// StreamerOption carries the transport-specific parameters needed to construct a
+// streamer. Callers populate only the fields relevant to their transport:
+//
+//   - WebSocket providers (Twilio, Exotel, Vonage, Asterisk WS): set WebSocketConn
+//   - AudioSocket (Asterisk): set AudioSocketConn, AudioSocketReader, AudioSocketWriter, InitialUUID
+//   - SIP: set Ctx, SIPSession, SIPConfig
+type StreamerOption struct {
+	// WebSocket transport
+	WebSocketConn *websocket.Conn
+
+	// AudioSocket transport (Asterisk)
+	AudioSocketConn   net.Conn
+	AudioSocketReader *bufio.Reader
+	AudioSocketWriter *bufio.Writer
+
+	// SIP transport
+	Ctx        context.Context
+	SIPSession *sip_infra.Session
+	SIPConfig  *sip_infra.Config
+}
+
+// NewStreamer is the unified streamer factory. It creates a transport-specific
+// streamer based on the telephony provider, using the CallContext (identity) and
+// vault credential (secrets) that are common across all transports.
+func (at Telephony) NewStreamer(
 	logger commons.Logger,
-	connection *websocket.Conn,
-	assistant *internal_assistant_entity.Assistant,
-	conversation *internal_conversation_entity.AssistantConversation,
-	vlt *protos.VaultCredential,
+	cc *callcontext.CallContext,
+	vaultCred *protos.VaultCredential,
+	opt StreamerOption,
 ) (internal_type.Streamer, error) {
 	switch at {
 	case Twilio:
-		return internal_twilio_telephony.NewTwilioWebsocketStreamer(logger, connection, assistant, conversation, vlt), nil
+		return internal_twilio_telephony.NewTwilioWebsocketStreamer(logger, opt.WebSocketConn, cc, vaultCred), nil
 	case Exotel:
-		return internal_exotel_telephony.NewExotelWebsocketStreamer(logger, connection, assistant, conversation, vlt), nil
+		return internal_exotel_telephony.NewExotelWebsocketStreamer(logger, opt.WebSocketConn, cc, vaultCred), nil
 	case Vonage:
-		return internal_vonage_telephony.NewVonageWebsocketStreamer(logger, connection, assistant, conversation, vlt), nil
+		return internal_vonage_telephony.NewVonageWebsocketStreamer(logger, opt.WebSocketConn, cc, vaultCred), nil
 	case Asterisk:
-		return internal_asterisk_websocket.NewAsteriskWebsocketStreamer(logger, connection, assistant, conversation, vlt), nil
-	default:
-		return nil, errors.New("illegal telephony provider")
-	}
-
-}
-
-func (at Telephony) AudioSocketStreamer(
-	logger commons.Logger,
-	conn net.Conn,
-	reader *bufio.Reader,
-	writer *bufio.Writer,
-	assistant *internal_assistant_entity.Assistant,
-	conversation *internal_conversation_entity.AssistantConversation,
-	vlt *protos.VaultCredential,
-) (internal_type.Streamer, error) {
-	switch at {
-	case Asterisk:
-		return internal_asterisk_audiosocket.NewStreamer(logger, conn, reader, writer, assistant, conversation, vlt)
-	}
-	return nil, errors.New("illegal telephony provider")
-}
-
-func (at Telephony) SipStreamer(
-	ctx context.Context,
-	logger commons.Logger,
-	session *sip_infra.Session,
-	config *sip_infra.Config,
-	assistant *internal_assistant_entity.Assistant,
-	conversation *internal_conversation_entity.AssistantConversation,
-	valt *protos.VaultCredential,
-) (internal_type.Streamer, error) {
-	switch at {
+		if opt.AudioSocketConn != nil {
+			return internal_asterisk_audiosocket.NewStreamer(logger, opt.AudioSocketConn, opt.AudioSocketReader, opt.AudioSocketWriter, cc, vaultCred)
+		}
+		return internal_asterisk_websocket.NewAsteriskWebsocketStreamer(logger, opt.WebSocketConn, cc, vaultCred), nil
 	case SIP:
-		return internal_sip_telephony.NewInboundStreamer(ctx, config, logger, session, assistant, conversation, valt)
+		return internal_sip_telephony.NewStreamer(opt.Ctx, opt.SIPConfig, logger, opt.SIPSession, cc, vaultCred)
+	default:
+		return nil, fmt.Errorf("streamer not supported for provider %q", at)
 	}
-	return nil, errors.New("illegal telephony provider")
 }

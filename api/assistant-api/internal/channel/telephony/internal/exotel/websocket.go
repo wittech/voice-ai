@@ -13,10 +13,9 @@ import (
 
 	"github.com/gorilla/websocket"
 	internal_audio "github.com/rapidaai/api/assistant-api/internal/audio"
+	callcontext "github.com/rapidaai/api/assistant-api/internal/callcontext"
 	internal_telephony_base "github.com/rapidaai/api/assistant-api/internal/channel/telephony/internal/base"
 	internal_exotel "github.com/rapidaai/api/assistant-api/internal/channel/telephony/internal/exotel/internal"
-	internal_assistant_entity "github.com/rapidaai/api/assistant-api/internal/entity/assistants"
-	internal_conversation_entity "github.com/rapidaai/api/assistant-api/internal/entity/conversations"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 	"github.com/rapidaai/pkg/commons"
 	"github.com/rapidaai/protos"
@@ -29,11 +28,11 @@ type exotelWebsocketStreamer struct {
 	streamID   string
 }
 
-func NewExotelWebsocketStreamer(logger commons.Logger, connection *websocket.Conn, assistant *internal_assistant_entity.Assistant, conversation *internal_conversation_entity.AssistantConversation, vlt *protos.VaultCredential,
+func NewExotelWebsocketStreamer(logger commons.Logger, connection *websocket.Conn, cc *callcontext.CallContext, vaultCred *protos.VaultCredential,
 ) internal_type.Streamer {
 	return &exotelWebsocketStreamer{
 		BaseTelephonyStreamer: internal_telephony_base.NewBaseTelephonyStreamer(
-			logger, assistant, conversation, vlt,
+			logger, cc, vaultCred,
 			internal_telephony_base.WithSourceAudioConfig(internal_audio.NewLinear8khzMonoAudioConfig()),
 		),
 		streamID:   "",

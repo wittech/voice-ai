@@ -12,7 +12,7 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	"github.com/rapidaai/pkg/types"
+	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -22,11 +22,11 @@ func TestReceiveCall(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	tests := []struct {
-		name           string
-		queryParams    map[string]string
-		expectedError  bool
-		expectedPhone  string
-		checkTelemetry func(*testing.T, []types.Telemetry)
+		name          string
+		queryParams   map[string]string
+		expectedError bool
+		expectedPhone string
+		checkCallInfo func(*testing.T, *internal_type.CallInfo)
 	}{
 		{
 			name: "Valid Vonage webhook with all parameters",
@@ -40,45 +40,23 @@ func TestReceiveCall(t *testing.T) {
 			},
 			expectedError: false,
 			expectedPhone: "15703768754",
-			checkTelemetry: func(t *testing.T, telemetry []types.Telemetry) {
-				require.NotNil(t, telemetry)
-				assert.GreaterOrEqual(t, len(telemetry), 3)
+			checkCallInfo: func(t *testing.T, info *internal_type.CallInfo) {
+				require.NotNil(t, info)
+				assert.Equal(t, "vonage", info.Provider)
+				assert.Equal(t, "SUCCESS", info.Status)
+				assert.Equal(t, "15703768754", info.CallerNumber)
+				assert.Equal(t, "bccbc3faaf864e1641fe0cdb1921b6aa", info.ChannelUUID)
 
-				// Check for conversation_uuid metadata
-				foundConvUUID := false
-				foundUUID := false
-				foundEvent := false
-				foundMetric := false
+				// Check StatusInfo
+				assert.Equal(t, "webhook", info.StatusInfo.Event)
+				assert.NotNil(t, info.StatusInfo.Payload)
+				payload, ok := info.StatusInfo.Payload.(map[string]string)
+				require.True(t, ok, "Payload should be map[string]string")
+				assert.Equal(t, "15703768754", payload["from"])
 
-				for _, tel := range telemetry {
-					if metadata, ok := tel.(*types.Metadata); ok {
-						if metadata.Key == "telephony.conversation_uuid" {
-							assert.Equal(t, "CON-3d4ae1dd-5e14-4131-be3d-0247cb19a28a", metadata.Value)
-							foundConvUUID = true
-						}
-						if metadata.Key == "telephony.uuid" {
-							assert.Equal(t, "bccbc3faaf864e1641fe0cdb1921b6aa", metadata.Value)
-							foundUUID = true
-						}
-					}
-					if event, ok := tel.(*types.Event); ok {
-						if event.EventType == "webhook" {
-							foundEvent = true
-							assert.NotNil(t, event.Payload)
-						}
-					}
-					if metric, ok := tel.(*types.Metric); ok {
-						if metric.Name == "STATUS" {
-							assert.Equal(t, "SUCCESS", metric.Value)
-							foundMetric = true
-						}
-					}
-				}
-
-				assert.True(t, foundConvUUID, "Should have conversation_uuid metadata")
-				assert.True(t, foundUUID, "Should have uuid metadata")
-				assert.True(t, foundEvent, "Should have webhook event")
-				assert.True(t, foundMetric, "Should have STATUS metric")
+				// Check Extra for conversation_uuid
+				require.NotNil(t, info.Extra)
+				assert.Equal(t, "CON-3d4ae1dd-5e14-4131-be3d-0247cb19a28a", info.Extra["conversation_uuid"])
 			},
 		},
 		{
@@ -89,28 +67,13 @@ func TestReceiveCall(t *testing.T) {
 			},
 			expectedError: false,
 			expectedPhone: "15703768754",
-			checkTelemetry: func(t *testing.T, telemetry []types.Telemetry) {
-				require.NotNil(t, telemetry)
-
-				// Should still have event and metric even without optional params
-				foundEvent := false
-				foundMetric := false
-
-				for _, tel := range telemetry {
-					if event, ok := tel.(*types.Event); ok {
-						if event.EventType == "webhook" {
-							foundEvent = true
-						}
-					}
-					if metric, ok := tel.(*types.Metric); ok {
-						if metric.Name == "STATUS" {
-							foundMetric = true
-						}
-					}
-				}
-
-				assert.True(t, foundEvent, "Should have webhook event")
-				assert.True(t, foundMetric, "Should have STATUS metric")
+			checkCallInfo: func(t *testing.T, info *internal_type.CallInfo) {
+				require.NotNil(t, info)
+				assert.Equal(t, "vonage", info.Provider)
+				assert.Equal(t, "SUCCESS", info.Status)
+				assert.Equal(t, "webhook", info.StatusInfo.Event)
+				assert.NotNil(t, info.StatusInfo.Payload)
+				assert.Empty(t, info.ChannelUUID, "ChannelUUID should be empty without uuid param")
 			},
 		},
 		{
@@ -121,8 +84,8 @@ func TestReceiveCall(t *testing.T) {
 			},
 			expectedError: true,
 			expectedPhone: "",
-			checkTelemetry: func(t *testing.T, telemetry []types.Telemetry) {
-				// Telemetry may be empty or contain partial data
+			checkCallInfo: func(t *testing.T, info *internal_type.CallInfo) {
+				// CallInfo should be nil on error
 			},
 		},
 		{
@@ -133,8 +96,8 @@ func TestReceiveCall(t *testing.T) {
 			},
 			expectedError: true,
 			expectedPhone: "",
-			checkTelemetry: func(t *testing.T, telemetry []types.Telemetry) {
-				// Telemetry may be empty or contain partial data
+			checkCallInfo: func(t *testing.T, info *internal_type.CallInfo) {
+				// CallInfo should be nil on error
 			},
 		},
 		{
@@ -145,8 +108,8 @@ func TestReceiveCall(t *testing.T) {
 			},
 			expectedError: true,
 			expectedPhone: "",
-			checkTelemetry: func(t *testing.T, telemetry []types.Telemetry) {
-				// Telemetry may be empty or contain partial data
+			checkCallInfo: func(t *testing.T, info *internal_type.CallInfo) {
+				// CallInfo should be nil on error
 			},
 		},
 	}
@@ -171,27 +134,27 @@ func TestReceiveCall(t *testing.T) {
 			telephony := &vonageTelephony{}
 
 			// Call ReceiveCall
-			clientNumber, telemetry, err := telephony.ReceiveCall(c)
+			callInfo, err := telephony.ReceiveCall(c)
 
 			// Verify error expectation
 			if tt.expectedError {
 				assert.Error(t, err)
-				assert.Nil(t, clientNumber)
+				assert.Nil(t, callInfo)
 			} else {
 				assert.NoError(t, err)
-				require.NotNil(t, clientNumber)
-				assert.Equal(t, tt.expectedPhone, *clientNumber)
+				require.NotNil(t, callInfo)
+				assert.Equal(t, tt.expectedPhone, callInfo.CallerNumber)
 			}
 
-			// Check telemetry
-			if tt.checkTelemetry != nil {
-				tt.checkTelemetry(t, telemetry)
+			// Check CallInfo
+			if tt.checkCallInfo != nil {
+				tt.checkCallInfo(t, callInfo)
 			}
 		})
 	}
 }
 
-// TestReceiveCall_QueryParameterExtraction tests that all query parameters are captured in telemetry
+// TestReceiveCall_QueryParameterExtraction tests that all query parameters are captured in CallInfo payload
 func TestReceiveCall_QueryParameterExtraction(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
@@ -217,26 +180,17 @@ func TestReceiveCall_QueryParameterExtraction(t *testing.T) {
 	c.Request = req
 
 	telephony := &vonageTelephony{}
-	_, telemetry, err := telephony.ReceiveCall(c)
+	callInfo, err := telephony.ReceiveCall(c)
 
 	require.NoError(t, err)
-	require.NotNil(t, telemetry)
+	require.NotNil(t, callInfo)
 
-	// Verify event contains all query parameters
-	var webhookEvent *types.Event
-	for _, tel := range telemetry {
-		if event, ok := tel.(*types.Event); ok && event.EventType == "webhook" {
-			webhookEvent = event
-			break
-		}
-	}
+	// Verify StatusInfo contains webhook event with all query parameters as payload
+	assert.Equal(t, "webhook", callInfo.StatusInfo.Event)
+	require.NotNil(t, callInfo.StatusInfo.Payload, "StatusInfo payload should not be nil")
 
-	require.NotNil(t, webhookEvent, "Should have webhook event")
-	require.NotNil(t, webhookEvent.Payload, "Event should have payload")
-
-	// Verify all query params are in the event payload
-	payloadMap := webhookEvent.Payload
-	require.NotNil(t, payloadMap, "Payload should not be nil")
+	payloadMap, ok := callInfo.StatusInfo.Payload.(map[string]string)
+	require.True(t, ok, "Payload should be map[string]string")
 
 	for key, expectedValue := range queryParams {
 		actualValue, exists := payloadMap[key]

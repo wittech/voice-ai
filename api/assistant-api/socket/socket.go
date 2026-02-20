@@ -9,29 +9,30 @@ package assistant_socket
 import (
 	"bufio"
 	"context"
+	"encoding/binary"
+	"encoding/hex"
 	"fmt"
+	"io"
 	"net"
 	"sync"
 
 	"github.com/rapidaai/api/assistant-api/config"
 	internal_adapter "github.com/rapidaai/api/assistant-api/internal/adapters"
+	callcontext "github.com/rapidaai/api/assistant-api/internal/callcontext"
 	internal_telephony "github.com/rapidaai/api/assistant-api/internal/channel/telephony"
-	internal_assistant_entity "github.com/rapidaai/api/assistant-api/internal/entity/assistants"
-	internal_conversation_entity "github.com/rapidaai/api/assistant-api/internal/entity/conversations"
-	internal_services "github.com/rapidaai/api/assistant-api/internal/services"
 	internal_assistant_service "github.com/rapidaai/api/assistant-api/internal/services/assistant"
 	web_client "github.com/rapidaai/pkg/clients/web"
 	"github.com/rapidaai/pkg/commons"
 	"github.com/rapidaai/pkg/connectors"
 	"github.com/rapidaai/pkg/storages"
 	storage_files "github.com/rapidaai/pkg/storages/file-storage"
-	"github.com/rapidaai/pkg/types"
-	type_enums "github.com/rapidaai/pkg/types/enums"
 	"github.com/rapidaai/pkg/utils"
 )
 
-// AudioSocketManager manages Asterisk AudioSocket TCP connections.
-type AudioSocketManager struct {
+// AudioSocketEngine manages Asterisk AudioSocket TCP connections.
+// It delegates call-context resolution to InboundDispatcher.ResolveCallSessionByContext
+// to avoid duplicating entity-loading logic.
+type audioSocketEngine struct {
 	logger   commons.Logger
 	cfg      *config.AssistantConfig
 	listener net.Listener
@@ -42,34 +43,45 @@ type AudioSocketManager struct {
 	opensearch connectors.OpenSearchConnector
 	storage    storages.Storage
 
-	assistantConversationService internal_services.AssistantConversationService
-	assistantService             internal_services.AssistantService
-	vaultClient                  web_client.VaultClient
-	authClient                   web_client.AuthClient
+	inboundDispatcher *internal_telephony.InboundDispatcher
 }
 
-// NewAudioSocketManager creates a new AudioSocket manager.
-func NewAudioSocketManager(config *config.AssistantConfig, logger commons.Logger,
+// NewAudioSocketEngine creates a new AudioSocket engine.
+// Internally builds an InboundDispatcher for call-context resolution (Redis
+// lookup + parallel entity loading). The engine only manages TCP + streamer.
+func NewAudioSocketEngine(config *config.AssistantConfig, logger commons.Logger,
 	postgres connectors.PostgresConnector,
 	redis connectors.RedisConnector,
 	opensearch connectors.OpenSearchConnector,
-	vectordb connectors.VectorConnector) *AudioSocketManager {
-	return &AudioSocketManager{
-		cfg:                          config,
-		logger:                       logger,
-		postgres:                     postgres,
-		redis:                        redis,
-		opensearch:                   opensearch,
-		assistantConversationService: internal_assistant_service.NewAssistantConversationService(logger, postgres, storage_files.NewStorage(config.AssetStoreConfig, logger)),
-		assistantService:             internal_assistant_service.NewAssistantService(config, logger, postgres, opensearch),
-		storage:                      storage_files.NewStorage(config.AssetStoreConfig, logger),
-		vaultClient:                  web_client.NewVaultClientGRPC(&config.AppConfig, logger, redis),
-		authClient:                   web_client.NewAuthenticator(&config.AppConfig, logger, redis),
+) *audioSocketEngine {
+	store := callcontext.NewStore(redis, logger)
+	vaultClient := web_client.NewVaultClientGRPC(&config.AppConfig, logger, redis)
+	fileStorage := storage_files.NewStorage(config.AssetStoreConfig, logger)
+	assistantService := internal_assistant_service.NewAssistantService(config, logger, postgres, opensearch)
+	conversationService := internal_assistant_service.NewAssistantConversationService(logger, postgres, fileStorage)
+
+	dispatcher := internal_telephony.NewInboundDispatcher(internal_telephony.TelephonyDispatcherDeps{
+		Cfg:                 config,
+		Logger:              logger,
+		Store:               store,
+		VaultClient:         vaultClient,
+		AssistantService:    assistantService,
+		ConversationService: conversationService,
+	})
+
+	return &audioSocketEngine{
+		cfg:               config,
+		logger:            logger,
+		postgres:          postgres,
+		redis:             redis,
+		opensearch:        opensearch,
+		storage:           fileStorage,
+		inboundDispatcher: dispatcher,
 	}
 }
 
 // Start begins the AudioSocket TCP listener.
-func (m *AudioSocketManager) Start(ctx context.Context) error {
+func (m *audioSocketEngine) Connect(ctx context.Context) error {
 	addr := fmt.Sprintf("%s:%d", m.cfg.AudioSocketConfig.Host, m.cfg.AudioSocketConfig.Port)
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -84,7 +96,7 @@ func (m *AudioSocketManager) Start(ctx context.Context) error {
 }
 
 // Close stops the AudioSocket listener.
-func (m *AudioSocketManager) Close(ctx context.Context) error {
+func (m *audioSocketEngine) Disconnect(ctx context.Context) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.listener == nil {
@@ -95,7 +107,7 @@ func (m *AudioSocketManager) Close(ctx context.Context) error {
 	return nil
 }
 
-func (m *AudioSocketManager) acceptLoop(ctx context.Context) {
+func (m *audioSocketEngine) acceptLoop(ctx context.Context) {
 	for {
 		conn, err := m.listener.Accept()
 		if err != nil {
@@ -110,7 +122,7 @@ func (m *AudioSocketManager) acceptLoop(ctx context.Context) {
 	}
 }
 
-func (m *AudioSocketManager) handleConnection(ctx context.Context, conn net.Conn) {
+func (m *audioSocketEngine) handleConnection(ctx context.Context, conn net.Conn) {
 	defer conn.Close()
 
 	connCtx, cancel := context.WithCancel(ctx)
@@ -119,20 +131,39 @@ func (m *AudioSocketManager) handleConnection(ctx context.Context, conn net.Conn
 	reader := bufio.NewReader(conn)
 	writer := bufio.NewWriter(conn)
 
-	auth, assistant, conversation, err := m.resolveCallContext(connCtx, "channelID")
+	// Step 1: Read the UUID frame from AudioSocket protocol.
+	// Asterisk sends a FrameTypeUUID (0x01) as the first frame with a 16-byte UUID payload.
+	// This UUID is the contextId that was passed via the dialplan (e.g. AudioSocket(contextId, host:port)).
+	contextID, err := m.readContextID(reader)
 	if err != nil {
-		m.logger.Warn("AudioSocket context resolution failed", "error", err)
+		m.logger.Warn("AudioSocket failed to read UUID frame", "error", err)
 		return
 	}
 
-	streamer, err := internal_telephony.Telephony(internal_telephony.Asterisk).AudioSocketStreamer(m.logger, conn, reader, writer, assistant, conversation, nil)
+	m.logger.Infof("AudioSocket connection received with contextId=%s", contextID)
+
+	// Step 2: Resolve call context — delegates to InboundDispatcher which handles
+	// Redis lookup, context deletion, and parallel entity loading.
+	cc, vaultCred, err := m.inboundDispatcher.ResolveCallSessionByContext(connCtx, contextID)
 	if err != nil {
-		m.logger.Warn("AudioSocket streamer create failed", "error", err)
+		m.logger.Warn("AudioSocket session resolution failed", "contextId", contextID, "error", err)
 		return
 	}
 
-	// if s, ok := streamer.(*internal_telephony.Streamer); ok {
-	// 	s.SetInitialUUID("channelID")
+	// Step 3: Create AudioSocket streamer and start talking.
+	// Pass the contextID as the initial UUID so the streamer sends ConversationInitialization
+	// on the first Recv() call — the UUID frame was already consumed by readContextID above.
+	streamer, err := internal_telephony.Telephony(internal_telephony.Asterisk).NewStreamer(
+		m.logger, cc, vaultCred, internal_telephony.StreamerOption{
+			AudioSocketConn:   conn,
+			AudioSocketReader: reader,
+			AudioSocketWriter: writer,
+		},
+	)
+	if err != nil {
+		m.logger.Warn("AudioSocket streamer create failed", "contextId", contextID, "error", err)
+		return
+	}
 
 	talker, err := internal_adapter.GetTalker(
 		utils.PhoneCall,
@@ -146,45 +177,54 @@ func (m *AudioSocketManager) handleConnection(ctx context.Context, conn net.Conn
 		streamer,
 	)
 	if err != nil {
-		m.logger.Warn("AudioSocket talker create failed", "error", err)
+		m.logger.Warn("AudioSocket talker create failed", "contextId", contextID, "error", err)
 		return
 	}
 
-	if err := talker.Talk(connCtx, auth); err != nil {
-		m.logger.Warn("AudioSocket talker exited", "error", err)
+	if err := talker.Talk(connCtx, cc.ToAuth()); err != nil {
+		m.logger.Warn("AudioSocket talker exited", "contextId", contextID, "error", err)
 	}
-
 }
 
-// resolveCallContext parses the UUID which contains apiKey:assistantId format
-// Example: rpd-prj-xxx:123 or rpd-prj-xxx:123:callerID
-func (m *AudioSocketManager) resolveCallContext(ctx context.Context, uuidParam string) (types.SimplePrinciple, *internal_assistant_entity.Assistant, *internal_conversation_entity.AssistantConversation, error) {
+// readContextID reads the initial UUID frame from the AudioSocket connection.
+// Asterisk sends a FrameTypeUUID (0x01) frame with 16-byte UUID payload.
+// Frame format: 1-byte type + 2-byte big-endian length + payload.
+// We parse the UUID and return it as a string (the contextId).
+func (m *audioSocketEngine) readContextID(reader *bufio.Reader) (string, error) {
+	const frameTypeUUID byte = 0x01
 
-	auth := &types.ServiceScope{
-		ProjectId:      utils.Ptr(uint64(2257831930382778368)),
-		OrganizationId: utils.Ptr(uint64(2257831925018263552)),
-		CurrentToken:   "3dd5c2eef53d27942bccd892750fda23ea0b92965d4699e73d8e754ab882955f",
-	}
-
-	assistant, err := m.assistantService.Get(ctx, auth, 2263072539095859200, utils.GetVersionDefinition("latest"), &internal_services.GetAssistantOption{InjectPhoneDeployment: true})
+	// Read frame type
+	frameType, err := reader.ReadByte()
 	if err != nil {
-		return nil, nil, nil, err
+		return "", fmt.Errorf("failed to read frame type: %w", err)
 	}
 
-	conversation, err := m.assistantConversationService.CreateConversation(
-		ctx,
-		auth,
-		uuidParam,
-		assistant.Id,
-		assistant.AssistantProviderId,
-		type_enums.DIRECTION_INBOUND,
-		utils.PhoneCall,
-	)
-	if err != nil {
-		return nil, nil, nil, err
+	// Read 2-byte big-endian length
+	lenBuf := make([]byte, 2)
+	if _, err := io.ReadFull(reader, lenBuf); err != nil {
+		return "", fmt.Errorf("failed to read frame length: %w", err)
+	}
+	payloadLen := int(binary.BigEndian.Uint16(lenBuf))
+
+	// Read payload
+	payload := make([]byte, payloadLen)
+	if payloadLen > 0 {
+		if _, err := io.ReadFull(reader, payload); err != nil {
+			return "", fmt.Errorf("failed to read frame payload: %w", err)
+		}
 	}
 
-	_, _ = m.assistantConversationService.ApplyConversationMetadata(ctx, auth, assistant.Id, conversation.Id,
-		[]*types.Metadata{types.NewMetadata("telephony.uuid", uuidParam)})
-	return auth, assistant, conversation, nil
+	if frameType != frameTypeUUID {
+		return "", fmt.Errorf("expected UUID frame (0x01), got frame type 0x%02x", frameType)
+	}
+
+	if len(payload) != 16 {
+		return "", fmt.Errorf("invalid UUID payload length: %d (expected 16)", len(payload))
+	}
+
+	// Convert 16-byte UUID to standard string format (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
+	h := hex.EncodeToString(payload)
+	uuid := h[0:8] + "-" + h[8:12] + "-" + h[12:16] + "-" + h[16:20] + "-" + h[20:32]
+
+	return uuid, nil
 }

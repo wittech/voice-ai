@@ -11,9 +11,8 @@ import (
 
 	internal_audio "github.com/rapidaai/api/assistant-api/internal/audio"
 	internal_audio_resampler "github.com/rapidaai/api/assistant-api/internal/audio/resampler"
+	callcontext "github.com/rapidaai/api/assistant-api/internal/callcontext"
 	channel_base "github.com/rapidaai/api/assistant-api/internal/channel/base"
-	internal_assistant_entity "github.com/rapidaai/api/assistant-api/internal/entity/assistants"
-	internal_conversation_entity "github.com/rapidaai/api/assistant-api/internal/entity/conversations"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 	"github.com/rapidaai/pkg/commons"
 	"github.com/rapidaai/pkg/utils"
@@ -55,20 +54,25 @@ var RAPIDA_AUDIO_CONFIG = internal_audio.NewLinear16khzMonoAudioConfig()
 
 // BaseTelephonyStreamer embeds channel_base.BaseStreamer for common buffer,
 // channel, and lifecycle management. It adds telephony-specific concerns:
-// entity references, audio resampler, base64 encoder, and vault credentials.
+// call context, audio resampler, base64 encoder, and vault credentials.
 //
 // Concrete telephony streamers (Twilio, Exotel, Vonage, SIP, Asterisk) embed
 // this struct and only implement transport-specific I/O logic.
 type BaseTelephonyStreamer struct {
 	channel_base.BaseStreamer
 
-	// Telephony-specific fields
-	assistant             *internal_assistant_entity.Assistant
-	assistantConversation *internal_conversation_entity.AssistantConversation
+	// callCtx holds IDs and metadata from the call setup phase (Redis).
+	// Replaces separate assistant/conversation entity references — the
+	// streamer only needs IDs, not full DB entities.
+	callCtx *callcontext.CallContext
 
 	resampler       internal_type.AudioResampler
 	encoder         *base64.Encoding
 	vaultCredential *protos.VaultCredential
+
+	// ChannelUUID is the provider-specific call identifier, propagated from
+	// CallContext so concrete streamers can use it for call control.
+	ChannelUUID string
 
 	// sourceAudioConfig is the native audio format received from the telephony
 	// provider (e.g. µ-law 8kHz for Twilio, linear16 16kHz for Vonage).
@@ -77,9 +81,9 @@ type BaseTelephonyStreamer struct {
 	sourceAudioConfig *protos.AudioConfig
 }
 
-// NewBaseTelephonyStreamer creates a new BaseTelephonyStreamer with telephony-specific
-// entity references. Use TelephonyOption values to configure the source audio
-// format and any BaseStreamer overrides.
+// NewBaseTelephonyStreamer creates a new BaseTelephonyStreamer from a
+// CallContext and vault credential. Use TelephonyOption values to configure
+// the source audio format and any BaseStreamer overrides.
 //
 // By default the source audio config is RAPIDA_AUDIO_CONFIG (linear16 16kHz),
 // and input/output thresholds are automatically derived from that config
@@ -89,14 +93,13 @@ type BaseTelephonyStreamer struct {
 //
 // Example:
 //
-//	base := NewBaseTelephonyStreamer(logger, assistant, conv, vlt,
+//	base := NewBaseTelephonyStreamer(logger, cc, vaultCred,
 //	    WithSourceAudioConfig(audio.NewMulaw8khzMonoAudioConfig()),
 //	)
 func NewBaseTelephonyStreamer(
 	logger commons.Logger,
-	assistant *internal_assistant_entity.Assistant,
-	assistantConversation *internal_conversation_entity.AssistantConversation,
-	vlt *protos.VaultCredential,
+	cc *callcontext.CallContext,
+	vaultCred *protos.VaultCredential,
 	opts ...TelephonyOption,
 ) BaseTelephonyStreamer {
 	tc := telephonyConfig{}
@@ -119,13 +122,13 @@ func NewBaseTelephonyStreamer(
 
 	resampler, _ := internal_audio_resampler.GetResampler(logger)
 	return BaseTelephonyStreamer{
-		BaseStreamer:          channel_base.NewBaseStreamer(logger, baseOpts...),
-		assistant:             assistant,
-		resampler:             resampler,
-		assistantConversation: assistantConversation,
-		encoder:               base64.StdEncoding,
-		vaultCredential:       vlt,
-		sourceAudioConfig:     sourceAudioCfg,
+		BaseStreamer:      channel_base.NewBaseStreamer(logger, baseOpts...),
+		callCtx:           cc,
+		resampler:         resampler,
+		encoder:           base64.StdEncoding,
+		vaultCredential:   vaultCred,
+		ChannelUUID:       cc.ChannelUUID,
+		sourceAudioConfig: sourceAudioCfg,
 	}
 }
 
@@ -156,14 +159,19 @@ func (base *BaseTelephonyStreamer) CreateVoiceRequest(audioData []byte) *protos.
 // GetAssistantDefinition returns the protobuf assistant definition.
 func (base *BaseTelephonyStreamer) GetAssistantDefinition() *protos.AssistantDefinition {
 	return &protos.AssistantDefinition{
-		AssistantId: base.assistant.Id,
-		Version:     utils.GetVersionString(base.assistant.AssistantProviderId),
+		AssistantId: base.callCtx.AssistantID,
+		Version:     utils.GetVersionString(base.callCtx.AssistantProviderId),
 	}
 }
 
 // GetConversationId returns the conversation ID.
 func (base *BaseTelephonyStreamer) GetConversationId() uint64 {
-	return base.assistantConversation.Id
+	return base.callCtx.ConversationID
+}
+
+// CallContext returns the underlying call context.
+func (base *BaseTelephonyStreamer) CallContext() *callcontext.CallContext {
+	return base.callCtx
 }
 
 // Encoder returns the base64 encoder used by the streamer.
@@ -198,9 +206,4 @@ func (base *BaseTelephonyStreamer) CreateConnectionRequest() *protos.Conversatio
 		Assistant:               base.GetAssistantDefinition(),
 		StreamMode:              protos.StreamMode_STREAM_MODE_AUDIO,
 	}
-}
-
-// GetAssistatntConversation returns the assistant conversation entity.
-func (base *BaseTelephonyStreamer) GetAssistatntConversation() *internal_conversation_entity.AssistantConversation {
-	return base.assistantConversation
 }

@@ -9,13 +9,12 @@ import (
 	"context"
 	"fmt"
 
-	telephony "github.com/rapidaai/api/assistant-api/internal/channel/telephony"
+	callcontext "github.com/rapidaai/api/assistant-api/internal/callcontext"
 	internal_services "github.com/rapidaai/api/assistant-api/internal/services"
 	"github.com/rapidaai/pkg/types"
 	type_enums "github.com/rapidaai/pkg/types/enums"
 	"github.com/rapidaai/pkg/utils"
 	"github.com/rapidaai/protos"
-	"golang.org/x/sync/errgroup"
 )
 
 // InitiateAssistantTalk implements protos.TalkServiceServer.
@@ -77,78 +76,70 @@ func (cApi *ConversationGrpcApi) CreatePhoneCall(ctx context.Context, ir *protos
 	}
 	conversation.Arguments = arguments
 
-	credentialID, err := assistant.AssistantPhoneDeployment.GetOptions().GetUint64("rapida.credential_id")
-	if err != nil {
-		cApi.assistantConversationService.ApplyConversationMetrics(ctx, auth, assistant.Id, conversation.Id, []*types.Metric{types.NewStatusMetric(type_enums.RECORD_FAILED)})
-		return utils.ErrorWithCode[protos.CreatePhoneCallResponse](200, err, "Please check the credential for telephony, please check and try again.")
-	}
-
-	vltC, err := cApi.vaultClient.GetCredential(ctx, auth, credentialID)
-	if err != nil {
-		cApi.assistantConversationService.ApplyConversationMetrics(ctx, auth, assistant.Id, conversation.Id, []*types.Metric{types.NewStatusMetric(type_enums.RECORD_FAILED)})
-		return utils.ErrorWithCode[protos.CreatePhoneCallResponse](200, err, "Please check the credential for telephony, please check and try again.")
-	}
-
-	telephony, err := telephony.GetTelephony(telephony.Telephony(assistant.AssistantPhoneDeployment.TelephonyProvider), cApi.cfg, cApi.logger)
-	if err != nil {
-		cApi.assistantConversationService.ApplyConversationMetrics(ctx, auth, assistant.Id, conversation.Id, []*types.Metric{types.NewStatusMetric(type_enums.RECORD_FAILED)})
-		return utils.ErrorWithCode[protos.CreatePhoneCallResponse](200, err, "Please check the configuration for telephony, please check and try again.")
-	}
-
+	// Resolve from phone number
 	fromPhone := ir.GetFromNumber()
 	if utils.IsEmpty(fromPhone) {
 		fromNumber, err := assistant.AssistantPhoneDeployment.GetOptions().GetString("phone")
 		if err != nil {
 			cApi.assistantConversationService.ApplyConversationMetrics(ctx, auth, assistant.Id, conversation.Id, []*types.Metric{types.NewStatusMetric(type_enums.RECORD_FAILED)})
-			return utils.ErrorWithCode[protos.CreatePhoneCallResponse](200, fmt.Errorf("failed to get Twilio phone number"), "Unable to retrieve the default phone number.")
+			return utils.ErrorWithCode[protos.CreatePhoneCallResponse](200, fmt.Errorf("failed to get phone number"), "Unable to retrieve the default phone number.")
 		}
 		fromPhone = fromNumber
 	}
 
-	telemetries, err := telephony.OutboundCall(auth, toNumber, fromPhone, ir.GetAssistant().GetAssistantId(), conversation.Id, vltC, assistant.AssistantPhoneDeployment.GetOptions())
-	if err != nil {
-		cApi.logger.Errorf("telephony call return error %v", err)
-	}
-
-	evnts, mtrs, metadatas := types.GetDifferentTelemetry(telemetries)
-	var wg errgroup.Group
-	wg.Go(func() error {
-		mtdas, err := cApi.assistantConversationService.ApplyConversationMetadata(ctx, auth, assistant.Id, conversation.Id, append(metadatas, types.NewMetadataList(mtd)...))
+	// Apply metadata early (before async dispatch)
+	if len(mtd) > 0 {
+		mtdas, err := cApi.assistantConversationService.ApplyConversationMetadata(ctx, auth, assistant.Id, conversation.Id, types.NewMetadataList(mtd))
 		if err != nil {
 			cApi.logger.Errorf("failed to apply conversation metadata: %v", err)
-			return err
+		} else {
+			conversation.Metadatas = mtdas
 		}
-		conversation.Metadatas = mtdas
-		return nil
-	})
-
-	wg.Go(func() error {
-		if len(mtrs) > 0 {
-			metrics, err := cApi.assistantConversationService.ApplyConversationMetrics(ctx, auth, assistant.Id, conversation.Id, mtrs)
-			if err != nil {
-				cApi.logger.Errorf("failed to apply conversation metrics: %v", err)
-				return err
-			}
-			conversation.Metrics = append(conversation.Metrics, metrics...)
-		}
-		return nil
-	})
-	wg.Go(func() error {
-		if len(evnts) > 0 {
-			evts, err := cApi.assistantConversationService.ApplyConversationTelephonyEvent(ctx, auth, assistant.AssistantPhoneDeployment.TelephonyProvider, assistant.Id, conversation.Id, evnts)
-			if err != nil {
-				cApi.logger.Errorf("failed to apply telephony events: %v", err)
-				return err
-			}
-			conversation.TelephonyEvents = append(conversation.TelephonyEvents, evts...)
-		}
-		return nil
-	})
-	if err := wg.Wait(); err != nil {
-		cApi.logger.Errorf("failed to process telemetry for outbound call: %v", err)
-		return utils.ErrorWithCode[protos.CreatePhoneCallResponse](500, err, "Failed to process call telemetry")
 	}
 
+	// Store call context in Redis for async worker resolution
+	cc := &callcontext.CallContext{
+		AssistantID:         assistant.Id,
+		ConversationID:      conversation.Id,
+		AssistantProviderId: assistant.AssistantProviderId,
+		AuthToken:           auth.GetCurrentToken(),
+		AuthType:            auth.Type(),
+		Direction:           "outbound",
+		CallerNumber:        toNumber,
+		CalleeNumber:        toNumber,
+		FromNumber:          fromPhone,
+		Provider:            assistant.AssistantPhoneDeployment.TelephonyProvider,
+		Status:              "queued",
+	}
+	if auth.GetCurrentProjectId() != nil {
+		cc.ProjectID = *auth.GetCurrentProjectId()
+	}
+	if auth.GetCurrentOrganizationId() != nil {
+		cc.OrganizationID = *auth.GetCurrentOrganizationId()
+	}
+	contextID, err := cApi.callContextStore.Save(ctx, cc)
+	if err != nil {
+		cApi.logger.Errorf("failed to save call context for outbound call: %v", err)
+		cApi.assistantConversationService.ApplyConversationMetrics(ctx, auth, assistant.Id, conversation.Id, []*types.Metric{types.NewStatusMetric(type_enums.RECORD_FAILED)})
+		return utils.ErrorWithCode[protos.CreatePhoneCallResponse](500, err, "Failed to create call context")
+	}
+
+	// Dispatch outbound call asynchronously — the goroutine resolves the call context,
+	// fetches vault credentials, and initiates the telephony call without blocking the gRPC response.
+	go cApi.outboundDispatcher.Dispatch(context.Background(), contextID)
+
+	cApi.logger.Infof("outbound call dispatched: contextId=%s, provider=%s, assistant=%d, conversation=%d",
+		contextID, cc.Provider, assistant.Id, conversation.Id)
+
+	// Apply initial metadata for the queued call
+	cApi.assistantConversationService.ApplyConversationMetadata(ctx, auth, assistant.Id, conversation.Id, []*types.Metadata{
+		types.NewMetadata("telephony.contextId", contextID),
+		types.NewMetadata("telephony.toPhone", toNumber),
+		types.NewMetadata("telephony.fromPhone", fromPhone),
+		types.NewMetadata("telephony.provider", cc.Provider),
+	})
+
+	// Return immediately — the worker will handle the actual telephony call
 	out := &protos.AssistantConversation{}
 	err = utils.Cast(conversation, out)
 	if err != nil {

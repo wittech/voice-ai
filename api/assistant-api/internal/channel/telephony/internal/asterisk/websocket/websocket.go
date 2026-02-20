@@ -15,10 +15,9 @@ import (
 	"sync"
 
 	"github.com/gorilla/websocket"
+	callcontext "github.com/rapidaai/api/assistant-api/internal/callcontext"
 	internal_asterisk "github.com/rapidaai/api/assistant-api/internal/channel/telephony/internal/asterisk/internal"
 	internal_telephony_base "github.com/rapidaai/api/assistant-api/internal/channel/telephony/internal/base"
-	internal_assistant_entity "github.com/rapidaai/api/assistant-api/internal/entity/assistants"
-	internal_conversation_entity "github.com/rapidaai/api/assistant-api/internal/entity/conversations"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 	"github.com/rapidaai/pkg/commons"
 	"github.com/rapidaai/protos"
@@ -47,9 +46,8 @@ type asteriskWebsocketStreamer struct {
 func NewAsteriskWebsocketStreamer(
 	logger commons.Logger,
 	connection *websocket.Conn,
-	assistant *internal_assistant_entity.Assistant,
-	conversation *internal_conversation_entity.AssistantConversation,
-	vlt *protos.VaultCredential,
+	cc *callcontext.CallContext,
+	vaultCred *protos.VaultCredential,
 ) internal_type.Streamer {
 	audioProcessor, err := NewAudioProcessor(logger)
 	if err != nil {
@@ -59,7 +57,7 @@ func NewAsteriskWebsocketStreamer(
 
 	aws := &asteriskWebsocketStreamer{
 		BaseTelephonyStreamer: internal_telephony_base.NewBaseTelephonyStreamer(
-			logger, assistant, conversation, vlt,
+			logger, cc, vaultCred,
 		),
 		audioProcessor: audioProcessor,
 		connection:     connection,
@@ -294,7 +292,7 @@ func (aws *asteriskWebsocketStreamer) hangupViaARI() error {
 	credMap := vaultCredential.GetValue().AsMap()
 
 	ariURL, _ := credMap["ari_url"].(string)
-	ariURL = fmt.Sprintf("%s/ari/channels", ariURL)
+	ariURL = fmt.Sprintf("%s/ari/channels/%s", ariURL, aws.channelName)
 	user, _ := credMap["ari_user"].(string)
 	password, _ := credMap["ari_password"].(string)
 
@@ -321,7 +319,9 @@ func (aws *asteriskWebsocketStreamer) hangupViaARI() error {
 }
 
 func (tws *asteriskWebsocketStreamer) Cancel() error {
-	tws.connection.Close()
-	tws.connection = nil
+	if tws.connection != nil {
+		tws.connection.Close()
+		tws.connection = nil
+	}
 	return nil
 }

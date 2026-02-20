@@ -12,7 +12,7 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	"github.com/rapidaai/pkg/types"
+	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -22,11 +22,11 @@ func TestReceiveCall(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	tests := []struct {
-		name           string
-		queryParams    map[string]string
-		expectedError  bool
-		expectedPhone  string
-		checkTelemetry func(*testing.T, []types.Telemetry)
+		name          string
+		queryParams   map[string]string
+		expectedError bool
+		expectedPhone string
+		checkCallInfo func(*testing.T, *internal_type.CallInfo)
 	}{
 		{
 			name: "Valid Twilio webhook with all parameters",
@@ -60,39 +60,20 @@ func TestReceiveCall(t *testing.T) {
 			},
 			expectedError: false,
 			expectedPhone: "+15703768754",
-			checkTelemetry: func(t *testing.T, telemetry []types.Telemetry) {
-				require.NotNil(t, telemetry)
-				assert.GreaterOrEqual(t, len(telemetry), 2)
+			checkCallInfo: func(t *testing.T, info *internal_type.CallInfo) {
+				require.NotNil(t, info)
+				assert.Equal(t, "twilio", info.Provider)
+				assert.Equal(t, "SUCCESS", info.Status)
+				assert.Equal(t, "+15703768754", info.CallerNumber)
+				assert.Equal(t, "CAf64ab88f90f35581dcb16e60f875ea4a", info.ChannelUUID)
 
-				// Check for CallSid metadata (telephony.uuid)
-				foundCallSid := false
-				foundEvent := false
-				foundMetric := false
-
-				for _, tel := range telemetry {
-					if metadata, ok := tel.(*types.Metadata); ok {
-						if metadata.Key == "telephony.uuid" {
-							assert.Equal(t, "CAf64ab88f90f35581dcb16e60f875ea4a", metadata.Value)
-							foundCallSid = true
-						}
-					}
-					if event, ok := tel.(*types.Event); ok {
-						if event.EventType == "webhook" {
-							foundEvent = true
-							assert.NotNil(t, event.Payload)
-						}
-					}
-					if metric, ok := tel.(*types.Metric); ok {
-						if metric.Name == "STATUS" {
-							assert.Equal(t, "SUCCESS", metric.Value)
-							foundMetric = true
-						}
-					}
-				}
-
-				assert.True(t, foundCallSid, "Should have CallSid (telephony.uuid) metadata")
-				assert.True(t, foundEvent, "Should have webhook event")
-				assert.True(t, foundMetric, "Should have STATUS metric")
+				// Check StatusInfo
+				assert.Equal(t, "webhook", info.StatusInfo.Event)
+				assert.NotNil(t, info.StatusInfo.Payload)
+				payload, ok := info.StatusInfo.Payload.(map[string]string)
+				require.True(t, ok, "Payload should be map[string]string")
+				assert.Equal(t, "+15703768754", payload["From"])
+				assert.Equal(t, "CAf64ab88f90f35581dcb16e60f875ea4a", payload["CallSid"])
 			},
 		},
 		{
@@ -104,35 +85,13 @@ func TestReceiveCall(t *testing.T) {
 			},
 			expectedError: false,
 			expectedPhone: "+15703768754",
-			checkTelemetry: func(t *testing.T, telemetry []types.Telemetry) {
-				require.NotNil(t, telemetry)
-
-				// Should still have event and metric even without optional params
-				foundEvent := false
-				foundMetric := false
-				foundCallSid := false
-
-				for _, tel := range telemetry {
-					if metadata, ok := tel.(*types.Metadata); ok {
-						if metadata.Key == "telephony.uuid" {
-							foundCallSid = true
-						}
-					}
-					if event, ok := tel.(*types.Event); ok {
-						if event.EventType == "webhook" {
-							foundEvent = true
-						}
-					}
-					if metric, ok := tel.(*types.Metric); ok {
-						if metric.Name == "STATUS" {
-							foundMetric = true
-						}
-					}
-				}
-
-				assert.True(t, foundCallSid, "Should have CallSid metadata")
-				assert.True(t, foundEvent, "Should have webhook event")
-				assert.True(t, foundMetric, "Should have STATUS metric")
+			checkCallInfo: func(t *testing.T, info *internal_type.CallInfo) {
+				require.NotNil(t, info)
+				assert.Equal(t, "twilio", info.Provider)
+				assert.Equal(t, "SUCCESS", info.Status)
+				assert.Equal(t, "CAf64ab88f90f35581dcb16e60f875ea4a", info.ChannelUUID)
+				assert.Equal(t, "webhook", info.StatusInfo.Event)
+				assert.NotNil(t, info.StatusInfo.Payload)
 			},
 		},
 		{
@@ -143,28 +102,12 @@ func TestReceiveCall(t *testing.T) {
 			},
 			expectedError: false,
 			expectedPhone: "+15703768754",
-			checkTelemetry: func(t *testing.T, telemetry []types.Telemetry) {
-				require.NotNil(t, telemetry)
-
-				// Should have event and metric but no CallSid metadata
-				foundEvent := false
-				foundMetric := false
-
-				for _, tel := range telemetry {
-					if event, ok := tel.(*types.Event); ok {
-						if event.EventType == "webhook" {
-							foundEvent = true
-						}
-					}
-					if metric, ok := tel.(*types.Metric); ok {
-						if metric.Name == "STATUS" {
-							foundMetric = true
-						}
-					}
-				}
-
-				assert.True(t, foundEvent, "Should have webhook event")
-				assert.True(t, foundMetric, "Should have STATUS metric")
+			checkCallInfo: func(t *testing.T, info *internal_type.CallInfo) {
+				require.NotNil(t, info)
+				assert.Equal(t, "twilio", info.Provider)
+				assert.Equal(t, "SUCCESS", info.Status)
+				assert.Empty(t, info.ChannelUUID, "ChannelUUID should be empty without CallSid")
+				assert.Equal(t, "webhook", info.StatusInfo.Event)
 			},
 		},
 		{
@@ -176,8 +119,8 @@ func TestReceiveCall(t *testing.T) {
 			},
 			expectedError: true,
 			expectedPhone: "",
-			checkTelemetry: func(t *testing.T, telemetry []types.Telemetry) {
-				// Telemetry may be empty or contain partial data
+			checkCallInfo: func(t *testing.T, info *internal_type.CallInfo) {
+				// CallInfo should be nil on error
 			},
 		},
 		{
@@ -188,8 +131,8 @@ func TestReceiveCall(t *testing.T) {
 			},
 			expectedError: true,
 			expectedPhone: "",
-			checkTelemetry: func(t *testing.T, telemetry []types.Telemetry) {
-				// Telemetry may be empty or contain partial data
+			checkCallInfo: func(t *testing.T, info *internal_type.CallInfo) {
+				// CallInfo should be nil on error
 			},
 		},
 		{
@@ -201,8 +144,8 @@ func TestReceiveCall(t *testing.T) {
 			},
 			expectedError: true,
 			expectedPhone: "",
-			checkTelemetry: func(t *testing.T, telemetry []types.Telemetry) {
-				// Telemetry may be empty or contain partial data
+			checkCallInfo: func(t *testing.T, info *internal_type.CallInfo) {
+				// CallInfo should be nil on error
 			},
 		},
 	}
@@ -227,27 +170,27 @@ func TestReceiveCall(t *testing.T) {
 			telephony := &twilioTelephony{}
 
 			// Call ReceiveCall
-			clientNumber, telemetry, err := telephony.ReceiveCall(c)
+			callInfo, err := telephony.ReceiveCall(c)
 
 			// Verify error expectation
 			if tt.expectedError {
 				assert.Error(t, err)
-				assert.Nil(t, clientNumber)
+				assert.Nil(t, callInfo)
 			} else {
 				assert.NoError(t, err)
-				require.NotNil(t, clientNumber)
-				assert.Equal(t, tt.expectedPhone, *clientNumber)
+				require.NotNil(t, callInfo)
+				assert.Equal(t, tt.expectedPhone, callInfo.CallerNumber)
 			}
 
-			// Check telemetry
-			if tt.checkTelemetry != nil {
-				tt.checkTelemetry(t, telemetry)
+			// Check CallInfo
+			if tt.checkCallInfo != nil {
+				tt.checkCallInfo(t, callInfo)
 			}
 		})
 	}
 }
 
-// TestReceiveCall_QueryParameterExtraction tests that all query parameters are captured in telemetry
+// TestReceiveCall_QueryParameterExtraction tests that all query parameters are captured in CallInfo payload
 func TestReceiveCall_QueryParameterExtraction(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
@@ -292,26 +235,17 @@ func TestReceiveCall_QueryParameterExtraction(t *testing.T) {
 	c.Request = req
 
 	telephony := &twilioTelephony{}
-	_, telemetry, err := telephony.ReceiveCall(c)
+	callInfo, err := telephony.ReceiveCall(c)
 
 	require.NoError(t, err)
-	require.NotNil(t, telemetry)
+	require.NotNil(t, callInfo)
 
-	// Verify event contains all query parameters
-	var webhookEvent *types.Event
-	for _, tel := range telemetry {
-		if event, ok := tel.(*types.Event); ok && event.EventType == "webhook" {
-			webhookEvent = event
-			break
-		}
-	}
+	// Verify StatusInfo contains webhook event with all query parameters as payload
+	assert.Equal(t, "webhook", callInfo.StatusInfo.Event)
+	require.NotNil(t, callInfo.StatusInfo.Payload, "StatusInfo payload should not be nil")
 
-	require.NotNil(t, webhookEvent, "Should have webhook event")
-	require.NotNil(t, webhookEvent.Payload, "Event should have payload")
-
-	// Verify all query params are in the event payload
-	payloadMap := webhookEvent.Payload
-	require.NotNil(t, payloadMap, "Payload should not be nil")
+	payloadMap, ok := callInfo.StatusInfo.Payload.(map[string]string)
+	require.True(t, ok, "Payload should be map[string]string")
 
 	for key, expectedValue := range queryParams {
 		actualValue, exists := payloadMap[key]
@@ -359,17 +293,17 @@ func TestReceiveCall_PhoneNumberFormats(t *testing.T) {
 			c.Request = req
 
 			telephony := &twilioTelephony{}
-			clientNumber, _, err := telephony.ReceiveCall(c)
+			callInfo, err := telephony.ReceiveCall(c)
 
 			require.NoError(t, err)
-			require.NotNil(t, clientNumber)
-			assert.Equal(t, tt.expectedPhone, *clientNumber)
+			require.NotNil(t, callInfo)
+			assert.Equal(t, tt.expectedPhone, callInfo.CallerNumber)
 		})
 	}
 }
 
-// TestReceiveCall_TelemetryStructure tests the structure of telemetry data
-func TestReceiveCall_TelemetryStructure(t *testing.T) {
+// TestReceiveCall_CallInfoStructure tests the structure of CallInfo data
+func TestReceiveCall_CallInfoStructure(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	w := httptest.NewRecorder()
@@ -385,29 +319,19 @@ func TestReceiveCall_TelemetryStructure(t *testing.T) {
 	c.Request = req
 
 	telephony := &twilioTelephony{}
-	_, telemetry, err := telephony.ReceiveCall(c)
+	callInfo, err := telephony.ReceiveCall(c)
 
 	require.NoError(t, err)
-	require.NotNil(t, telemetry)
+	require.NotNil(t, callInfo)
 
-	// Count different types of telemetry
-	metadataCount := 0
-	eventCount := 0
-	metricCount := 0
+	// Verify CallInfo fields
+	assert.Equal(t, "twilio", callInfo.Provider)
+	assert.Equal(t, "SUCCESS", callInfo.Status)
+	assert.Equal(t, "+15703768754", callInfo.CallerNumber)
+	assert.Equal(t, "CAf64ab88f90f35581dcb16e60f875ea4a", callInfo.ChannelUUID)
+	assert.Empty(t, callInfo.ErrorMessage)
 
-	for _, tel := range telemetry {
-		switch tel.(type) {
-		case *types.Metadata:
-			metadataCount++
-		case *types.Event:
-			eventCount++
-		case *types.Metric:
-			metricCount++
-		}
-	}
-
-	// Should have exactly 1 metadata (CallSid), 1 event (webhook), and 1 metric (STATUS)
-	assert.Equal(t, 1, metadataCount, "Should have exactly 1 metadata entry")
-	assert.Equal(t, 1, eventCount, "Should have exactly 1 event entry")
-	assert.Equal(t, 1, metricCount, "Should have exactly 1 metric entry")
+	// Verify StatusInfo
+	assert.Equal(t, "webhook", callInfo.StatusInfo.Event)
+	assert.NotNil(t, callInfo.StatusInfo.Payload)
 }

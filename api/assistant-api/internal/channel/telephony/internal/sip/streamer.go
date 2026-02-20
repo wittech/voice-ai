@@ -14,9 +14,8 @@ import (
 	"time"
 
 	internal_audio "github.com/rapidaai/api/assistant-api/internal/audio"
+	callcontext "github.com/rapidaai/api/assistant-api/internal/callcontext"
 	internal_telephony_base "github.com/rapidaai/api/assistant-api/internal/channel/telephony/internal/base"
-	internal_assistant_entity "github.com/rapidaai/api/assistant-api/internal/entity/assistants"
-	internal_conversation_entity "github.com/rapidaai/api/assistant-api/internal/entity/conversations"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 	sip_infra "github.com/rapidaai/api/assistant-api/sip/infra"
 	"github.com/rapidaai/pkg/commons"
@@ -61,99 +60,75 @@ type Streamer struct {
 	configSent  atomic.Bool
 }
 
-// NewInboundStreamer creates a streamer for an inbound SIP call using an existing session.
-// This does NOT create a new SIP server — it uses the session's RTP handler from the global server.
-func NewInboundStreamer(ctx context.Context,
+// NewStreamer creates a SIP streamer.
+//
+// When sipSession is non-nil (inbound path), the streamer reuses the session's
+// existing RTP handler from the global SIP server — no new server is created.
+//
+// When sipSession is nil (outbound / standalone path), a dedicated SIP server
+// is spun up with its own RTP port pool and event handlers.
+func NewStreamer(ctx context.Context,
 	config *sip_infra.Config,
 	logger commons.Logger,
-	session *sip_infra.Session,
-	assistant *internal_assistant_entity.Assistant,
-	conversation *internal_conversation_entity.AssistantConversation,
-	vlt *protos.VaultCredential,
-) (internal_type.Streamer, error) {
-
-	// Get the RTP handler from the session (created by server.handleInvite)
-	rtpHandler := session.GetRTPHandler()
-	if rtpHandler == nil {
-		return nil, sip_infra.NewSIPError("NewInboundStreamer", session.GetCallID(), "session has no RTP handler", sip_infra.ErrRTPNotInitialized)
-	}
-
-	streamerCtx, cancel := context.WithCancel(ctx)
-
-	// Get codec from session
-	codec := session.GetNegotiatedCodec()
-	if codec == nil {
-		pcmu := sip_infra.CodecPCMU
-		codec = &pcmu
-	}
-
-	// SIP streamer doesn't use channel-based I/O from BaseStreamer;
-	// it manages its own inputBuffer and RTP-based output. The base
-	// options are kept minimal.
-	s := &Streamer{
-		BaseTelephonyStreamer: internal_telephony_base.NewBaseTelephonyStreamer(
-			logger, assistant, conversation, vlt,
-			internal_telephony_base.WithSourceAudioConfig(internal_audio.NewMulaw8khzMonoAudioConfig()),
-		),
-		config:     config,
-		session:    session,
-		rtpHandler: rtpHandler,
-		codec:      codec,
-		ctx:        streamerCtx,
-		cancel:     cancel,
-	}
-
-	// Start audio forwarding from RTP handler
-	go s.forwardIncomingAudio()
-
-	localIP, localPort := rtpHandler.LocalAddr()
-	logger.Infow("Inbound SIP streamer created",
-		"call_id", session.GetCallID(),
-		"codec", codec.Name,
-		"rtp_port", localPort,
-		"local_ip", localIP)
-
-	return s, nil
-}
-
-// NewOutboundStreamer creates a new native SIP streamer for outbound calls.
-// Uses sipgo for SIP signaling and RTP for audio transport — no WebSocket needed.
-func NewOutboundStreamer(ctx context.Context,
-	config *sip_infra.Config,
-	logger commons.Logger,
-	tenantID string,
-	assistant *internal_assistant_entity.Assistant,
-	conversation *internal_conversation_entity.AssistantConversation,
+	sipSession *sip_infra.Session,
+	cc *callcontext.CallContext,
+	vaultCred *protos.VaultCredential,
 ) (internal_type.Streamer, error) {
 	streamerCtx, cancel := context.WithCancel(ctx)
 
+	// Default codec — overridden below when an existing session carries a
+	// negotiated codec.
 	pcmu := sip_infra.CodecPCMU
+	codec := &pcmu
 
 	s := &Streamer{
 		BaseTelephonyStreamer: internal_telephony_base.NewBaseTelephonyStreamer(
-			logger, assistant, conversation, nil,
+			logger, cc, vaultCred,
 			internal_telephony_base.WithSourceAudioConfig(internal_audio.NewMulaw8khzMonoAudioConfig()),
 		),
 		config: config,
-		codec:  &pcmu,
+		codec:  codec,
 		ctx:    streamerCtx,
 		cancel: cancel,
 	}
 
-	// Initialize SIP server for outbound calls.
+	// --- Inbound: reuse existing session's RTP handler ---
+	if sipSession != nil {
+		rtpHandler := sipSession.GetRTPHandler()
+		if rtpHandler == nil {
+			cancel()
+			return nil, sip_infra.NewSIPError("NewStreamer", sipSession.GetCallID(), "session has no RTP handler", sip_infra.ErrRTPNotInitialized)
+		}
+
+		if negotiated := sipSession.GetNegotiatedCodec(); negotiated != nil {
+			s.codec = negotiated
+		}
+
+		s.session = sipSession
+		s.rtpHandler = rtpHandler
+
+		go s.forwardIncomingAudio()
+
+		localIP, localPort := rtpHandler.LocalAddr()
+		logger.Infow("SIP streamer created (inbound)",
+			"call_id", sipSession.GetCallID(),
+			"codec", s.codec.Name,
+			"rtp_port", localPort,
+			"local_ip", localIP)
+
+		return s, nil
+	}
+
+	// --- Outbound / standalone: spin up a dedicated SIP server ---
 	// Address is the bind address (0.0.0.0 to listen on all interfaces).
 	// config.Server is the remote SIP server — it must NOT be used as the
 	// bind address or the RTP socket will fail to bind to a non-local IP.
-	// Note: ExternalIP is not set here because the per-tenant Config does
-	// not carry it. The shared SIPManager path (telephony.go → MakeCall)
-	// is the preferred outbound call flow; this Streamer path is legacy.
 	listenConfig := &sip_infra.ListenConfig{
 		Address:   "0.0.0.0",
 		Port:      config.Port,
 		Transport: config.Transport,
 	}
 
-	// Config resolver returns the tenant config for all calls on this server
 	tenantConfig := config
 	configResolver := func(reqCtx *sip_infra.SIPRequestContext) (*sip_infra.InviteResult, error) {
 		return &sip_infra.InviteResult{
@@ -175,16 +150,16 @@ func NewOutboundStreamer(ctx context.Context,
 	}
 	s.server = server
 
-	// Set up SIP event handlers
 	server.SetOnInvite(s.handleInvite)
 	server.SetOnBye(s.handleBye)
 	server.SetOnError(s.handleError)
 
-	// Start SIP server
 	if err := server.Start(); err != nil {
 		cancel()
 		return nil, err
 	}
+
+	logger.Infow("SIP streamer created (outbound)")
 	return s, nil
 }
 

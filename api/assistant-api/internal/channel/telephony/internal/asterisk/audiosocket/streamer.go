@@ -16,9 +16,8 @@ import (
 	"strings"
 	"sync"
 
+	callcontext "github.com/rapidaai/api/assistant-api/internal/callcontext"
 	internal_telephony_base "github.com/rapidaai/api/assistant-api/internal/channel/telephony/internal/base"
-	internal_assistant_entity "github.com/rapidaai/api/assistant-api/internal/entity/assistants"
-	internal_conversation_entity "github.com/rapidaai/api/assistant-api/internal/entity/conversations"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 	"github.com/rapidaai/pkg/commons"
 	"github.com/rapidaai/protos"
@@ -45,14 +44,16 @@ type Streamer struct {
 }
 
 // NewStreamer creates a new AudioSocket streamer.
+// initialUUID is the contextId already read from the first UUID frame by the AudioSocket
+// engine — when set, the streamer emits ConversationInitialization on the first Recv()
+// without waiting for another UUID frame from the wire.
 func NewStreamer(
 	logger commons.Logger,
 	conn net.Conn,
 	reader *bufio.Reader,
 	writer *bufio.Writer,
-	assistant *internal_assistant_entity.Assistant,
-	conversation *internal_conversation_entity.AssistantConversation,
-	vlt *protos.VaultCredential,
+	cc *callcontext.CallContext,
+	vaultCred *protos.VaultCredential,
 ) (internal_type.Streamer, error) {
 	audioProcessor, err := NewAudioProcessor(logger)
 	if err != nil {
@@ -69,7 +70,7 @@ func NewStreamer(
 
 	as := &Streamer{
 		BaseTelephonyStreamer: internal_telephony_base.NewBaseTelephonyStreamer(
-			logger, assistant, conversation, vlt,
+			logger, cc, vaultCred,
 		),
 		conn:           conn,
 		reader:         reader,
@@ -79,17 +80,13 @@ func NewStreamer(
 		outputCancel:   cancel,
 		ctx:            ctx,
 		cancel:         cancel,
+		initialUUID:    cc.ContextID,
 	}
 
 	audioProcessor.SetInputAudioCallback(as.sendProcessedInputAudio)
 	audioProcessor.SetOutputChunkCallback(as.sendAudioChunk)
 	go audioProcessor.RunOutputSender(as.outputCtx)
 	return as, nil
-}
-
-// SetInitialUUID sets the AudioSocket UUID before streaming starts.
-func (as *Streamer) SetInitialUUID(uuid string) {
-	as.initialUUID = uuid
 }
 
 func (as *Streamer) sendProcessedInputAudio(audio []byte) {

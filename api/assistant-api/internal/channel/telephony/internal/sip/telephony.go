@@ -25,6 +25,8 @@ import (
 	"github.com/rapidaai/protos"
 )
 
+const sipProvider = "sip"
+
 // sipTelephony implements the Telephony interface for native SIP
 type sipTelephony struct {
 	appCfg       *config.AssistantConfig
@@ -111,7 +113,7 @@ func (t *sipTelephony) StatusCallback(
 	auth types.SimplePrinciple,
 	assistantId uint64,
 	assistantConversationId uint64,
-) ([]types.Telemetry, error) {
+) (*internal_type.StatusInfo, error) {
 	body, err := c.GetRawData()
 	if err != nil {
 		t.logger.Error("Failed to read SIP status callback body", "error", err)
@@ -134,14 +136,11 @@ func (t *sipTelephony) StatusCallback(
 		"assistant_id", assistantId,
 		"conversation_id", assistantConversationId)
 
-	return []types.Telemetry{
-		types.NewMetric("STATUS", eventType, utils.Ptr("SIP event status")),
-		types.NewEvent(eventType, payload),
-	}, nil
+	return &internal_type.StatusInfo{Event: eventType, Payload: payload}, nil
 }
 
 // CatchAllStatusCallback handles catch-all status callbacks
-func (t *sipTelephony) CatchAllStatusCallback(ctx *gin.Context) ([]types.Telemetry, error) {
+func (t *sipTelephony) CatchAllStatusCallback(ctx *gin.Context) (*internal_type.StatusInfo, error) {
 	return nil, nil
 }
 
@@ -153,33 +152,26 @@ func (t *sipTelephony) OutboundCall(
 	assistantId, assistantConversationId uint64,
 	vaultCredential *protos.VaultCredential,
 	opts utils.Option,
-) ([]types.Telemetry, error) {
-	mtds := []types.Telemetry{
-		types.NewMetadata("telephony.toPhone", toPhone),
-		types.NewMetadata("telephony.fromPhone", fromPhone),
-		types.NewMetadata("telephony.provider", "sip"),
-	}
+) (*internal_type.CallInfo, error) {
+	info := &internal_type.CallInfo{Provider: sipProvider}
 
 	cfg, err := t.parseConfig(vaultCredential)
 	if err != nil {
-		return append(mtds,
-			types.NewMetadata("telephony.error", fmt.Sprintf("config error: %s", err.Error())),
-			types.NewMetric("STATUS", "FAILED", utils.Ptr("Status of telephony api")),
-		), err
+		info.Status = "FAILED"
+		info.ErrorMessage = fmt.Sprintf("config error: %s", err.Error())
+		return info, err
 	}
 
 	// Validate shared server is available and running
 	if t.sharedServer == nil {
-		return append(mtds,
-			types.NewMetadata("telephony.error", "SIP server not initialized"),
-			types.NewMetric("STATUS", "FAILED", utils.Ptr("Status of telephony api")),
-		), fmt.Errorf("shared SIP server not available")
+		info.Status = "FAILED"
+		info.ErrorMessage = "SIP server not initialized"
+		return info, fmt.Errorf("shared SIP server not available")
 	}
 	if !t.sharedServer.IsRunning() {
-		return append(mtds,
-			types.NewMetadata("telephony.error", "SIP server not running"),
-			types.NewMetric("STATUS", "FAILED", utils.Ptr("Status of telephony api")),
-		), fmt.Errorf("shared SIP server is not running")
+		info.Status = "FAILED"
+		info.ErrorMessage = "SIP server not running"
+		return info, fmt.Errorf("shared SIP server is not running")
 	}
 
 	// Initiate outbound call via the shared SIP server.
@@ -196,10 +188,9 @@ func (t *sipTelephony) OutboundCall(
 	}
 	session, err := t.sharedServer.MakeCall(context.Background(), cfg, toPhone, fromPhone, callMetadata)
 	if err != nil {
-		return append(mtds,
-			types.NewMetadata("telephony.error", fmt.Sprintf("call error: %s", err.Error())),
-			types.NewMetric("STATUS", "FAILED", utils.Ptr("Status of telephony api")),
-		), err
+		info.Status = "FAILED"
+		info.ErrorMessage = fmt.Sprintf("call error: %s", err.Error())
+		return info, err
 	}
 
 	t.logger.Info("SIP outbound call initiated",
@@ -209,18 +200,22 @@ func (t *sipTelephony) OutboundCall(
 		"assistant_id", assistantId,
 		"conversation_id", assistantConversationId)
 
-	return append(mtds,
-		types.NewMetadata("telephony.status", "initiated"),
-		types.NewMetadata("telephony.call_id", session.GetCallID()),
-		types.NewEvent("initiated", map[string]interface{}{
+	info.ChannelUUID = session.GetCallID()
+	info.Status = "SUCCESS"
+	info.StatusInfo = internal_type.StatusInfo{
+		Event: "initiated",
+		Payload: map[string]interface{}{
 			"to":              toPhone,
 			"from":            fromPhone,
 			"call_id":         session.GetCallID(),
 			"assistant_id":    assistantId,
 			"conversation_id": assistantConversationId,
-		}),
-		types.NewMetric("STATUS", "SUCCESS", utils.Ptr("Status of telephony api")),
-	), nil
+		},
+	}
+	info.Extra = map[string]string{
+		"telephony.status": "initiated",
+	}
+	return info, nil
 }
 
 // InboundCall handles incoming SIP calls
@@ -244,10 +239,8 @@ func (t *sipTelephony) InboundCall(
 }
 
 // ReceiveCall processes incoming call webhook data
-func (t *sipTelephony) ReceiveCall(c *gin.Context) (*string, []types.Telemetry, error) {
+func (t *sipTelephony) ReceiveCall(c *gin.Context) (*internal_type.CallInfo, error) {
 	queryParams := make(map[string]string)
-	telemetry := []types.Telemetry{}
-
 	for key, values := range c.Request.URL.Query() {
 		if len(values) > 0 {
 			queryParams[key] = values[0]
@@ -260,16 +253,18 @@ func (t *sipTelephony) ReceiveCall(c *gin.Context) (*string, []types.Telemetry, 
 		// Try alternative parameter names
 		clientNumber, ok = queryParams["caller"]
 		if !ok || clientNumber == "" {
-			return nil, telemetry, fmt.Errorf("missing caller information")
+			return nil, fmt.Errorf("missing caller information")
 		}
 	}
 
-	if callID, ok := queryParams["call_id"]; ok && callID != "" {
-		telemetry = append(telemetry, types.NewMetadata("telephony.uuid", callID))
+	info := &internal_type.CallInfo{
+		CallerNumber: clientNumber,
+		Provider:     sipProvider,
+		Status:       "SUCCESS",
+		StatusInfo:   internal_type.StatusInfo{Event: "webhook", Payload: queryParams},
 	}
-
-	return utils.Ptr(clientNumber), append(telemetry,
-		types.NewEvent("webhook", queryParams),
-		types.NewMetric("STATUS", "SUCCESS", utils.Ptr("Status of telephony api")),
-	), nil
+	if callID, ok := queryParams["call_id"]; ok && callID != "" {
+		info.ChannelUUID = callID
+	}
+	return info, nil
 }

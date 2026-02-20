@@ -21,6 +21,8 @@ import (
 	"github.com/rapidaai/protos"
 )
 
+const asteriskProvider = "asterisk"
+
 // asteriskTelephony implements the Telephony interface for Asterisk
 type asteriskTelephony struct {
 	appCfg *config.AssistantConfig
@@ -35,115 +37,56 @@ func NewAsteriskTelephony(config *config.AssistantConfig, logger commons.Logger)
 	}, nil
 }
 
-// StatusCallback handles status callback events from Asterisk
+// StatusCallback handles ARI status callback events from Asterisk.
+// Asterisk ARI sends JSON payloads with a "type" field indicating the event type.
 func (apt *asteriskTelephony) StatusCallback(
 	c *gin.Context,
 	auth types.SimplePrinciple,
 	assistantId uint64,
 	assistantConversationId uint64,
-) ([]types.Telemetry, error) {
-	body, err := c.GetRawData()
-	if err != nil {
-		apt.logger.Errorf("Failed to read event body: %+v", err)
-		return nil, fmt.Errorf("failed to read request body")
-	}
-
-	// Try to parse as JSON first
+) (*internal_type.StatusInfo, error) {
 	var eventDetails map[string]interface{}
-	if err := json.Unmarshal(body, &eventDetails); err != nil {
-		// Fall back to form-encoded data
-		values, err := url.ParseQuery(string(body))
-		if err != nil {
-			apt.logger.Errorf("Failed to parse body: %+v", err)
-			return nil, fmt.Errorf("failed to parse request body")
-		}
-		eventDetails = make(map[string]interface{})
-		for key, value := range values {
-			if len(value) > 0 {
-				eventDetails[key] = value[0]
-			} else {
-				eventDetails[key] = nil
-			}
-		}
+	if err := c.ShouldBindJSON(&eventDetails); err != nil {
+		apt.logger.Errorf("failed to parse ARI event body: %+v", err)
+		return nil, fmt.Errorf("failed to parse ARI event body: %w", err)
 	}
 
-	// Extract event type from various possible fields
 	eventType := "unknown"
 	if v, ok := eventDetails["type"]; ok {
 		eventType = fmt.Sprintf("%v", v)
-	} else if v, ok := eventDetails["event"]; ok {
-		eventType = fmt.Sprintf("%v", v)
-	} else if v, ok := eventDetails["Event"]; ok {
-		eventType = fmt.Sprintf("%v", v)
 	}
 
-	return []types.Telemetry{
-		types.NewMetric("STATUS", eventType, utils.Ptr("Status of conversation")),
-		types.NewEvent(eventType, eventDetails),
-	}, nil
+	return &internal_type.StatusInfo{Event: eventType, Payload: eventDetails}, nil
 }
 
 // CatchAllStatusCallback handles catch-all status callbacks
-func (apt *asteriskTelephony) CatchAllStatusCallback(ctx *gin.Context) ([]types.Telemetry, error) {
+func (apt *asteriskTelephony) CatchAllStatusCallback(ctx *gin.Context) (*internal_type.StatusInfo, error) {
 	return nil, nil
 }
 
-// ReceiveCall handles incoming call webhooks from Asterisk
-func (apt *asteriskTelephony) ReceiveCall(c *gin.Context) (*string, []types.Telemetry, error) {
-	queryParams := make(map[string]string)
-	telemetry := []types.Telemetry{}
-
-	for key, values := range c.Request.URL.Query() {
-		if len(values) > 0 {
-			queryParams[key] = values[0]
-		}
-	}
-
-	// Try to get caller info from query params or body
-	var clientNumber string
-
-	// Check query parameters first
-	if from, ok := queryParams["from"]; ok && from != "" {
-		clientNumber = from
-	} else if callerID, ok := queryParams["callerid"]; ok && callerID != "" {
-		clientNumber = callerID
-	} else if caller, ok := queryParams["caller"]; ok && caller != "" {
-		clientNumber = caller
-	}
-
-	// Try to parse body if no caller found in query
+// ReceiveCall handles incoming call webhooks from Asterisk.
+// The caller number is passed as the `from` query parameter by the Asterisk dialplan.
+// Channel ID (if present) is captured as ChannelUUID.
+func (apt *asteriskTelephony) ReceiveCall(c *gin.Context) (*internal_type.CallInfo, error) {
+	clientNumber := c.Query("from")
 	if clientNumber == "" {
-		body, err := c.GetRawData()
-		if err == nil && len(body) > 0 {
-			var bodyData map[string]interface{}
-			if json.Unmarshal(body, &bodyData) == nil {
-				if from, ok := bodyData["from"]; ok {
-					clientNumber = fmt.Sprintf("%v", from)
-				} else if callerID, ok := bodyData["callerid"]; ok {
-					clientNumber = fmt.Sprintf("%v", callerID)
-				} else if caller, ok := bodyData["caller"]; ok {
-					clientNumber = fmt.Sprintf("%v", caller)
-				}
-			}
-		}
+		clientNumber = c.Query("callerid")
 	}
-
 	if clientNumber == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing caller information"})
-		return nil, telemetry, fmt.Errorf("missing caller information")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing caller information — provide 'from' query parameter"})
+		return nil, fmt.Errorf("missing caller information in query params")
 	}
 
-	// Extract channel ID if available
-	if channelID, ok := queryParams["channel_id"]; ok && channelID != "" {
-		telemetry = append(telemetry, types.NewMetadata("telephony.uuid", channelID))
-	} else if channelID, ok := queryParams["channelid"]; ok && channelID != "" {
-		telemetry = append(telemetry, types.NewMetadata("telephony.uuid", channelID))
+	info := &internal_type.CallInfo{
+		CallerNumber: clientNumber,
+		Provider:     asteriskProvider,
+		Status:       "SUCCESS",
+		StatusInfo:   internal_type.StatusInfo{Event: "webhook", Payload: map[string]string{"from": clientNumber}},
 	}
-
-	return utils.Ptr(clientNumber), append(telemetry,
-		types.NewEvent("webhook", queryParams),
-		types.NewMetric("STATUS", "SUCCESS", utils.Ptr("Status of telephony api")),
-	), nil
+	if channelID := c.Query("channel_id"); channelID != "" {
+		info.ChannelUUID = channelID
+	}
+	return info, nil
 }
 
 // OutboundCall initiates an outbound call via Asterisk ARI
@@ -154,18 +97,13 @@ func (apt *asteriskTelephony) OutboundCall(
 	assistantId, assistantConversationId uint64,
 	vaultCredential *protos.VaultCredential,
 	opts utils.Option,
-) ([]types.Telemetry, error) {
-	mtds := []types.Telemetry{
-		types.NewMetadata("telephony.toPhone", toPhone),
-		types.NewMetadata("telephony.fromPhone", fromPhone),
-		types.NewMetadata("telephony.provider", "asterisk"),
-	}
+) (*internal_type.CallInfo, error) {
+	info := &internal_type.CallInfo{Provider: asteriskProvider}
 
 	if vaultCredential == nil {
-		return append(mtds,
-			types.NewMetadata("telephony.error", "Missing vault credential for Asterisk ARI"),
-			types.NewMetric("STATUS", "FAILED", utils.Ptr("Status of telephony api")),
-		), fmt.Errorf("missing vault credential for Asterisk ARI")
+		info.Status = "FAILED"
+		info.ErrorMessage = "Missing vault credential for Asterisk ARI"
+		return info, fmt.Errorf("missing vault credential for Asterisk ARI")
 	}
 	credMap := vaultCredential.GetValue().AsMap()
 	ariURL, _ := credMap["ari_url"].(string)
@@ -189,24 +127,21 @@ func (apt *asteriskTelephony) OutboundCall(
 	params.Set("callerId", callerId)
 	params.Set("appArgs", fmt.Sprintf("incoming,assistant_id=%d,conversation_id=%d", assistantId, assistantConversationId))
 
-	// Add channel variables for AudioSocket routing
-	params.Add("variables", fmt.Sprintf("RAPIDA_ASSISTANT_ID=%d", assistantId))
-	params.Add("variables", fmt.Sprintf("RAPIDA_CONVERSATION_ID=%d", assistantConversationId))
-	if auth.GetCurrentProjectId() != nil {
-		params.Add("variables", fmt.Sprintf("RAPIDA_PROJECT_ID=%d", *auth.GetCurrentProjectId()))
-	}
-	if auth.GetCurrentOrganizationId() != nil {
-		params.Add("variables", fmt.Sprintf("RAPIDA_ORG_ID=%d", *auth.GetCurrentOrganizationId()))
+	// Pass contextId as a channel variable — Asterisk dialplan uses this as the AudioSocket UUID
+	// so the AudioSocket server can resolve the full call context from Redis.
+	// All other call details (assistant, conversation, auth, org, project) are resolved
+	// from Redis via the contextId — no need to pass them as separate channel variables.
+	if contextID, err := opts.GetString("rapida.context_id"); err == nil && contextID != "" {
+		params.Add("variables", fmt.Sprintf("RAPIDA_CONTEXT_ID=%s", contextID))
 	}
 
 	// Create HTTP request
 	reqURL := fmt.Sprintf("%s?%s", ariURL, params.Encode())
 	req, err := http.NewRequest("POST", reqURL, nil)
 	if err != nil {
-		return append(mtds,
-			types.NewMetadata("telephony.error", fmt.Sprintf("request creation error: %s", err.Error())),
-			types.NewMetric("STATUS", "FAILED", utils.Ptr("Status of telephony api")),
-		), err
+		info.Status = "FAILED"
+		info.ErrorMessage = fmt.Sprintf("request creation error: %s", err.Error())
+		return info, err
 	}
 
 	user, _ := credMap["ari_user"].(string)
@@ -217,18 +152,16 @@ func (apt *asteriskTelephony) OutboundCall(
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		return append(mtds,
-			types.NewMetadata("telephony.error", fmt.Sprintf("API error: %s", err.Error())),
-			types.NewMetric("STATUS", "FAILED", utils.Ptr("Status of telephony api")),
-		), err
+		info.Status = "FAILED"
+		info.ErrorMessage = fmt.Sprintf("API error: %s", err.Error())
+		return info, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		return append(mtds,
-			types.NewMetadata("telephony.error", fmt.Sprintf("API returned status: %d", resp.StatusCode)),
-			types.NewMetric("STATUS", "FAILED", utils.Ptr("Status of telephony api")),
-		), fmt.Errorf("ARI API returned status: %d", resp.StatusCode)
+		info.Status = "FAILED"
+		info.ErrorMessage = fmt.Sprintf("API returned status: %d", resp.StatusCode)
+		return info, fmt.Errorf("ARI API returned status: %d", resp.StatusCode)
 	}
 
 	// Parse response
@@ -237,21 +170,21 @@ func (apt *asteriskTelephony) OutboundCall(
 		apt.logger.Warn("Failed to decode ARI response", "error", err)
 	}
 
-	channelID := ""
 	if id, ok := ariResp["id"]; ok {
-		channelID = fmt.Sprintf("%v", id)
+		info.ChannelUUID = fmt.Sprintf("%v", id)
 	}
 
-	return append(mtds,
-		types.NewMetadata("telephony.uuid", channelID),
-		types.NewEvent("channel_created", ariResp),
-		types.NewMetric("STATUS", "SUCCESS", utils.Ptr("Status of telephony api")),
-	), nil
+	info.Status = "SUCCESS"
+	info.StatusInfo = internal_type.StatusInfo{Event: "channel_created", Payload: ariResp}
+	return info, nil
 }
 
-// InboundCall handles inbound call setup for Asterisk
-// This returns the WebSocket connection URL as plain text for Asterisk to connect to
-// Asterisk AudioSocket or chan_websocket expects a plain WebSocket URL
+// InboundCall handles inbound call setup for Asterisk.
+// Returns the contextId as plain text — Asterisk dialplan uses this as the AudioSocket UUID
+// so the AudioSocket server can resolve the full call context from Redis.
+//
+// For AudioSocket: same = n,AudioSocket(${CURL(https://api.rapida.ai/v1/talk/asterisk/call/${ASSISTANT_ID})},host:port)
+// For chan_websocket: the contextId is used in the WS URL path: wss://host/v1/talk/asterisk/ctx/${contextId}
 func (apt *asteriskTelephony) InboundCall(
 	c *gin.Context,
 	auth types.SimplePrinciple,
@@ -259,25 +192,13 @@ func (apt *asteriskTelephony) InboundCall(
 	clientNumber string,
 	assistantConversationId uint64,
 ) error {
-	// Build WebSocket connection URL for Asterisk
-	wsPath := internal_type.GetAnswerPrefix(auth, assistantId, assistantConversationId, clientNumber)
-	// wsURL := fmt.Sprintf("wss://%s/%s", apt.appCfg.PublicAssistantHost, wsPath)
-
-	// Return plain text WebSocket URL for Asterisk dialplan to use
-	// This can be used directly in Asterisk dialplan with AudioSocket or chan_websocket:
-	// same = n,AudioSocket(${CURL(https://api.rapida.ai/v1/talk/asterisk/call/${ASSISTANT_ID})})
-	c.String(http.StatusOK, wsPath)
-	return nil
-}
-
-// parsePort parses a port number from string
-func parsePort(s string) (int, error) {
-	var port int
-	for _, c := range s {
-		if c < '0' || c > '9' {
-			return 0, fmt.Errorf("invalid port: %s", s)
-		}
-		port = port*10 + int(c-'0')
+	// contextId was set by CallReciever after saving the call context to Redis.
+	// Return it as plain text — Asterisk dialplan uses this as the AudioSocket UUID
+	// or as part of the WebSocket URL path for chan_websocket.
+	contextID, exists := c.Get("contextId")
+	if !exists || contextID == "" {
+		return fmt.Errorf("missing contextId — CallReciever must save call context before InboundCall")
 	}
-	return port, nil
+	c.String(http.StatusOK, fmt.Sprintf("%v", contextID))
+	return nil
 }

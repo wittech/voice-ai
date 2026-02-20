@@ -21,6 +21,8 @@ import (
 	openapi "github.com/twilio/twilio-go/rest/api/v2010"
 )
 
+const twilioProvider = "twilio"
+
 type twilioTelephony struct {
 	appCfg *config.AssistantConfig
 	logger commons.Logger
@@ -56,14 +58,14 @@ func (tpc *twilioTelephony) clientParam(vaultCredential *protos.VaultCredential)
 	}, nil
 }
 
-func (tpc *twilioTelephony) CatchAllStatusCallback(ctx *gin.Context) ([]types.Telemetry, error) {
+func (tpc *twilioTelephony) CatchAllStatusCallback(ctx *gin.Context) (*internal_type.StatusInfo, error) {
 	return nil, nil
 }
-func (tpc *twilioTelephony) StatusCallback(c *gin.Context, auth types.SimplePrinciple, assistantId uint64, assistantConversationId uint64) ([]types.Telemetry, error) {
-	body, err := c.GetRawData() // Extract raw request body
+func (tpc *twilioTelephony) StatusCallback(c *gin.Context, auth types.SimplePrinciple, assistantId uint64, assistantConversationId uint64) (*internal_type.StatusInfo, error) {
+	body, err := c.GetRawData()
 	if err != nil {
 		tpc.logger.Errorf("failed to read event body with error %+v", err)
-		return nil, fmt.Errorf("not implimented")
+		return nil, fmt.Errorf("failed to read request body")
 	}
 
 	values, err := url.ParseQuery(string(body))
@@ -81,30 +83,29 @@ func (tpc *twilioTelephony) StatusCallback(c *gin.Context, auth types.SimplePrin
 		}
 	}
 
-	callStatusOrStreamEvent := eventDetails["CallStatus"]
+	event := fmt.Sprintf("%v", eventDetails["CallStatus"])
 	if streamEvent, ok := eventDetails["StreamEvent"]; ok {
-		callStatusOrStreamEvent = streamEvent
+		event = fmt.Sprintf("%v", streamEvent)
 	}
-	return []types.Telemetry{types.NewMetric("STATUS", fmt.Sprintf("%v", callStatusOrStreamEvent), utils.Ptr("Status of conversation")), types.NewEvent(fmt.Sprintf("%v", callStatusOrStreamEvent), eventDetails)}, nil
-
+	return &internal_type.StatusInfo{Event: event, Payload: eventDetails}, nil
 }
 
-func (tpc *twilioTelephony) OutboundCall(auth types.SimplePrinciple, toPhone string, fromPhone string, assistantId, assistantConversationId uint64, vaultCredential *protos.VaultCredential, opts utils.Option) ([]types.Telemetry, error) {
-	mtds := []types.Telemetry{
-		types.NewMetadata("telephony.toPhone", toPhone),
-		types.NewMetadata("telephony.fromPhone", fromPhone),
-		types.NewMetadata("telephony.provider", "twilio"),
-	}
+func (tpc *twilioTelephony) OutboundCall(auth types.SimplePrinciple, toPhone string, fromPhone string, assistantId, assistantConversationId uint64, vaultCredential *protos.VaultCredential, opts utils.Option) (*internal_type.CallInfo, error) {
+	info := &internal_type.CallInfo{Provider: twilioProvider}
+
+	contextID, _ := opts.GetString("rapida.context_id")
 
 	client, err := tpc.client(vaultCredential)
 	if err != nil {
-		return append(mtds, types.NewMetadata("telephony.error", fmt.Sprintf("authentication error: %s", err.Error())), types.NewMetric("STATUS", "FAILED", utils.Ptr("Status of telephony api"))), err
+		info.Status = "FAILED"
+		info.ErrorMessage = fmt.Sprintf("authentication error: %s", err.Error())
+		return info, err
 	}
 	callParams := &openapi.CreateCallParams{}
 	callParams.SetTo(toPhone)
 	callParams.SetFrom(fromPhone)
 	callParams.SetStatusCallback(
-		fmt.Sprintf("https://%s/%s", tpc.appCfg.PublicAssistantHost, internal_type.GetEventPath("twilio", auth, assistantId, assistantConversationId)),
+		fmt.Sprintf("https://%s/%s", tpc.appCfg.PublicAssistantHost, internal_type.GetContextEventPath(twilioProvider, contextID)),
 	)
 	callParams.SetStatusCallbackEvent([]string{
 		"initiated", "ringing", "answered", "completed",
@@ -114,23 +115,22 @@ func (tpc *twilioTelephony) OutboundCall(auth types.SimplePrinciple, toPhone str
 		tpc.CreateTwinML(
 			tpc.appCfg.PublicAssistantHost,
 			fmt.Sprintf("%d__%d", assistantId, assistantConversationId),
-			internal_type.GetAnswerPath("twilio", auth, assistantId,
-				assistantConversationId,
-				toPhone,
-			),
-			fmt.Sprintf("https://%s/%s", tpc.appCfg.PublicAssistantHost, internal_type.GetEventPath("twilio", auth, assistantId, assistantConversationId)),
+			internal_type.GetContextAnswerPath(twilioProvider, contextID),
+			fmt.Sprintf("https://%s/%s", tpc.appCfg.PublicAssistantHost, internal_type.GetContextEventPath(twilioProvider, contextID)),
 			assistantId,
 			toPhone),
 	)
 	resp, err := client.Api.CreateCall(callParams)
 	if err != nil || resp.Status == nil || resp.Sid == nil {
-		return append(mtds, types.NewMetadata("telephony.error", fmt.Sprintf("API error: %s", err.Error())), types.NewMetric("STATUS", "FAILED", utils.Ptr("Status of telephony api"))), err
+		info.Status = "FAILED"
+		info.ErrorMessage = fmt.Sprintf("API error: %s", err.Error())
+		return info, err
 	}
 
-	return append(mtds,
-		types.NewMetadata("telephony.uuid", *resp.Sid),
-		types.NewEvent(*resp.Status, resp),
-		types.NewMetric("STATUS", "SUCCESS", utils.Ptr("Status of telephony api"))), nil
+	info.ChannelUUID = *resp.Sid
+	info.Status = "SUCCESS"
+	info.StatusInfo = internal_type.StatusInfo{Event: *resp.Status, Payload: resp}
+	return info, nil
 }
 
 func (tpc *twilioTelephony) CreateTwinML(mediaServer string, name, path string, callback string, assistantId uint64, clientNumber string) string {
@@ -154,22 +154,22 @@ func (tpc *twilioTelephony) CreateTwinML(mediaServer string, name, path string, 
 }
 
 func (tpc *twilioTelephony) InboundCall(c *gin.Context, auth types.SimplePrinciple, assistantId uint64, clientNumber string, assistantConversationId uint64) error {
+	contextID, _ := c.Get("contextId")
+	ctxID := fmt.Sprintf("%v", contextID)
+
 	c.Data(http.StatusOK, "text/xml", []byte(
 		tpc.CreateTwinML(
 			tpc.appCfg.PublicAssistantHost,
 			fmt.Sprintf("%d__%d", assistantId, assistantConversationId),
-			fmt.Sprintf("v1/talk/twilio/prj/%d/%s/%d/%s",
-				assistantId,
-				clientNumber, assistantConversationId, auth.GetCurrentToken()),
-			fmt.Sprintf("https://%s/%s", tpc.appCfg.PublicAssistantHost, internal_type.GetEventPath("twilio", auth, assistantId, assistantConversationId)),
+			internal_type.GetContextAnswerPath("twilio", ctxID),
+			fmt.Sprintf("https://%s/%s", tpc.appCfg.PublicAssistantHost, internal_type.GetContextEventPath("twilio", ctxID)),
 			assistantId, clientNumber),
 	))
 	return nil
 }
 
-func (tpc *twilioTelephony) ReceiveCall(c *gin.Context) (*string, []types.Telemetry, error) {
+func (tpc *twilioTelephony) ReceiveCall(c *gin.Context) (*internal_type.CallInfo, error) {
 	queryParams := make(map[string]string)
-	telemetry := []types.Telemetry{}
 	for key, values := range c.Request.URL.Query() {
 		if len(values) > 0 {
 			queryParams[key] = values[0]
@@ -179,13 +179,17 @@ func (tpc *twilioTelephony) ReceiveCall(c *gin.Context) (*string, []types.Teleme
 	clientNumber, ok := queryParams["From"]
 	if !ok || clientNumber == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid assistant ID"})
-		return nil, telemetry, fmt.Errorf("missing or empty 'from' query parameter")
+		return nil, fmt.Errorf("missing or empty 'from' query parameter")
 	}
 
-	if v, ok := queryParams["CallSid"]; ok && v != "" {
-		telemetry = append(telemetry,
-			types.NewMetadata("telephony.uuid", v),
-		)
+	info := &internal_type.CallInfo{
+		CallerNumber: clientNumber,
+		Provider:     twilioProvider,
+		Status:       "SUCCESS",
+		StatusInfo:   internal_type.StatusInfo{Event: "webhook", Payload: queryParams},
 	}
-	return utils.Ptr(clientNumber), append(telemetry, types.NewEvent("webhook", queryParams), types.NewMetric("STATUS", "SUCCESS", utils.Ptr("Status of telephony api"))), nil
+	if v, ok := queryParams["CallSid"]; ok && v != "" {
+		info.ChannelUUID = v
+	}
+	return info, nil
 }

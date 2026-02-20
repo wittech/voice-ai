@@ -128,10 +128,15 @@ func main() {
 	}
 
 	// add all middleware depends on configurations
-	appRunner.AllMiddlewares()
+	appRunner.AllMiddlewares(ctx)
 
 	// all router add all handlers which required to resolve the service request
-	appRunner.AllRouters()
+	appRunner.AllRouters(ctx)
+
+	// add all engine which required to run in same application like grpc server, http server, socket server etc.
+	appRunner.AllEngine(ctx)
+
+	// all engine start all required engine like grpc server, http server, socket server etc.
 	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", appRunner.Cfg.Host, appRunner.Cfg.Port))
 	if err != nil {
 		log.Fatalf("Failed to create connection tcp %v", err)
@@ -139,7 +144,6 @@ func main() {
 	}
 
 	defer appRunner.Close(ctx)
-
 	cmuxListener := cmux.New(listener)
 	http2GRPCFilteredListener := cmuxListener.Match(cmux.HTTP2())
 	grpcFilteredListener := cmuxListener.Match(
@@ -272,25 +276,6 @@ func (app *AppRunner) Init(ctx context.Context) error {
 	app.Closeable = append(app.Closeable, app.Postgres.Disconnect)
 	app.Closeable = append(app.Closeable, app.Redis.Disconnect)
 
-	if app.Cfg.AudioSocketConfig != nil {
-		audioManager := assistant_socket.NewAudioSocketManager(app.Cfg, app.Logger, app.Postgres, app.Redis, app.Opensearch, app.Opensearch)
-		if err := audioManager.Start(ctx); err != nil {
-			return err
-		}
-		app.Closeable = append(app.Closeable, audioManager.Close)
-	}
-
-	// Start SIP server for inbound calls (multi-tenant)
-	// Server listens on shared address, tenant config resolved per-call from assistant deployment
-	if app.Cfg.SIPConfig != nil {
-		sipManager := assistant_sip.NewSIPManager(app.Cfg, app.Logger, app.Postgres, app.Redis, app.Opensearch, app.Opensearch)
-		if err := sipManager.Start(ctx); err != nil {
-			app.Logger.Errorf("Failed to start SIP server: %v", err)
-			return err
-		}
-		app.Closeable = append(app.Closeable, sipManager.Close)
-		app.Logger.Info("SIP server started (multi-tenant)", "address", app.Cfg.SIPConfig.Server, "port", app.Cfg.SIPConfig.Port)
-	}
 	return nil
 }
 
@@ -308,24 +293,49 @@ func (app *AppRunner) Close(ctx context.Context) {
 }
 
 // all router initialize
-func (g *AppRunner) AllRouters() {
+func (g *AppRunner) AllRouters(ctx context.Context) error {
 	router.AssistantApiRoute(g.Cfg, g.S, g.Logger, g.Postgres, g.Redis, g.Opensearch)
 	router.HealthCheckRoutes(g.Cfg, g.E, g.Logger, g.Postgres)
 	router.KnowledgeApiRoute(g.Cfg, g.S, g.Logger, g.Postgres, g.Redis, g.Opensearch)
 	router.DocumentApiRoute(g.Cfg, g.S, g.Logger, g.Postgres, g.Redis, g.Opensearch)
 	router.AssistantConversationApiRoute(g.Cfg, g.S, g.Logger, g.Postgres, g.Redis, g.Opensearch)
 	router.AssistantDeploymentApiRoute(g.Cfg, g.S, g.Logger, g.Postgres)
-	//
 	router.TalkCallbackApiRoute(g.Cfg, g.E, g.Logger, g.Postgres, g.Redis, g.Opensearch)
+	return nil
+}
 
+// engine allow to start mutlile service in same application like grpc server, http server, socket server etc.
+func (app *AppRunner) AllEngine(ctx context.Context) error {
+	if app.Cfg.AudioSocketConfig != nil {
+		audioManager := assistant_socket.NewAudioSocketEngine(app.Cfg, app.Logger, app.Postgres, app.Redis, app.Opensearch)
+		if err := audioManager.Connect(ctx); err != nil {
+			return err
+		}
+		app.Closeable = append(app.Closeable, audioManager.Disconnect)
+	}
+
+	// Start SIP server for inbound calls (multi-tenant)
+	// Server listens on shared address, tenant config resolved per-call from assistant deployment
+	if app.Cfg.SIPConfig != nil {
+		sipManager := assistant_sip.NewSIPEngine(app.Cfg, app.Logger, app.Postgres, app.Redis, app.Opensearch, app.Opensearch)
+		if err := sipManager.Connect(ctx); err != nil {
+			app.Logger.Errorf("Failed to start SIP server: %v", err)
+			return err
+		}
+		app.Closeable = append(app.Closeable, sipManager.Disconnect)
+		app.Logger.Info("SIP server started (multi-tenant)", "address", app.Cfg.SIPConfig.Server, "port", app.Cfg.SIPConfig.Port)
+	}
+
+	return nil
 }
 
 // all middleware
-func (g *AppRunner) AllMiddlewares() {
+func (g *AppRunner) AllMiddlewares(ctx context.Context) error {
 	g.RecoveryMiddleware()
 	g.CorsMiddleware()
 	g.RequestLoggerMiddleware()
 	g.AuthenticationMiddleware()
+	return nil
 }
 
 // Recovery middleware
