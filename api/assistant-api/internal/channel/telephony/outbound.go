@@ -48,11 +48,11 @@ func NewOutboundDispatcher(deps TelephonyDispatcherDeps) *OutboundDispatcher {
 // Dispatch resolves the call context for the given contextID and places the
 // outbound call. It should be called in a goroutine so the caller does not
 // block on telephony provider latency.
-func (d *OutboundDispatcher) Dispatch(ctx context.Context, contextID string) {
+func (d *OutboundDispatcher) Dispatch(ctx context.Context, contextID string) error {
 	cc, err := d.store.Get(ctx, contextID)
 	if err != nil {
 		d.logger.Errorf("outbound dispatcher: failed to resolve call context %s: %v", contextID, err)
-		return
+		return err
 	}
 
 	d.logger.Infof("outbound dispatcher[%s]: processing call contextId=%s, assistant=%d, conversation=%d",
@@ -64,10 +64,11 @@ func (d *OutboundDispatcher) Dispatch(ctx context.Context, contextID string) {
 		if _, saveErr := d.store.Save(ctx, cc); saveErr != nil {
 			d.logger.Errorf("outbound dispatcher[%s]: failed to update status for %s: %v", cc.Provider, contextID, saveErr)
 		}
-		return
+		return err
 	}
 
 	d.logger.Infof("outbound dispatcher[%s]: call initiated for contextId=%s", cc.Provider, contextID)
+	return nil
 }
 
 // performOutbound resolves the telephony provider from the call context and places the call.

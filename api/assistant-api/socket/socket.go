@@ -114,7 +114,7 @@ func (m *audioSocketEngine) acceptLoop(ctx context.Context) {
 			if ctx.Err() != nil {
 				return
 			}
-			m.logger.Warn("AudioSocket accept error", "error", err)
+			m.logger.Warnw("AudioSocket accept error", "error", err)
 			continue
 		}
 
@@ -136,7 +136,7 @@ func (m *audioSocketEngine) handleConnection(ctx context.Context, conn net.Conn)
 	// This UUID is the contextId that was passed via the dialplan (e.g. AudioSocket(contextId, host:port)).
 	contextID, err := m.readContextID(reader)
 	if err != nil {
-		m.logger.Warn("AudioSocket failed to read UUID frame", "error", err)
+		m.logger.Warnw("AudioSocket failed to read UUID frame", "error", err)
 		return
 	}
 
@@ -146,7 +146,7 @@ func (m *audioSocketEngine) handleConnection(ctx context.Context, conn net.Conn)
 	// Redis lookup, context deletion, and parallel entity loading.
 	cc, vaultCred, err := m.inboundDispatcher.ResolveCallSessionByContext(connCtx, contextID)
 	if err != nil {
-		m.logger.Warn("AudioSocket session resolution failed", "contextId", contextID, "error", err)
+		m.logger.Warnw("AudioSocket session resolution failed", "contextId", contextID, "error", err)
 		return
 	}
 
@@ -161,7 +161,7 @@ func (m *audioSocketEngine) handleConnection(ctx context.Context, conn net.Conn)
 		},
 	)
 	if err != nil {
-		m.logger.Warn("AudioSocket streamer create failed", "contextId", contextID, "error", err)
+		m.logger.Warnw("AudioSocket streamer create failed", "contextId", contextID, "error", err)
 		return
 	}
 
@@ -177,12 +177,12 @@ func (m *audioSocketEngine) handleConnection(ctx context.Context, conn net.Conn)
 		streamer,
 	)
 	if err != nil {
-		m.logger.Warn("AudioSocket talker create failed", "contextId", contextID, "error", err)
+		m.logger.Warnw("AudioSocket talker create failed", "contextId", contextID, "error", err)
 		return
 	}
 
 	if err := talker.Talk(connCtx, cc.ToAuth()); err != nil {
-		m.logger.Warn("AudioSocket talker exited", "contextId", contextID, "error", err)
+		m.logger.Warnw("AudioSocket talker exited", "contextId", contextID, "error", err)
 	}
 }
 

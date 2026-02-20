@@ -7,6 +7,7 @@
 package internal_callcontext
 
 import (
+	"fmt"
 	"strconv"
 
 	"github.com/rapidaai/pkg/types"
@@ -73,6 +74,65 @@ func (cc *CallContext) ToHashFields() map[string]string {
 		"channel_uuid":          cc.ChannelUUID,
 	}
 	return fields
+}
+
+// fromHashFields reconstructs a CallContext from a Redis HGETALL map[string]string result.
+// This is the inverse of ToHashFields and avoids the fragile generic Cmd→ResultStruct pipeline.
+func fromHashFields(fields map[string]string) (*CallContext, error) {
+	cc := &CallContext{
+		ContextID:    fields["context_id"],
+		AuthToken:    fields["auth_token"],
+		AuthType:     fields["auth_type"],
+		Provider:     fields["provider"],
+		Direction:    fields["direction"],
+		CallerNumber: fields["caller_number"],
+		CalleeNumber: fields["callee_number"],
+		FromNumber:   fields["from_number"],
+		Status:       fields["status"],
+		ChannelUUID:  fields["channel_uuid"],
+	}
+
+	if cc.ContextID == "" {
+		return nil, fmt.Errorf("call context has empty context_id")
+	}
+
+	if v := fields["assistant_id"]; v != "" {
+		n, err := strconv.ParseUint(v, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("invalid assistant_id %q: %w", v, err)
+		}
+		cc.AssistantID = n
+	}
+	if v := fields["conversation_id"]; v != "" {
+		n, err := strconv.ParseUint(v, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("invalid conversation_id %q: %w", v, err)
+		}
+		cc.ConversationID = n
+	}
+	if v := fields["project_id"]; v != "" {
+		n, err := strconv.ParseUint(v, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("invalid project_id %q: %w", v, err)
+		}
+		cc.ProjectID = n
+	}
+	if v := fields["organization_id"]; v != "" {
+		n, err := strconv.ParseUint(v, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("invalid organization_id %q: %w", v, err)
+		}
+		cc.OrganizationID = n
+	}
+	if v := fields["assistant_provider_id"]; v != "" {
+		n, err := strconv.ParseUint(v, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("invalid assistant_provider_id %q: %w", v, err)
+		}
+		cc.AssistantProviderId = n
+	}
+
+	return cc, nil
 }
 
 // ToAuth converts the CallContext into a SimplePrinciple for use in service calls.

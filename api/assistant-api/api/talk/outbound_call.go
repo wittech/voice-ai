@@ -126,7 +126,12 @@ func (cApi *ConversationGrpcApi) CreatePhoneCall(ctx context.Context, ir *protos
 
 	// Dispatch outbound call asynchronously — the goroutine resolves the call context,
 	// fetches vault credentials, and initiates the telephony call without blocking the gRPC response.
-	go cApi.outboundDispatcher.Dispatch(context.Background(), contextID)
+	err = cApi.outboundDispatcher.Dispatch(context.Background(), contextID)
+	if err != nil {
+		cApi.logger.Errorf("failed to dispatch outbound call: %v", err)
+		cApi.assistantConversationService.ApplyConversationMetrics(ctx, auth, assistant.Id, conversation.Id, []*types.Metric{types.NewStatusMetric(type_enums.RECORD_FAILED)})
+		return utils.ErrorWithCode[protos.CreatePhoneCallResponse](500, err, "Failed to dispatch outbound call")
+	}
 
 	cApi.logger.Infof("outbound call dispatched: contextId=%s, provider=%s, assistant=%d, conversation=%d",
 		contextID, cc.Provider, assistant.Id, conversation.Id)

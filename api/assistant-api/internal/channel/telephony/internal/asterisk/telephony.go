@@ -7,6 +7,7 @@
 package internal_asterisk_telephony
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -89,7 +90,29 @@ func (apt *asteriskTelephony) ReceiveCall(c *gin.Context) (*internal_type.CallIn
 	return info, nil
 }
 
-// OutboundCall initiates an outbound call via Asterisk ARI
+// OutboundCall initiates an outbound call via Asterisk ARI.
+//
+// ARI POST /ari/channels requires:
+//   - endpoint: Technology/Resource (e.g. "PJSIP/+15551234567")
+//   - app: Stasis application name (default "rapida")
+//   - callerId: caller ID string
+//   - context/extension/priority: dialplan entry point (optional, for non-Stasis routing)
+//   - variables: JSON object of channel variables (passed in request body)
+//
+// The RAPIDA_CONTEXT_ID channel variable is critical — the Asterisk dialplan uses
+// it as the AudioSocket UUID so the AudioSocket server can resolve the call context.
+//
+// Vault credential must contain:
+//   - ari_url: base URL (e.g. "http://asterisk:8088")
+//   - ari_user / ari_password: ARI authentication
+//   - Optional: endpoint_technology (default "PJSIP"), trunk
+//
+// Deployment options may contain:
+//   - context, extension: dialplan entry point for the outbound call
+//   - caller_id: override callerId
+//   - app: Stasis application name (default "rapida")
+//   - endpoint_technology: SIP technology (default "PJSIP")
+//   - trunk: SIP trunk name (e.g. "mytrunk")
 func (apt *asteriskTelephony) OutboundCall(
 	auth types.SimplePrinciple,
 	toPhone string,
@@ -105,39 +128,109 @@ func (apt *asteriskTelephony) OutboundCall(
 		info.ErrorMessage = "Missing vault credential for Asterisk ARI"
 		return info, fmt.Errorf("missing vault credential for Asterisk ARI")
 	}
+
 	credMap := vaultCredential.GetValue().AsMap()
-	ariURL, _ := credMap["ari_url"].(string)
-	ariURL = fmt.Sprintf("%s/ari/channels", ariURL)
-	params := url.Values{}
-	params.Set("endpoint", fmt.Sprintf("%s", toPhone))
-
-	if ctxVal, err := opts.GetString("context"); err == nil && ctxVal != "" {
-		params.Set("context", ctxVal)
+	ariBaseURL, _ := credMap["ari_url"].(string)
+	if ariBaseURL == "" {
+		info.Status = "FAILED"
+		info.ErrorMessage = "Missing ari_url in vault credential"
+		return info, fmt.Errorf("missing ari_url in vault credential")
 	}
 
-	if extVal, err := opts.GetString("extension"); err == nil && extVal != "" {
-		params.Set("extension", extVal)
+	// Build the endpoint in Technology/Resource format.
+	// Default technology is PJSIP; can be overridden via vault credential or deployment opts.
+	endpointTech := "PJSIP"
+	if tech, ok := credMap["endpoint_technology"].(string); ok && tech != "" {
+		endpointTech = tech
 	}
+	if tech, err := opts.GetString("endpoint_technology"); err == nil && tech != "" {
+		endpointTech = tech
+	}
+
+	// Build endpoint: Technology/trunk/number or Technology/number
+	endpoint := fmt.Sprintf("%s/%s", endpointTech, toPhone)
+	if trunk, ok := credMap["trunk"].(string); ok && trunk != "" {
+		endpoint = fmt.Sprintf("%s/%s/%s", endpointTech, trunk, toPhone)
+	}
+	if trunk, err := opts.GetString("trunk"); err == nil && trunk != "" {
+		endpoint = fmt.Sprintf("%s/%s/%s", endpointTech, trunk, toPhone)
+	}
+
+	// Resolve caller ID
 	callerId := fromPhone
 	if callerIdVal, err := opts.GetString("caller_id"); err == nil && callerIdVal != "" {
 		callerId = callerIdVal
 	}
 
-	params.Set("priority", "1")
+	// Build query parameters for ARI POST /ari/channels
+	params := url.Values{}
+	params.Set("endpoint", endpoint)
 	params.Set("callerId", callerId)
-	params.Set("appArgs", fmt.Sprintf("incoming,assistant_id=%d,conversation_id=%d", assistantId, assistantConversationId))
 
-	// Pass contextId as a channel variable — Asterisk dialplan uses this as the AudioSocket UUID
-	// so the AudioSocket server can resolve the full call context from Redis.
-	// All other call details (assistant, conversation, auth, org, project) are resolved
-	// from Redis via the contextId — no need to pass them as separate channel variables.
+	// Stasis app name — required by ARI to route the channel into a Stasis application.
+	// If no context/extension is set, ARI requires "app" to handle the channel.
+	// If context/extension IS set, ARI creates the channel in the dialplan instead.
+	appName := "rapida"
+	if appVal, err := opts.GetString("app"); err == nil && appVal != "" {
+		appName = appVal
+	}
+
+	// Dialplan context/extension — if set, ARI originates the channel into the
+	// given dialplan context (which should route to AudioSocket with RAPIDA_CONTEXT_ID).
+	// If NOT set, ARI originates into the Stasis app.
+	hasDialplan := false
+	if ctxVal, err := opts.GetString("context"); err == nil && ctxVal != "" {
+		params.Set("context", ctxVal)
+		params.Set("priority", "1")
+		hasDialplan = true
+		if extVal, err := opts.GetString("extension"); err == nil && extVal != "" {
+			params.Set("extension", extVal)
+		} else {
+			params.Set("extension", "s")
+		}
+	}
+
+	if !hasDialplan {
+		// No dialplan context — use Stasis app mode
+		params.Set("app", appName)
+		params.Set("appArgs", fmt.Sprintf("incoming,assistant_id=%d,conversation_id=%d", assistantId, assistantConversationId))
+	}
+
+	// Build channel variables as a JSON body.
+	// ARI expects variables as {"variables": {"KEY": "VALUE"}} in the request body.
+	// The RAPIDA_CONTEXT_ID variable is essential — the Asterisk dialplan uses it
+	// as the AudioSocket UUID so the AudioSocket server can resolve the call context.
+	channelVars := map[string]string{}
 	if contextID, err := opts.GetString("rapida.context_id"); err == nil && contextID != "" {
-		params.Add("variables", fmt.Sprintf("RAPIDA_CONTEXT_ID=%s", contextID))
+		channelVars["RAPIDA_CONTEXT_ID"] = contextID
+	}
+
+	var bodyBytes []byte
+	if len(channelVars) > 0 {
+		bodyMap := map[string]interface{}{
+			"variables": channelVars,
+		}
+		var err error
+		bodyBytes, err = json.Marshal(bodyMap)
+		if err != nil {
+			info.Status = "FAILED"
+			info.ErrorMessage = fmt.Sprintf("failed to marshal channel variables: %s", err.Error())
+			return info, err
+		}
 	}
 
 	// Create HTTP request
-	reqURL := fmt.Sprintf("%s?%s", ariURL, params.Encode())
-	req, err := http.NewRequest("POST", reqURL, nil)
+	ariURL := fmt.Sprintf("%s/ari/channels?%s", ariBaseURL, params.Encode())
+	var req *http.Request
+	var err error
+	if bodyBytes != nil {
+		req, err = http.NewRequest("POST", ariURL, bytes.NewReader(bodyBytes))
+		if err == nil {
+			req.Header.Set("Content-Type", "application/json")
+		}
+	} else {
+		req, err = http.NewRequest("POST", ariURL, nil)
+	}
 	if err != nil {
 		info.Status = "FAILED"
 		info.ErrorMessage = fmt.Sprintf("request creation error: %s", err.Error())
@@ -146,28 +239,34 @@ func (apt *asteriskTelephony) OutboundCall(
 
 	user, _ := credMap["ari_user"].(string)
 	password, _ := credMap["ari_password"].(string)
-	// Set authentication
 	req.SetBasicAuth(user, password)
+
+	apt.logger.Infof("ARI outbound call: endpoint=%s, callerId=%s, url=%s", endpoint, callerId, ariURL)
 
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
 		info.Status = "FAILED"
-		info.ErrorMessage = fmt.Sprintf("API error: %s", err.Error())
+		info.ErrorMessage = fmt.Sprintf("ARI request error: %s", err.Error())
 		return info, err
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		info.Status = "FAILED"
-		info.ErrorMessage = fmt.Sprintf("API returned status: %d", resp.StatusCode)
-		return info, fmt.Errorf("ARI API returned status: %d", resp.StatusCode)
+	// Parse response body (for both success and error cases)
+	var ariResp map[string]interface{}
+	if decodeErr := json.NewDecoder(resp.Body).Decode(&ariResp); decodeErr != nil {
+		apt.logger.Warnf("failed to decode ARI response: %v", decodeErr)
 	}
 
-	// Parse response
-	var ariResp map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&ariResp); err != nil {
-		apt.logger.Warn("Failed to decode ARI response", "error", err)
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		errMsg := fmt.Sprintf("ARI returned status %d", resp.StatusCode)
+		if msg, ok := ariResp["message"]; ok {
+			errMsg = fmt.Sprintf("ARI returned status %d: %v", resp.StatusCode, msg)
+		}
+		info.Status = "FAILED"
+		info.ErrorMessage = errMsg
+		apt.logger.Errorf("ARI outbound call failed: %s, response: %+v", errMsg, ariResp)
+		return info, fmt.Errorf(errMsg)
 	}
 
 	if id, ok := ariResp["id"]; ok {
@@ -176,6 +275,7 @@ func (apt *asteriskTelephony) OutboundCall(
 
 	info.Status = "SUCCESS"
 	info.StatusInfo = internal_type.StatusInfo{Event: "channel_created", Payload: ariResp}
+	apt.logger.Infof("ARI outbound call succeeded: channelId=%s, endpoint=%s", info.ChannelUUID, endpoint)
 	return info, nil
 }
 

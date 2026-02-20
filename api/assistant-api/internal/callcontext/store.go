@@ -98,34 +98,62 @@ func (s *redisStore) Save(ctx context.Context, cc *CallContext) (string, error) 
 
 // Get retrieves a call context by contextId.
 func (s *redisStore) Get(ctx context.Context, contextID string) (*CallContext, error) {
-	resp := s.redis.Cmd(ctx, "HGETALL", []string{RedisKey(contextID)})
-	return s.parseResponse(resp, contextID)
+	key := RedisKey(contextID)
+	client := s.redis.GetConnection()
+
+	result, err := client.HGetAll(ctx, key).Result()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get call context %s: %w", contextID, err)
+	}
+	if len(result) == 0 {
+		return nil, fmt.Errorf("call context not found (key does not exist): %s", contextID)
+	}
+
+	cc, err := fromHashFields(result)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse call context %s: %w", contextID, err)
+	}
+
+	s.logger.Debugf("resolved call context: contextId=%s, assistant=%d, conversation=%d",
+		cc.ContextID, cc.AssistantID, cc.ConversationID)
+
+	return cc, nil
 }
 
 // GetAndDelete atomically retrieves and deletes a call context using a Lua script.
 // Only one caller can claim a given context — subsequent calls get an empty result.
 func (s *redisStore) GetAndDelete(ctx context.Context, contextID string) (*CallContext, error) {
+	key := RedisKey(contextID)
+	client := s.redis.GetConnection()
+
+	// Lua script: HGETALL + DEL in a single atomic operation.
+	// Returns the flat array of field-value pairs from HGETALL.
 	script := `local d=redis.call('HGETALL',KEYS[1]) if #d>0 then redis.call('DEL',KEYS[1]) end return d`
-	resp := s.redis.Cmd(ctx, "EVAL", []string{script, "1", RedisKey(contextID)})
-	return s.parseResponse(resp, contextID)
-}
-
-// parseResponse parses a Redis HGETALL-style response into a CallContext.
-func (s *redisStore) parseResponse(resp *connectors.RedisResponse, contextID string) (*CallContext, error) {
-	if resp.HasError() {
-		return nil, fmt.Errorf("failed to get call context %s: %w", contextID, resp.Error())
+	raw, err := client.Eval(ctx, script, []string{key}).Result()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get-and-delete call context %s: %w", contextID, err)
 	}
 
-	cc := &CallContext{}
-	if err := resp.ResultStruct(cc); err != nil {
-		return nil, fmt.Errorf("call context not found: %s", contextID)
+	// Eval returns []interface{} for the flat HGETALL array
+	pairs, ok := raw.([]interface{})
+	if !ok || len(pairs) == 0 {
+		return nil, fmt.Errorf("call context not found (key does not exist): %s", contextID)
 	}
 
-	if cc.ContextID == "" {
-		return nil, fmt.Errorf("call context not found: %s", contextID)
+	// Convert flat pairs to map[string]string
+	result := make(map[string]string, len(pairs)/2)
+	for i := 0; i < len(pairs); i += 2 {
+		k, _ := pairs[i].(string)
+		v, _ := pairs[i+1].(string)
+		result[k] = v
 	}
 
-	s.logger.Debugf("resolved call context: contextId=%s, assistant=%d, conversation=%d",
+	cc, err := fromHashFields(result)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse call context %s: %w", contextID, err)
+	}
+
+	s.logger.Debugf("resolved and deleted call context: contextId=%s, assistant=%d, conversation=%d",
 		cc.ContextID, cc.AssistantID, cc.ConversationID)
 
 	return cc, nil
