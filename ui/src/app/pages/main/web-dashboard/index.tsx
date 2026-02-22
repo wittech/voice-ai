@@ -70,13 +70,13 @@ export const HomePage = () => {
           Welcome, {user?.name?.split(/\s+/)[0] || user?.name}{' '}
         </h1>
       </div>
-      <div className="bg-white dark:bg-gray-950">
-        <div className="bg-blue-500/10 border-blue-500 border-b-[0.5px]  p-4 flex flex-col items-center text-center sm:flex-row sm:items-start sm:text-left">
+      <div className="">
+        <div className="bg-blue-500/10 border-blue-500 border-[0.5px] p-4 flex flex-col items-center text-center sm:flex-row sm:items-start sm:text-left m-2 rounded-md">
           <div className="flex-1">
-            <h2 className="mb-1 text-lg font-semibold">
-              Design and Deploy Custom Voice Assistant
+            <h2 className="mb-1 text-base font-semibold">
+              Design and deploy custom voice assistant
             </h2>
-            <p className="mb-4 text-base">
+            <p className="mb-3 text-sm">
               Build intelligent voice assistants that can handle calls, answer
               questions, and integrate with your existing systems. Deploy across
               websites, phone systems, or via SDK.
@@ -86,7 +86,7 @@ export const HomePage = () => {
                 onClick={() => {
                   goToCreateAssistant();
                 }}
-                className="text-base"
+                className="text-sm h-8"
               >
                 Create Assistant
               </IBlueBGArrowButton>
@@ -94,7 +94,7 @@ export const HomePage = () => {
                 rel="noreferrer"
                 href="https://doc.rapida.ai/assistants/overview"
                 target="_blank"
-                className="text-base text-blue-600 font-medium hover:underline flex items-center space-x-1.5"
+                className="text-sm text-blue-600 font-medium hover:underline flex items-center space-x-1.5"
               >
                 <span>View documentations</span>
               </a>
@@ -133,7 +133,7 @@ export const HomePage = () => {
           ))}
         </div>
       </main>
-      <div className="border-y p-4 justify-between items-center bg-white dark:bg-gray-900 absolute bottom-0 w-full flex">
+      <div className="border-y p-4 justify-between items-center bg-white dark:bg-gray-900 absolute bottom-0 w-full flex text-sm">
         <p>
           Reach out anytime — Get quick help from our team at:
           <a
