@@ -122,7 +122,6 @@ export const useAssistantConversationListPageStore =
           );
         }
       };
-
       GetAllAssistantConversation(
         connectionConfig,
         assistantId,
