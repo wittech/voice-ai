@@ -8,6 +8,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     gcc g++ make autoconf automake libtool pkg-config \
     curl git wget unzip ca-certificates tar \
+    libopus-dev libopusfile-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy go mod files first for caching
@@ -66,6 +67,7 @@ WORKDIR /opt/apps
 # Install minimal runtime deps
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates wget netcat-openbsd \
+    libopus0 libopusfile0 \
     && rm -rf /var/lib/apt/lists/*
 
 # Create user
