@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/rapidaai/pkg/commons"
+	"golang.org/x/sys/unix"
 )
 
 // RTP constants
@@ -149,7 +150,7 @@ func NewRTPHandler(ctx context.Context, config *RTPConfig) (*RTPHandler, error) 
 				if opErr != nil {
 					return
 				}
-				opErr = syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_REUSEPORT, 1)
+				opErr = syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, unix.SO_REUSEPORT, 1)
 			}); err != nil {
 				return err
 			}
@@ -381,7 +382,7 @@ func (h *RTPHandler) SetRemoteAddr(ip string, port int) {
 				if opErr != nil {
 					return
 				}
-				opErr = syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_REUSEPORT, 1)
+				opErr = syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, unix.SO_REUSEPORT, 1)
 			}); err != nil {
 				return err
 			}
@@ -486,6 +487,16 @@ func (h *RTPHandler) SetCodec(codec *Codec) {
 }
 
 func (h *RTPHandler) receiveLoop() {
+	// Safety net: recover from "send on closed channel" panic that can occur
+	// if Stop() closes audioInChan while this goroutine is mid-send.
+	defer func() {
+		if r := recover(); r != nil {
+			if h.logger != nil {
+				h.logger.Warn("RTP receiveLoop recovered from panic", "panic", r)
+			}
+		}
+	}()
+
 	buf := make([]byte, rtpPacketMaxSize)
 	logCounter := 0
 
@@ -494,6 +505,11 @@ func (h *RTPHandler) receiveLoop() {
 		case <-h.ctx.Done():
 			return
 		default:
+		}
+
+		// Exit early if handler is stopped — avoids sending to closed channels
+		if !h.running.Load() {
+			return
 		}
 
 		if err := h.conn.SetReadDeadline(time.Now().Add(rtpReadTimeout)); err != nil {
@@ -551,8 +567,14 @@ func (h *RTPHandler) receiveLoop() {
 				"total_received", count)
 		}
 
-		// Send to channel (non-blocking)
+		// Send to channel — guard against closed channel by checking
+		// running state and context together with the send.
+		if !h.running.Load() {
+			return
+		}
 		select {
+		case <-h.ctx.Done():
+			return
 		case h.audioInChan <- packet.Payload:
 		default:
 			if h.logger != nil && logCounter%rtpLogInterval == 1 {

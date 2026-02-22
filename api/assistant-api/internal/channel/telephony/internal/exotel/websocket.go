@@ -21,6 +21,9 @@ import (
 	"github.com/rapidaai/protos"
 )
 
+// LINEAR_8K_AUDIO_CONFIG is the Exotel-native audio format (linear16 8kHz).
+var EXOTEL_LINEAR_8K_AUDIO_CONFIG = internal_audio.NewLinear8khzMonoAudioConfig()
+
 type exotelWebsocketStreamer struct {
 	internal_telephony_base.BaseTelephonyStreamer
 
@@ -33,7 +36,7 @@ func NewExotelWebsocketStreamer(logger commons.Logger, connection *websocket.Con
 	return &exotelWebsocketStreamer{
 		BaseTelephonyStreamer: internal_telephony_base.NewBaseTelephonyStreamer(
 			logger, cc, vaultCred,
-			internal_telephony_base.WithSourceAudioConfig(internal_audio.NewLinear8khzMonoAudioConfig()),
+			internal_telephony_base.WithSourceAudioConfig(EXOTEL_LINEAR_8K_AUDIO_CONFIG),
 		),
 		streamID:   "",
 		connection: connection,
@@ -86,9 +89,18 @@ func (exotel *exotelWebsocketStreamer) Send(response internal_type.Stream) error
 	case *protos.ConversationAssistantMessage:
 		switch content := data.Message.(type) {
 		case *protos.ConversationAssistantMessage_Audio:
+			// Resample from internal Rapida format (linear16 16kHz) to Exotel format (linear16 8kHz)
+			audioData, err := exotel.Resampler().Resample(content.Audio, internal_audio.RAPIDA_INTERNAL_AUDIO_CONFIG, EXOTEL_LINEAR_8K_AUDIO_CONFIG)
+			if err != nil {
+				exotel.Logger.Warnw("Failed to resample output audio to linear16 8kHz, forwarding raw bytes",
+					"error", err.Error(),
+				)
+				audioData = content.Audio
+			}
+
 			var sendErr error
 			exotel.WithOutputBuffer(func(buf *bytes.Buffer) {
-				buf.Write(content.Audio)
+				buf.Write(audioData)
 				for buf.Len() >= exotel.OutputFrameSize() && exotel.streamID != "" {
 					chunk := buf.Next(exotel.OutputFrameSize())
 					if err := exotel.sendingExotelMessage("media", map[string]interface{}{

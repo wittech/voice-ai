@@ -365,13 +365,22 @@ func (s *Streamer) Send(response internal_type.Stream) error {
 	return nil
 }
 
-func (s *Streamer) sendAudio(audioData []byte) error {
+func (s *Streamer) sendAudio(audioData []byte) (err error) {
+	// Recover from "send on closed channel" if the RTP handler shuts down
+	// between our guard checks and the actual channel send.
+	defer func() {
+		if r := recover(); r != nil {
+			s.Logger.Warn("sendAudio: recovered from panic (channel closed)", "panic", r)
+			err = sip_infra.ErrSessionClosed
+		}
+	}()
+
 	s.mu.RLock()
 	rtpHandler := s.rtpHandler
 	codec := s.codec
 	s.mu.RUnlock()
 
-	if rtpHandler == nil {
+	if rtpHandler == nil || !rtpHandler.IsRunning() {
 		return sip_infra.ErrRTPNotInitialized
 	}
 
