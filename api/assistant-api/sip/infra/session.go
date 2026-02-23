@@ -80,6 +80,14 @@ type Session struct {
 	// Outbound dialog session — stored so BYE/re-INVITE handlers can access it.
 	// nil for inbound calls.
 	dialogClientSession *sipgo.DialogClientSession
+
+	// Inbound dialog session — stored so we can send BYE when ending an inbound call.
+	// nil for outbound calls.
+	dialogServerSession *sipgo.DialogServerSession
+
+	// onDisconnect is called during Close/End to perform transport-level call teardown
+	// (e.g., sending SIP BYE). Set by the server that owns this session.
+	onDisconnect func(session *Session)
 }
 
 // NewSession creates a new SIP session
@@ -372,6 +380,44 @@ func (s *Session) GetDialogClientSession() *sipgo.DialogClientSession {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.dialogClientSession
+}
+
+// SetDialogServerSession stores the inbound DialogServerSession on this session.
+// This allows the server to send BYE when ending an inbound call.
+func (s *Session) SetDialogServerSession(ds *sipgo.DialogServerSession) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.dialogServerSession = ds
+}
+
+// GetDialogServerSession returns the inbound DialogServerSession, or nil for outbound calls.
+func (s *Session) GetDialogServerSession() *sipgo.DialogServerSession {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.dialogServerSession
+}
+
+// SetOnDisconnect registers a callback that is invoked when the session is disconnected.
+// This allows the SIP server to inject transport-level call teardown (e.g., sending BYE)
+// without the session needing to know about SIP signaling internals.
+func (s *Session) SetOnDisconnect(fn func(session *Session)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.onDisconnect = fn
+}
+
+// Disconnect performs transport-level call teardown by invoking the onDisconnect callback.
+// This sends a SIP BYE (or equivalent) to the remote party before local cleanup.
+// Safe to call multiple times — the callback is cleared after first invocation.
+func (s *Session) Disconnect() {
+	s.mu.Lock()
+	fn := s.onDisconnect
+	s.onDisconnect = nil // Clear to prevent double-disconnect
+	s.mu.Unlock()
+
+	if fn != nil {
+		fn(s)
+	}
 }
 
 // GetAuth returns the authentication principal (types.SimplePrinciple) for this session.

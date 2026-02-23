@@ -9,6 +9,7 @@ package sip_infra
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"math/rand"
 	"net"
@@ -34,9 +35,6 @@ const (
 	// Audio channel buffer sizes
 	rtpAudioInBufferSize  = 100
 	rtpAudioOutBufferSize = 100
-
-	// rtpLogInterval is the number of packets between periodic log entries
-	rtpLogInterval = 50
 )
 
 // RTPPacket represents an RTP packet
@@ -77,6 +75,10 @@ type RTPHandler struct {
 	// Audio channels
 	audioInChan  chan []byte
 	audioOutChan chan []byte
+
+	// flushAudioCh signals the sendLoop to discard all pending audio
+	// (used on user interruption to silence stale frames immediately).
+	flushAudioCh chan struct{}
 
 	// codecVersion is bumped by SetCodec so the sendLoop can detect mid-call
 	// codec changes and regenerate its pre-computed silence chunk.
@@ -190,6 +192,7 @@ func NewRTPHandler(ctx context.Context, config *RTPConfig) (*RTPHandler, error) 
 		codec:        codec,
 		audioInChan:  make(chan []byte, rtpAudioInBufferSize),
 		audioOutChan: make(chan []byte, rtpAudioOutBufferSize),
+		flushAudioCh: make(chan struct{}, 1),
 		ctx:          handlerCtx,
 		cancel:       cancel,
 	}
@@ -307,7 +310,7 @@ func (h *RTPHandler) Stop() error {
 
 	if h.logger != nil {
 		sent, received := h.GetStats()
-		h.logger.Debug("RTP handler stopped",
+		h.logger.Debugw("RTP handler stopped",
 			"packets_sent", sent,
 			"packets_received", received)
 	}
@@ -453,6 +456,15 @@ func (h *RTPHandler) AudioOut() chan<- []byte {
 	return h.audioOutChan
 }
 
+// FlushAudioOut signals the sendLoop to discard all pending audio.
+// Used on user interruption to silence stale frames immediately.
+func (h *RTPHandler) FlushAudioOut() {
+	select {
+	case h.flushAudioCh <- struct{}{}:
+	default:
+	}
+}
+
 // GetCodec returns the codec used by this handler
 func (h *RTPHandler) GetCodec() *Codec {
 	h.mu.RLock()
@@ -497,8 +509,13 @@ func (h *RTPHandler) receiveLoop() {
 		}
 	}()
 
+	if h.logger != nil {
+		h.logger.Infow("RTP receiveLoop started",
+			"local_addr", h.conn.LocalAddr().String(),
+			"codec", h.codec.Name)
+	}
+
 	buf := make([]byte, rtpPacketMaxSize)
-	logCounter := 0
 
 	for {
 		select {
@@ -512,18 +529,65 @@ func (h *RTPHandler) receiveLoop() {
 			return
 		}
 
-		if err := h.conn.SetReadDeadline(time.Now().Add(rtpReadTimeout)); err != nil {
-			continue
+		// Determine which socket to read from.
+		//
+		// When a connected send socket (sendConn) exists, the kernel routes
+		// inbound UDP packets from the remote peer to it instead of the
+		// unconnected receive socket (h.conn), because SO_REUSEPORT with a
+		// connected socket creates a more-specific 4-tuple match. If we only
+		// read from h.conn, we will never see any packets.
+		//
+		// Strategy:
+		//   - If sendConn is available, read from it (connected → Read).
+		//   - Otherwise, fall back to h.conn (unconnected → ReadFromUDP).
+		//
+		// We re-check sendConn each iteration so that a mid-call re-INVITE
+		// (which calls SetRemoteAddr → creates a new sendConn) is picked up.
+		h.mu.RLock()
+		sendConn := h.sendConn
+		h.mu.RUnlock()
+
+		var n int
+		var remoteAddr *net.UDPAddr
+		var err error
+
+		if sendConn != nil {
+			// Connected socket: the kernel delivers packets from the connected
+			// remote peer here. Use Read() — the source address is the
+			// connected remote, which we already know.
+			if deadlineErr := sendConn.SetReadDeadline(time.Now().Add(rtpReadTimeout)); deadlineErr != nil {
+				continue
+			}
+			n, err = sendConn.Read(buf)
+			if err == nil {
+				// Source is the connected remote address
+				h.mu.RLock()
+				remoteAddr = h.remoteAddr
+				h.mu.RUnlock()
+			}
+		} else {
+			// Unconnected socket: no sendConn yet (remote address not set,
+			// or DialUDP failed). Read from the listener socket.
+			if deadlineErr := h.conn.SetReadDeadline(time.Now().Add(rtpReadTimeout)); deadlineErr != nil {
+				continue
+			}
+			n, remoteAddr, err = h.conn.ReadFromUDP(buf)
 		}
 
-		n, remoteAddr, err := h.conn.ReadFromUDP(buf)
 		if err != nil {
 			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
 				continue
 			}
+			// When SetRemoteAddr replaces sendConn during a re-INVITE, the
+			// old socket is closed and Read() returns "use of closed network
+			// connection". This is expected — the next iteration will pick up
+			// the new sendConn. Don't log it as a warning.
+			if sendConn != nil && errors.Is(err, net.ErrClosed) {
+				continue
+			}
 			// Connection closed or other error
 			if h.running.Load() && h.logger != nil {
-				h.logger.Warn("RTP receive error", "error", err)
+				h.logger.Warn("RTP receive error", "error", err, "from_send_conn", sendConn != nil)
 			}
 			continue
 		}
@@ -544,30 +608,20 @@ func (h *RTPHandler) receiveLoop() {
 		}
 
 		// Auto-detect remote address if not set
-		h.mu.Lock()
-		if h.remoteAddr == nil {
-			h.remoteAddr = remoteAddr
-			if h.logger != nil {
-				h.logger.Info("RTP: Auto-detected remote address", "addr", remoteAddr.String())
+		if remoteAddr != nil {
+			h.mu.Lock()
+			if h.remoteAddr == nil {
+				h.remoteAddr = remoteAddr
+				if h.logger != nil {
+					h.logger.Info("RTP: Auto-detected remote address", "addr", remoteAddr.String())
+				}
 			}
+			h.mu.Unlock()
 		}
-		h.mu.Unlock()
 
 		// Update statistics
 		h.packetsReceived.Add(1)
 		h.bytesReceived.Add(uint64(len(packet.Payload)))
-		count := h.packetsReceived.Load()
-
-		// Log periodically
-		logCounter++
-		if h.logger != nil && logCounter%rtpLogInterval == 1 {
-			h.logger.Debug("RTP: Received audio packet",
-				"seq", packet.SequenceNumber,
-				"payload_size", len(packet.Payload),
-				"total_received", count)
-		}
-
-		// Send to channel — guard against closed channel by checking
 		// running state and context together with the send.
 		if !h.running.Load() {
 			return
@@ -576,9 +630,10 @@ func (h *RTPHandler) receiveLoop() {
 		case <-h.ctx.Done():
 			return
 		case h.audioInChan <- packet.Payload:
+			// Successfully sent to channel
 		default:
-			if h.logger != nil && logCounter%rtpLogInterval == 1 {
-				h.logger.Warn("RTP: Audio input channel full, dropping packet")
+			if h.logger != nil {
+				h.logger.Warn("RTP: Audio input channel full, dropping packet", "seq", packet.SequenceNumber)
 			}
 		}
 	}
@@ -595,7 +650,6 @@ func (h *RTPHandler) sendLoop() {
 	silenceChunk := h.createSilenceChunk(samplesPerPacket)
 
 	var pendingAudio []byte
-	logCounter := 0
 	// First sendLoop packet should go out immediately (sendInitialSilence
 	// already sent packet #1, this will send packet #2 without delay).
 	nextSendTime := time.Now()
@@ -621,14 +675,26 @@ func (h *RTPHandler) sendLoop() {
 			silenceChunk = h.createSilenceChunk(samplesPerPacket)
 		}
 
-		// Collect pending audio (non-blocking)
+		// Collect pending audio (non-blocking) or handle flush signal
 		select {
+		case <-h.flushAudioCh:
+			// Interruption: discard all queued audio immediately
+			pendingAudio = nil
+			// Drain any remaining audio in the channel
+			for {
+				select {
+				case <-h.audioOutChan:
+				default:
+					goto collectDone
+				}
+			}
 		case audio, ok := <-h.audioOutChan:
 			if ok {
 				pendingAudio = append(pendingAudio, audio...)
 			}
 		default:
 		}
+	collectDone:
 
 		// Wait until next send time with precision
 		now := time.Now()
@@ -658,7 +724,7 @@ func (h *RTPHandler) sendLoop() {
 		packet := h.createRTPPacket(chunk)
 		data := h.serializeRTPPacket(packet)
 
-		n, err := h.sendPacket(data, remoteAddr)
+		_, err := h.sendPacket(data, remoteAddr)
 		if err != nil {
 			if h.running.Load() && h.logger != nil {
 				h.logger.Warnw("RTP sendLoop: send FAILED",
@@ -672,28 +738,7 @@ func (h *RTPHandler) sendLoop() {
 		// Update statistics
 		h.packetsSent.Add(1)
 		h.bytesSent.Add(uint64(len(chunk)))
-		count := h.packetsSent.Load()
 
-		// Log first 10 packets at Info level to diagnose send issues,
-		// then every rtpLogInterval packets at Debug level.
-		logCounter++
-		if h.logger != nil {
-			if count <= 10 {
-				h.logger.Infow("RTP sendLoop: packet sent",
-					"seq", packet.SequenceNumber,
-					"bytes_written", n,
-					"total_sent", count,
-					"dest", remoteAddr.String(),
-					"conn_local", h.conn.LocalAddr().String(),
-					"silence", len(pendingAudio) == 0)
-			} else if logCounter%rtpLogInterval == 1 {
-				h.logger.Debug("RTP: Sent packet",
-					"seq", packet.SequenceNumber,
-					"total_sent", count,
-					"pending", len(pendingAudio),
-					"silence", len(pendingAudio) == 0)
-			}
-		}
 	}
 }
 

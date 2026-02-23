@@ -790,7 +790,9 @@ func (m *SIPEngine) HandleIncomingCall(
 	return nil
 }
 
-// EndCall terminates an active SIP call
+// EndCall terminates an active SIP call.
+// First closes the streamer (which sends SIP BYE to the remote party),
+// then cancels the session context for full cleanup.
 func (m *SIPEngine) EndCall(callID string) error {
 	m.mu.Lock()
 	session, exists := m.sessions[callID]
@@ -800,6 +802,16 @@ func (m *SIPEngine) EndCall(callID string) error {
 	}
 	delete(m.sessions, callID)
 	m.mu.Unlock()
+
+	// Close the streamer first — this sends SIP BYE via session.Disconnect()
+	// before performing local cleanup.
+	if session.Streamer != nil {
+		if closeable, ok := session.Streamer.(io.Closer); ok {
+			if err := closeable.Close(); err != nil {
+				m.logger.Warnw("EndCall: streamer close failed", "callID", callID, "error", err)
+			}
+		}
+	}
 
 	if session.Cancel != nil {
 		session.Cancel()

@@ -140,6 +140,13 @@ func NewBaseTelephonyStreamer(
 // to the internal Rapida format (linear16 16kHz) and wraps it in a
 // ConversationUserMessage for downstream processing.
 func (base *BaseTelephonyStreamer) CreateVoiceRequest(audioData []byte) *protos.ConversationUserMessage {
+	// base.Logger.Debugw("CreateVoiceRequest: Resampling audio",
+	// 	"input_size", len(audioData),
+	// 	"source_format", base.sourceAudioConfig.GetAudioFormat(),
+	// 	"source_rate", base.sourceAudioConfig.GetSampleRate(),
+	// 	"target_format", RAPIDA_AUDIO_CONFIG.GetAudioFormat(),
+	// 	"target_rate", RAPIDA_AUDIO_CONFIG.GetSampleRate())
+
 	resampled, err := base.resampler.Resample(audioData, base.sourceAudioConfig, RAPIDA_AUDIO_CONFIG)
 	if err != nil {
 		base.Logger.Warnw("Failed to resample input audio, forwarding raw bytes",
@@ -149,6 +156,11 @@ func (base *BaseTelephonyStreamer) CreateVoiceRequest(audioData []byte) *protos.
 		)
 		resampled = audioData
 	}
+
+	// base.Logger.Debugw("CreateVoiceRequest: Resampling complete",
+	// 	"input_size", len(audioData),
+	// 	"output_size", len(resampled))
+
 	return &protos.ConversationUserMessage{
 		Message: &protos.ConversationUserMessage_Audio{
 			Audio: resampled,

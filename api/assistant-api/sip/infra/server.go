@@ -164,6 +164,12 @@ type Server struct {
 	// only at the Session level and the sipgo dialog stays in limbo.
 	dialogClientCache *sipgo.DialogClientCache
 
+	// Inbound dialog cache — manages UAS dialog state for inbound calls so we
+	// can send BYE when the assistant ends the conversation. Without this,
+	// ending an inbound call only does local cleanup and the remote PBX keeps
+	// the call alive until timeout.
+	dialogServerCache *sipgo.DialogServerCache
+
 	sessions     map[string]*Session
 	sessionCount atomic.Int64
 
@@ -330,6 +336,11 @@ func NewServer(ctx context.Context, cfg *ServerConfig) (*Server, error) {
 	// re-INVITE responses lack proper dialog context (Contact, To-tag).
 	dialogClientCache := sipgo.NewDialogClientCache(client, contactHDR)
 
+	// Create dialog server cache — manages UAS dialog state for inbound calls.
+	// This allows us to send BYE when the assistant ends an inbound conversation,
+	// properly tearing down the call on the remote PBX side.
+	dialogServerCache := sipgo.NewDialogServerCache(client, contactHDR)
+
 	s := &Server{
 		logger:            cfg.Logger,
 		ua:                ua,
@@ -338,6 +349,7 @@ func NewServer(ctx context.Context, cfg *ServerConfig) (*Server, error) {
 		listenConfig:      cfg.ListenConfig,
 		rtpAllocator:      rtpAllocator,
 		dialogClientCache: dialogClientCache,
+		dialogServerCache: dialogServerCache,
 		configResolver:    cfg.ConfigResolver,
 		sessions:          make(map[string]*Session),
 		ctx:               serverCtx,
@@ -645,11 +657,26 @@ func (s *Server) handleInvite(req *sip.Request, tx sip.ServerTransaction) {
 	s.sessionCount.Add(1)
 	s.mu.Unlock()
 
-	// Send 100 Trying
-	s.sendResponse(tx, req, 100)
-
-	// Send 180 Ringing
-	s.sendResponse(tx, req, 180)
+	// Create an inbound dialog session via the server dialog cache.
+	// This tracks dialog state (To-tag, CSeq, Route) so we can later send
+	// BYE to properly disconnect the call when the assistant ends the conversation.
+	dialogSession, err := s.dialogServerCache.ReadInvite(req, tx)
+	if err != nil {
+		s.logger.Warnw("Failed to create inbound dialog session — BYE on disconnect will not work",
+			"error", err, "call_id", callID)
+		// Fall back to non-dialog response flow
+		s.sendResponse(tx, req, 100)
+		s.sendResponse(tx, req, 180)
+	} else {
+		session.SetDialogServerSession(dialogSession)
+		// Send provisionals via dialog session (non-blocking, ensures consistent To-tag)
+		if err := dialogSession.Respond(100, "Trying", nil); err != nil {
+			s.logger.Warnw("Failed to send 100 via dialog", "error", err, "call_id", callID)
+		}
+		if err := dialogSession.Respond(180, "Ringing", nil); err != nil {
+			s.logger.Warnw("Failed to send 180 via dialog", "error", err, "call_id", callID)
+		}
+	}
 	session.SetState(CallStateRinging)
 
 	s.logger.Debugw("Parsed remote SDP",
@@ -711,9 +738,29 @@ func (s *Server) handleInvite(req *sip.Request, tx sip.ServerTransaction) {
 	sdpConfig := s.NegotiatedSDPConfig(externalIP, localPort, negotiatedCodec)
 	sdpBody := s.GenerateSDP(sdpConfig)
 
-	// Send 200 OK with SDP
-	s.sendResponseWithSDPBody(tx, req, sdpBody)
+	// Send 200 OK with SDP.
+	// When a dialog session exists, use RespondSDP which blocks until ACK is
+	// received (or timeout). This establishes the dialog in Confirmed state,
+	// enabling us to send BYE later. Falls back to manual response if no dialog.
+	if ds := session.GetDialogServerSession(); ds != nil {
+		if err := ds.RespondSDP([]byte(sdpBody)); err != nil {
+			s.logger.Warnw("Dialog RespondSDP failed — falling back to manual response",
+				"error", err, "call_id", callID)
+			s.sendResponseWithSDPBody(tx, req, sdpBody)
+		}
+	} else {
+		s.sendResponseWithSDPBody(tx, req, sdpBody)
+	}
 	session.SetState(CallStateConnected)
+
+	// Register the onDisconnect callback so that closing the session sends a SIP BYE.
+	// Captures the server reference in the closure — the session itself doesn't need
+	// to know about SIP signaling details.
+	session.SetOnDisconnect(func(sess *Session) {
+		if err := s.EndCall(sess); err != nil {
+			s.logger.Warnw("onDisconnect: EndCall failed", "error", err, "call_id", callID)
+		}
+	})
 
 	s.logger.Infow("SIP call answered",
 		"call_id", callID,
@@ -896,6 +943,16 @@ func (s *Server) handleAck(req *sip.Request, tx sip.ServerTransaction) {
 		return
 	}
 
+	// For inbound calls with a dialog session, ReadAck confirms the dialog.
+	// NOTE: When RespondSDP is used (which blocks until ACK), the dialog is
+	// already confirmed by the time this handler fires. ReadAck is still called
+	// for consistency — it's a no-op if CSeq matches.
+	if ds := session.GetDialogServerSession(); ds != nil {
+		if err := ds.ReadAck(req, tx); err != nil {
+			s.logger.Warnw("Dialog ReadAck failed", "error", err, "call_id", callID)
+		}
+	}
+
 	session.SetState(CallStateConnected)
 	s.logger.Debugw("SIP call established (ACK received)", "call_id", callID)
 }
@@ -978,8 +1035,14 @@ func (s *Server) handleBye(req *sip.Request, tx sip.ServerTransaction) {
 		return
 	}
 
-	// Inbound call — respond 200 OK and tear down immediately
-	s.sendResponse(tx, req, 200)
+	// Inbound call — respond 200 OK and tear down.
+	// Use the dialog server cache if available (handles To-tag matching and
+	// sets dialog state to Ended). Fall back to manual 200 OK otherwise.
+	if err := s.dialogServerCache.ReadBye(req, tx); err != nil {
+		s.logger.Debugw("Dialog server cache ReadBye failed, responding directly",
+			"error", err, "call_id", callID)
+		s.sendResponse(tx, req, 200)
+	}
 
 	// Remove session (also releases RTP port).
 	s.removeSession(callID)
@@ -1308,30 +1371,55 @@ func (s *Server) GetSession(callID string) (*Session, bool) {
 	return session, exists
 }
 
-// EndCall ends a specific call.
-// For outbound calls, sends a SIP BYE to the remote party via the dialog session
-// before ending the local session. This ensures the remote PBX/provider properly
-// tears down the call leg (e.g., Asterisk removes from bridge and frees channel).
+// EndCall ends a specific call by sending a SIP BYE to the remote party before
+// performing local cleanup. Works for both inbound and outbound calls:
+//   - Outbound: sends BYE via DialogClientSession (UAC dialog)
+//   - Inbound:  sends BYE via DialogServerSession (UAS dialog)
+//
+// This ensures the remote PBX/provider properly tears down the call leg
+// (e.g., Asterisk removes from bridge and frees channel).
 func (s *Server) EndCall(session *Session) error {
 	if session == nil {
 		return fmt.Errorf("session is nil")
 	}
 
-	// For outbound calls, send BYE to the remote before ending locally.
-	// dialogSession.Bye() constructs a proper in-dialog BYE with correct
+	callID := session.GetCallID()
+
+	// For outbound calls, send BYE via the UAC dialog session.
+	// dialogClientSession.Bye() constructs a proper in-dialog BYE with correct
 	// To/From tags, CSeq, and Route headers derived from the dialog state.
 	if ds := session.GetDialogClientSession(); ds != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		if err := ds.Bye(ctx); err != nil {
 			s.logger.Warnw("Failed to send BYE for outbound call",
-				"call_id", session.GetCallID(),
+				"call_id", callID,
 				"error", err)
 		} else {
 			s.logger.Infow("Sent BYE for outbound call",
-				"call_id", session.GetCallID())
+				"call_id", callID)
 		}
 	}
+
+	// For inbound calls, send BYE via the UAS dialog session.
+	// dialogServerSession.Bye() constructs a BYE using the original INVITE's
+	// Contact, To/From tags, and Record-Route headers to properly route the
+	// request back to the caller.
+	if ds := session.GetDialogServerSession(); ds != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := ds.Bye(ctx); err != nil {
+			s.logger.Warnw("Failed to send BYE for inbound call",
+				"call_id", callID,
+				"error", err)
+		} else {
+			s.logger.Infow("Sent BYE for inbound call",
+				"call_id", callID)
+		}
+	}
+
+	// Remove session from active sessions (releases RTP port)
+	s.removeSession(callID)
 
 	session.End()
 	return nil

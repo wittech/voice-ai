@@ -11,6 +11,7 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -124,24 +125,26 @@ func (m *audioSocketEngine) acceptLoop(ctx context.Context) {
 
 func (m *audioSocketEngine) handleConnection(ctx context.Context, conn net.Conn) {
 	defer conn.Close()
-
 	connCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
-
 	reader := bufio.NewReader(conn)
 	writer := bufio.NewWriter(conn)
 
-	// Step 1: Read the UUID frame from AudioSocket protocol.
 	// Asterisk sends a FrameTypeUUID (0x01) as the first frame with a 16-byte UUID payload.
 	// This UUID is the contextId that was passed via the dialplan (e.g. AudioSocket(contextId, host:port)).
 	contextID, err := m.readContextID(reader)
 	if err != nil {
+		// EOF is expected for health checks, port probes, or clients that disconnect before
+		// sending data. Log at debug level to reduce noise.
+		if errors.Is(err, io.EOF) {
+			m.logger.Debugw("AudioSocket connection closed before UUID frame", "remote", conn.RemoteAddr())
+			return
+		}
 		m.logger.Warnw("AudioSocket failed to read UUID frame", "error", err)
 		return
 	}
 
 	m.logger.Infof("AudioSocket connection received with contextId=%s", contextID)
-
 	// Step 2: Resolve call context — delegates to InboundDispatcher which handles
 	// Postgres lookup, atomic claiming, and parallel entity loading.
 	cc, vaultCred, err := m.inboundDispatcher.ResolveCallSessionByContext(connCtx, contextID)
