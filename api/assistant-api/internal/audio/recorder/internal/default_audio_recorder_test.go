@@ -369,6 +369,170 @@ func TestTTSNewSegmentAfterGap(t *testing.T) {
 // Push copies data
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Interruption — truncate system track
+// ---------------------------------------------------------------------------
+
+func TestInterruptionTruncatesSystemTrack(t *testing.T) {
+	// TTS sends 3 chunks of 320 bytes each (30ms total audio) at t=0.
+	// User interrupts at t=10ms (= 320 bytes into the session).
+	// The streamer would ClearOutputBuffer, so only the first 320 bytes
+	// of TTS audio were actually heard.  The recorder must mirror that.
+	rec, fc := newTestRecorderWithClock(t)
+	rec.Start()
+	ctx := context.Background()
+
+	// 3 TTS chunks at t=0 — paced contiguously at offsets 0, 320, 640.
+	rec.Record(ctx, internal_type.TextToSpeechAudioPacket{ContextID: "c1", AudioChunk: pcm(0xA1, 320)})
+	rec.Record(ctx, internal_type.TextToSpeechAudioPacket{ContextID: "c1", AudioChunk: pcm(0xA2, 320)})
+	rec.Record(ctx, internal_type.TextToSpeechAudioPacket{ContextID: "c1", AudioChunk: pcm(0xA3, 320)})
+
+	if len(rec.chunks) != 3 {
+		t.Fatalf("expected 3 chunks before interruption, got %d", len(rec.chunks))
+	}
+
+	// User interrupts at t=10ms (320 bytes).
+	fc.Advance(10 * time.Millisecond)
+	rec.Record(ctx, internal_type.InterruptionPacket{ContextID: "c1", Source: internal_type.InterruptionSourceVad})
+
+	// Only the first chunk (offset 0, 320 bytes) should survive — it ends
+	// exactly at cutoff=320, so chunkEnd(320) <= cutoff(320) → kept.
+	// Chunk 2 starts at 320 → offset >= cutoff → discarded.
+	// Chunk 3 starts at 640 → discarded.
+	if len(rec.chunks) != 1 {
+		t.Fatalf("expected 1 chunk after interruption, got %d", len(rec.chunks))
+	}
+	if rec.chunks[0].ByteOffset != 0 || len(rec.chunks[0].Data) != 320 {
+		t.Errorf("surviving chunk: offset=%d len=%d", rec.chunks[0].ByteOffset, len(rec.chunks[0].Data))
+	}
+
+	// System cursor should be reset to cutoff.
+	if rec.cursor[trackSystem] != 320 {
+		t.Errorf("system cursor: expected 320, got %d", rec.cursor[trackSystem])
+	}
+}
+
+func TestInterruptionPartialTrim(t *testing.T) {
+	// One large TTS chunk (640 bytes = 20ms audio) placed at offset 0.
+	// Interruption at t=10ms (cutoff=320). The chunk should be trimmed
+	// to 320 bytes, not fully removed.
+	rec, fc := newTestRecorderWithClock(t)
+	rec.Start()
+	ctx := context.Background()
+
+	rec.Record(ctx, internal_type.TextToSpeechAudioPacket{ContextID: "c1", AudioChunk: pcm(0xBB, 640)})
+
+	fc.Advance(10 * time.Millisecond) // cutoff = 320
+	rec.Record(ctx, internal_type.InterruptionPacket{ContextID: "c1", Source: internal_type.InterruptionSourceWord})
+
+	if len(rec.chunks) != 1 {
+		t.Fatalf("expected 1 trimmed chunk, got %d", len(rec.chunks))
+	}
+	if len(rec.chunks[0].Data) != 320 {
+		t.Errorf("trimmed chunk: expected 320 bytes, got %d", len(rec.chunks[0].Data))
+	}
+
+	fc.Advance(490 * time.Millisecond) // session 500ms
+	_, systemWAV, err := rec.Persist()
+	if err != nil {
+		t.Fatalf("Persist error: %v", err)
+	}
+	sysPCM := wavPCMData(systemWAV)
+
+	// First 320 bytes = 0xBB, rest = silence.
+	for i := 0; i < 320; i++ {
+		if sysPCM[i] != 0xBB {
+			t.Errorf("byte %d: expected 0xBB, got 0x%02x", i, sysPCM[i])
+			break
+		}
+	}
+	for i := 320; i < len(sysPCM); i++ {
+		if sysPCM[i] != 0x00 {
+			t.Errorf("byte %d: expected silence, got 0x%02x", i, sysPCM[i])
+			break
+		}
+	}
+}
+
+func TestInterruptionPreservesUserTrack(t *testing.T) {
+	// User audio is NOT affected by interruption.
+	rec, fc := newTestRecorderWithClock(t)
+	rec.Start()
+	ctx := context.Background()
+
+	rec.Record(ctx, internal_type.UserAudioPacket{Audio: pcm(0x11, 640)})
+	rec.Record(ctx, internal_type.TextToSpeechAudioPacket{ContextID: "c1", AudioChunk: pcm(0x22, 640)})
+
+	fc.Advance(10 * time.Millisecond) // cutoff = 320
+	rec.Record(ctx, internal_type.InterruptionPacket{ContextID: "c1", Source: internal_type.InterruptionSourceVad})
+
+	// User chunk (640 bytes) untouched.  System chunk trimmed to 320.
+	userChunks := 0
+	sysChunks := 0
+	for _, c := range rec.chunks {
+		if c.Track == trackUser {
+			userChunks++
+			if len(c.Data) != 640 {
+				t.Errorf("user chunk size: expected 640, got %d", len(c.Data))
+			}
+		} else {
+			sysChunks++
+			if len(c.Data) != 320 {
+				t.Errorf("system chunk size after trim: expected 320, got %d", len(c.Data))
+			}
+		}
+	}
+	if userChunks != 1 {
+		t.Errorf("expected 1 user chunk, got %d", userChunks)
+	}
+	if sysChunks != 1 {
+		t.Errorf("expected 1 system chunk, got %d", sysChunks)
+	}
+}
+
+func TestInterruptionThenNewTTS(t *testing.T) {
+	// After an interruption, new TTS audio should anchor at wall-clock.
+	rec, fc := newTestRecorderWithClock(t)
+	rec.Start()
+	ctx := context.Background()
+
+	// TTS at t=0: 960 bytes (30ms audio) paced at offset 0..960.
+	rec.Record(ctx, internal_type.TextToSpeechAudioPacket{ContextID: "c1", AudioChunk: pcm(0xA1, 960)})
+
+	// Interrupt at t=10ms (cutoff = 320).
+	fc.Advance(10 * time.Millisecond)
+	rec.Record(ctx, internal_type.InterruptionPacket{ContextID: "c1", Source: internal_type.InterruptionSourceVad})
+
+	// After interrupt, cursor is at 320, so first chunk is trimmed.
+	if rec.cursor[trackSystem] != 320 {
+		t.Errorf("cursor after interrupt: expected 320, got %d", rec.cursor[trackSystem])
+	}
+
+	// New TTS at t=500ms (offset 16000). Cursor = 320, wall = 16000.
+	// wall > cursor → new segment anchored at 16000.
+	fc.Advance(490 * time.Millisecond)
+	rec.Record(ctx, internal_type.TextToSpeechAudioPacket{ContextID: "c2", AudioChunk: pcm(0xB1, 320)})
+
+	// Find the new chunk.
+	var newChunk *chunk
+	for i := range rec.chunks {
+		if rec.chunks[i].Data[0] == 0xB1 {
+			newChunk = &rec.chunks[i]
+		}
+	}
+	if newChunk == nil {
+		t.Fatal("new TTS chunk not found")
+	}
+	expectedOffset := durationBytes(500 * time.Millisecond)
+	if newChunk.ByteOffset != expectedOffset {
+		t.Errorf("new TTS offset: expected %d, got %d", expectedOffset, newChunk.ByteOffset)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Push copies data
+// ---------------------------------------------------------------------------
+
 func TestPushCopiesData(t *testing.T) {
 	rec, _ := newTestRecorderWithClock(t)
 	rec.Start()

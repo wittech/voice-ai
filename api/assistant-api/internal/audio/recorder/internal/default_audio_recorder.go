@@ -85,12 +85,19 @@ func durationBytes(d time.Duration) int {
 // Record places audio on the appropriate track at the current wall-clock
 // position. Each chunk is positioned based on WHEN it arrives, not just
 // appended. Both tracks share the same timeline (Start → Persist).
+//
+// InterruptionPacket truncates the system (TTS) track at the current
+// wall-clock position, discarding any audio that was buffered ahead of
+// real time — mirroring the streamer's ClearOutputBuffer behaviour.
 func (r *audioRecorder) Record(ctx context.Context, p internal_type.Packet) error {
 	switch vl := p.(type) {
 	case internal_type.UserAudioPacket:
 		return r.push(vl.Audio, trackUser)
 	case internal_type.TextToSpeechAudioPacket:
 		return r.push(vl.AudioChunk, trackSystem)
+	case internal_type.InterruptionPacket:
+		r.truncateSystemTrack()
+		return nil
 	}
 	return nil
 }
@@ -101,8 +108,6 @@ func (r *audioRecorder) push(data []byte, track int) error {
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-
-	// Compute wall-clock byte offset.
 	wallOffset := 0
 	if r.started {
 		wallOffset = durationBytes(r.clock().Sub(r.startTime))
@@ -119,17 +124,6 @@ func (r *audioRecorder) push(data []byte, track int) error {
 		}
 
 	case trackSystem:
-		// TTS audio: PACING. TTS delivers audio in bursts (faster than
-		// real-time). We pace it at the playback rate on the timeline:
-		//
-		//   - First chunk after silence (cursor <= wallOffset): anchor at
-		//     wall-clock offset.
-		//   - Subsequent burst chunks (cursor > wallOffset): place at cursor
-		//     so audio is continuous at the playback rate with no gaps.
-		//
-		// This avoids "audio breaking" that happened when wall-clock was used
-		// for every chunk — variable delivery timing introduced tiny gaps or
-		// overlaps between TTS chunks.
 		if r.cursor[track] > wallOffset {
 			// Burst continuation: pace from cursor.
 			offset = r.cursor[track]
@@ -151,6 +145,50 @@ func (r *audioRecorder) push(data []byte, track int) error {
 	// Advance cursor past this chunk.
 	r.cursor[track] = offset + len(buf)
 	return nil
+}
+
+// truncateSystemTrack removes any system (TTS) audio that extends past the
+// current wall-clock position. When the user interrupts, the streamer clears
+// its output buffer (ClearOutputBuffer) so queued TTS audio is never played.
+// The recorder must mirror this: any system audio recorded beyond "now" on
+// the timeline is audio that the listener never heard.
+func (r *audioRecorder) truncateSystemTrack() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	// Current wall-clock position = the cut point.
+	cutoff := 0
+	if r.started {
+		cutoff = durationBytes(r.clock().Sub(r.startTime))
+	}
+
+	// Rebuild the chunk list, trimming or removing system chunks past cutoff.
+	kept := r.chunks[:0] // reuse backing array
+	for _, c := range r.chunks {
+		if c.Track != trackSystem {
+			kept = append(kept, c)
+			continue
+		}
+		chunkEnd := c.ByteOffset + len(c.Data)
+		if chunkEnd <= cutoff {
+			// Entirely before the cut — keep as-is.
+			kept = append(kept, c)
+			continue
+		}
+		if c.ByteOffset >= cutoff {
+			// Entirely after the cut — discard.
+			continue
+		}
+		// Partially overlaps — trim to cutoff.
+		trimmed := c
+		trimmed.Data = c.Data[:cutoff-c.ByteOffset]
+		kept = append(kept, trimmed)
+	}
+	r.chunks = kept
+
+	// Reset system cursor to cutoff so the next TTS segment starts at the
+	// right position.
+	r.cursor[trackSystem] = cutoff
 }
 
 // Persist renders two WAV files — one per track. Both WAVs span the full
