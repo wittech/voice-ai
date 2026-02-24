@@ -43,7 +43,7 @@ cymem==2.0.11
 dataclasses-json==0.6.7
 Deprecated==1.2.18
 distro==1.9.0
-elastic-apm==6.9.1
+elastic-apm==6.25.0
 elasticsearch==7.13.0
 emoji==2.14.1
 en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl#sha256=1932429db727d4bff3deed6b34cfc05df17794f4a52eeb26cf8928f7c1a0fb85
@@ -61,8 +61,8 @@ frozenlist==1.6.0
 fsspec==2025.5.1
 greenlet==3.2.2
 grpc-interceptor==0.15.4
-grpcio==1.72.1
-grpcio-tools==1.72.1
+grpcio==1.78.1
+grpcio-tools==1.78.1
 h11==0.16.0
 hf-xet==1.1.2
 html5lib==1.1
@@ -125,7 +125,7 @@ preshed==3.0.10
 prometheus_client==0.22.0
 prompt_toolkit==3.0.51
 propcache==0.3.1
-protobuf==6.30.0
+protobuf==6.31.1
 psutil==7.0.0
 psycopg2==2.9.10
 psycopg2-binary==2.9.10
