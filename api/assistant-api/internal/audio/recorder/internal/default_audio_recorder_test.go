@@ -1,4 +1,4 @@
-// Copyright (c) 2023-2025 RapidaAI
+// Copyright (c) 2023-2026 RapidaAI
 // Author: Prashant Srivastav <prashant@rapida.ai>
 //
 // Licensed under GPL-2.0 with Rapida Additional Terms.
@@ -15,6 +15,12 @@ import (
 	"github.com/rapidaai/pkg/commons"
 )
 
+// ---------------------------------------------------------------------------
+// Test helpers
+// ---------------------------------------------------------------------------
+
+// newTestLogger creates a logger that writes to a temporary directory scoped
+// to the running test.
 func newTestLogger(t *testing.T) commons.Logger {
 	t.Helper()
 	logger, err := commons.NewApplicationLogger(
@@ -28,7 +34,7 @@ func newTestLogger(t *testing.T) commons.Logger {
 	return logger
 }
 
-// fakeClock returns a controllable clock for deterministic tests.
+// fakeClock is a controllable clock for deterministic timeline tests.
 type fakeClock struct {
 	now time.Time
 }
@@ -36,6 +42,8 @@ type fakeClock struct {
 func (c *fakeClock) Now() time.Time          { return c.now }
 func (c *fakeClock) Advance(d time.Duration) { c.now = c.now.Add(d) }
 
+// newTestRecorderWithClock returns an audioRecorder wired to a fakeClock
+// starting at 2025-01-01T00:00:00Z.
 func newTestRecorderWithClock(t *testing.T) (*audioRecorder, *fakeClock) {
 	t.Helper()
 	rec, err := NewDefaultAudioRecorder(newTestLogger(t))
@@ -48,6 +56,8 @@ func newTestRecorderWithClock(t *testing.T) (*audioRecorder, *fakeClock) {
 	return ar, fc
 }
 
+// pcm generates a byte slice of the given length filled with val, simulating
+// constant-amplitude PCM audio.
 func pcm(val byte, length int) []byte {
 	buf := make([]byte, length)
 	for i := range buf {
@@ -56,7 +66,8 @@ func pcm(val byte, length int) []byte {
 	return buf
 }
 
-func wavPCMData(wav []byte) []byte { return wav[44:] }
+// wavPCMData strips the 44-byte WAV header and returns the raw PCM payload.
+func wavPCMData(wav []byte) []byte { return wav[wavHeaderSize:] }
 
 // ---------------------------------------------------------------------------
 // Basic recording
@@ -366,10 +377,6 @@ func TestTTSNewSegmentAfterGap(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Push copies data
-// ---------------------------------------------------------------------------
-
-// ---------------------------------------------------------------------------
 // Interruption — truncate system track
 // ---------------------------------------------------------------------------
 
@@ -530,7 +537,7 @@ func TestInterruptionThenNewTTS(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Push copies data
+// Data isolation
 // ---------------------------------------------------------------------------
 
 func TestPushCopiesData(t *testing.T) {
