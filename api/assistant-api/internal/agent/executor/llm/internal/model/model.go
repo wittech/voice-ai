@@ -210,7 +210,6 @@ func (executor *modelAssistantExecutor) listen(ctx context.Context, communicatio
 func (executor *modelAssistantExecutor) handleResponse(ctx context.Context, communication internal_type.Communication, resp *protos.ChatResponse) {
 	output := resp.GetData()
 	metrics := resp.GetMetrics()
-
 	// Handle error responses
 	if !resp.GetSuccess() && resp.GetError() != nil {
 		communication.OnPacket(ctx, internal_type.LLMErrorPacket{

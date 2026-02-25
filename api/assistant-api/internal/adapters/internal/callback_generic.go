@@ -7,13 +7,16 @@ package adapter_internal
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"time"
 
 	internal_adapter_request_customizers "github.com/rapidaai/api/assistant-api/internal/adapters/customizers"
+	internal_audio "github.com/rapidaai/api/assistant-api/internal/audio"
 	internal_adapter_telemetry "github.com/rapidaai/api/assistant-api/internal/telemetry"
 	internal_telemetry "github.com/rapidaai/api/assistant-api/internal/telemetry"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
+	type_enums "github.com/rapidaai/pkg/types/enums"
 	"github.com/rapidaai/pkg/utils"
 	"github.com/rapidaai/protos"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -103,7 +106,6 @@ func (spk *genericRequestor) interruptAllProvider(ctx context.Context, result in
 }
 
 func (spk *genericRequestor) callSpeaking(ctx context.Context, result internal_type.LLMPacket) error {
-
 	switch res := result.(type) {
 	case internal_type.LLMResponseDonePacket:
 		if spk.textToSpeechTransformer != nil && spk.messaging.GetMode().Audio() {
@@ -213,11 +215,7 @@ func (talking *genericRequestor) OnPacket(ctx context.Context, pkts ...internal_
 			// when static packet is received it means that rapida system has something to speak
 			// do not abrupt it just send it to the assembler
 
-			// starting the timer for idle timeout as bot has finished responding
-			if talking.messaging.GetMode().Text() {
-				// stop idle timeout as bot has started responding
-				talking.startIdleTimeoutTimer(ctx)
-			}
+			talking.startIdleTimeoutTimer(ctx)
 
 			if err := talking.callCreateMessage(ctx, vl); err != nil {
 				talking.logger.Errorf("unable to create message from static packet %v", err)
@@ -382,7 +380,6 @@ func (talking *genericRequestor) OnPacket(ctx context.Context, pkts ...internal_
 			}
 			// sending to aggregator for assembling sentences
 			if err := talking.callTextAggregator(ctx, vl); err != nil {
-				talking.logger.Errorf("sentence aggregator error: %v, calling speak directly", err)
 				if err := talking.callSpeaking(ctx, vl); err != nil {
 					talking.logger.Errorf("speaking error: %v", err)
 				}
@@ -396,11 +393,9 @@ func (talking *genericRequestor) OnPacket(ctx context.Context, pkts ...internal_
 				continue
 			}
 
-			// starting the timer for idle timeout as bot has finished responding
-			if talking.messaging.GetMode().Text() {
-				// stop idle timeout as bot has started responding
-				talking.startIdleTimeoutTimer(ctx)
-			}
+			// start idle timeout — for audio mode, TextToSpeechAudioPacket will extend
+			// the timer by each chunk's duration so it won't fire during playback.
+			talking.startIdleTimeoutTimer(ctx)
 			//
 			if err := talking.messaging.Transition(internal_adapter_request_customizers.LLMGenerated); err != nil {
 				talking.logger.Errorf("messaging transition error: %v", err)
@@ -410,7 +405,6 @@ func (talking *genericRequestor) OnPacket(ctx context.Context, pkts ...internal_
 			}
 
 			if err := talking.callTextAggregator(ctx, vl); err != nil {
-				talking.logger.Errorf("sentence aggregator error: %v calling speak directly", err)
 				if err := talking.callSpeaking(ctx, vl); err != nil {
 					talking.logger.Errorf("speaking error: %v", err)
 				}
@@ -443,7 +437,7 @@ func (talking *genericRequestor) OnPacket(ctx context.Context, pkts ...internal_
 			})
 			continue
 
-		case internal_type.MetricPacket:
+		case internal_type.MessageMetricPacket:
 			// metrics update for the message
 			// later this can be used at each stage to calculate various metrics
 			utils.Go(ctx, func() {
@@ -466,11 +460,11 @@ func (talking *genericRequestor) OnPacket(ctx context.Context, pkts ...internal_
 			continue
 		case internal_type.TextToSpeechAudioPacket:
 
-			// resetting idle timer as bot has sponken
-			// starting the timer for idle timeout as bot has finished responding
+			// Extend the idle timeout by each audio chunk's duration so the timer
+			// doesn't fire while the browser is still playing buffered TTS audio.
 			if talking.messaging.GetMode().Audio() {
-				// stop idle timeout as bot has started responding
-				talking.startIdleTimeoutTimer(ctx)
+				audioInfo := internal_audio.GetAudioInfo(vl.AudioChunk, internal_audio.RAPIDA_INTERNAL_AUDIO_CONFIG)
+				talking.extendIdleTimeoutTimer(time.Duration(audioInfo.DurationMs) * time.Millisecond)
 			}
 
 			// might be stale packet
@@ -488,6 +482,30 @@ func (talking *genericRequestor) OnPacket(ctx context.Context, pkts ...internal_
 				talking.logger.Errorf("recorder error: %v", err)
 			}
 			continue
+		case internal_type.LLMToolCallPacket:
+			// centralized tool call logging — create record with tool execution started
+			utils.Go(ctx, func() {
+				req, _ := json.Marshal(map[string]interface{}{
+					"id":        vl.ToolID,
+					"name":      vl.Name,
+					"arguments": vl.Arguments,
+				})
+				if err := talking.CreateToolLog(ctx, vl.ContextID, vl.ToolID, vl.Name, type_enums.RECORD_IN_PROGRESS, req); err != nil {
+					talking.logger.Errorf("error logging tool call start: %v", err)
+				}
+			})
+			continue
+
+		case internal_type.LLMToolResultPacket:
+			// centralized tool result logging — update existing record by ToolID
+			utils.Go(ctx, func() {
+				res, _ := json.Marshal(vl.Result)
+				if err := talking.UpdateToolLog(ctx, vl.ToolID, vl.TimeTaken, type_enums.RECORD_COMPLETE, res); err != nil {
+					talking.logger.Errorf("error logging tool call result: %v", err)
+				}
+			})
+			continue
+
 		default:
 			talking.logger.Warnf("unknown packet type received in OnGeneration %T", vl)
 		}

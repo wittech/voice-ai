@@ -41,7 +41,6 @@ import {
   ValidatePlayHTOptions,
 } from '@/app/components/providers/text-to-speech/playht';
 import { ProviderComponentProps } from '@/app/components/providers';
-import { SENTENCE_BOUNDRIES } from '../../../../providers/index';
 import {
   ConfigureSarvamTextToSpeech,
   GetSarvamDefaultOptions,
@@ -56,10 +55,6 @@ export const GetDefaultSpeakerConfig = (
   existing: Metadata[] = [],
 ): Metadata[] => {
   const defaultConfig = [
-    {
-      key: 'speaker.sentence.boundaries',
-      value: SENTENCE_BOUNDRIES.join('<|||>'),
-    },
     {
       key: 'speaker.conjunction.boundaries',
       value: '',

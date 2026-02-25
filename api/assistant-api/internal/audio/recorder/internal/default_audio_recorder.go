@@ -88,12 +88,12 @@ func (r *audioRecorder) Start() {
 
 // bytesPerSecond returns the PCM byte rate for the internal audio format.
 func bytesPerSecond() int {
-	return int(audioConfig.SampleRate) * int(audioConfig.Channels) * AudioBytesPerSample
+	return internal_audio.BytesPerSecond(audioConfig)
 }
 
 // frameSize returns the number of bytes in a single audio frame (all channels).
 func frameSize() int {
-	return AudioBytesPerSample * int(audioConfig.Channels)
+	return internal_audio.FrameSize(audioConfig)
 }
 
 // durationBytes converts a wall-clock duration to a frame-aligned byte count.
@@ -263,12 +263,14 @@ func (r *audioRecorder) Persist() (userWAV, systemWAV []byte, err error) {
 		audioBytes[c.Track] += len(c.Data)
 	}
 
-	bps := float64(bytesPerSecond())
+	userInfo := internal_audio.GetAudioInfo(trackPCM[trackUser][:audioBytes[trackUser]], audioConfig)
+	systemInfo := internal_audio.GetAudioInfo(trackPCM[trackSystem][:audioBytes[trackSystem]], audioConfig)
+	totalInfo := internal_audio.GetAudioInfo(trackPCM[trackUser], audioConfig)
 	r.logger.Info(fmt.Sprintf(
-		"Audio persist: userAudio=%d (%.2fs), systemAudio=%d (%.2fs), totalLen=%d (%.2fs), chunks=%d",
-		audioBytes[trackUser], float64(audioBytes[trackUser])/bps,
-		audioBytes[trackSystem], float64(audioBytes[trackSystem])/bps,
-		totalLen, float64(totalLen)/bps,
+		"Audio persist: userAudio=%d (%.2fms), systemAudio=%d (%.2fms), totalLen=%d (%.2fms), chunks=%d",
+		audioBytes[trackUser], userInfo.DurationMs,
+		audioBytes[trackSystem], systemInfo.DurationMs,
+		totalLen, totalInfo.DurationMs,
 		len(r.chunks),
 	))
 

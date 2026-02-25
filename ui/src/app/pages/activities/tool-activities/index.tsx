@@ -24,7 +24,6 @@ import { PaginationButtonBlock } from '@/app/components/blocks/pagination-button
 import { PageHeaderBlock } from '@/app/components/blocks/page-header-block';
 import { useToolActivityLogPage } from '@/hooks/use-tool-activity-log-page-store';
 import { ToolLogDialog } from '@/app/components/base/modal/tool-log-modal';
-import { ToolActionPill } from '@/app/components/pill/tool-action-pill';
 import { DateCell } from '@/app/components/base/tables/date-cell';
 import TooltipPlus from '@/app/components/base/tooltip-plus';
 
@@ -183,9 +182,9 @@ export function ListingPage() {
                   <TableCell>{at.getAssistanttoolname()}</TableCell>
                 )}
 
-                {visibleColumn('execution_method') && (
+                {visibleColumn('tool_call_id') && (
                   <TableCell>
-                    <ToolActionPill code={at.getExecutionmethod()} />
+                    <span className="font-mono">{at.getToolcallid()}</span>
                   </TableCell>
                 )}
 
@@ -262,54 +261,5 @@ export function ListingPage() {
         </div>
       )}
     </>
-  );
-}
-
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function _ActivitySource(props: { metadatas: Metadata[] }) {
-  const [, setActivitySource] = useState('');
-  const [activityLink, setActivityLink] = useState('');
-  const [, setExternal] = useState(true);
-  useEffect(() => {
-    const endpoint = getMetadataValue(props.metadatas, 'endpoint_id');
-    if (endpoint) {
-      setActivitySource(endpoint);
-      setActivityLink(`/deployment/endpoint/${endpoint}`);
-      setExternal(false);
-      return;
-    }
-
-    const assistant = getMetadataValue(props.metadatas, 'assistant_id');
-    if (assistant) {
-      setActivitySource(assistant);
-      setActivityLink(`/deployment/assistant/${assistant}`);
-      setExternal(false);
-      return;
-    }
-
-    const knowledge = getMetadataValue(props.metadatas, 'knowledge_id');
-    if (knowledge) {
-      setActivitySource(knowledge);
-      setActivityLink(`/knowledge/${knowledge}`);
-      setExternal(false);
-      return;
-    }
-
-    const source = getMetadataValue(props.metadatas, 'source');
-    if (source) {
-      setActivitySource(source);
-      setActivityLink('');
-      setExternal(false);
-      return;
-    }
-  }, [props.metadatas]);
-  return (
-    <CustomLink
-      to={activityLink}
-      className="font-normal dark:text-blue-500 text-blue-600 hover:underline cursor-pointer text-left flex items-center space-x-1"
-    >
-      <span>{acivitySource}</span>
-      <ExternalLink className="w-3 h-3" />
-    </CustomLink>
   );
 }

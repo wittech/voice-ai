@@ -57,6 +57,7 @@ import (
 	"io"
 	"sync"
 
+	internal_audio "github.com/rapidaai/api/assistant-api/internal/audio"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 	"github.com/rapidaai/pkg/commons"
 	"github.com/rapidaai/protos"
@@ -209,15 +210,10 @@ func WithOutputAudioConfig(cfg *protos.AudioConfig) Option {
 // BytesPerMs computes the byte rate per millisecond for the given audio config.
 // Formula: sampleRate × bytesPerSample × channels / 1000.
 // Returns 0 if cfg is nil.
+//
+// Delegates to internal_audio.BytesPerMs for the shared implementation.
 func BytesPerMs(cfg *protos.AudioConfig) int {
-	if cfg == nil {
-		return 0
-	}
-	bytesPerSample := 2 // LINEAR16
-	if cfg.GetAudioFormat() == protos.AudioConfig_MuLaw8 {
-		bytesPerSample = 1
-	}
-	return int(cfg.GetSampleRate()) * bytesPerSample * int(cfg.GetChannels()) / 1000
+	return internal_audio.BytesPerMs(cfg)
 }
 
 // resolveConfig applies all options, then derives any unset thresholds from

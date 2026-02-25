@@ -173,7 +173,7 @@ export const useToolActivityLogPage = create<ToolActivityLogType>(
         visible: true,
       },
       { name: 'Tool Name', key: 'assistant_tool_name', visible: true },
-      { name: 'Execution Method', key: 'execution_method', visible: true },
+      { name: 'Tool Call ID', key: 'tool_call_id', visible: true },
       { name: 'Action', key: 'action', visible: true },
       { name: 'Status', key: 'status', visible: true },
       { name: 'Time Taken', key: 'time_taken', visible: true },

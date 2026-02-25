@@ -41,13 +41,11 @@ type AssistantToolLog struct {
 	gorm_model.Audited
 	gorm_model.Mutable
 	gorm_model.Organizational
-	AssistantId                    uint64         `json:"assistantId" gorm:"type:bigint"`
-	AssistantConversationId        uint64         `json:"assistantConversationId" gorm:"type:bigint"`
-	AssistantConversationMessageId string         `json:"assistantConversationMessageId" gorm:"type:string;not null"`
-	AssistantToolId                uint64         `json:"assistantToolId" gorm:"type:bigint"`
-	AssistantToolName              string         `json:"assistantToolName" gorm:"type:string"`
-	ExecutionMethod                string         `json:"executionMethod" gorm:"type:string"`
-	AssetPrefix                    string         `json:"assetPrefix" gorm:"type:string;size:200;not null"`
-	TimeTaken                      int64          `json:"timeTaken" gorm:"type:bigint;size:20"`
-	AssistantTool                  *AssistantTool `json:"assistantTool" gorm:"foreignKey:AssistantToolId"`
+	AssistantId                    uint64 `json:"assistantId" gorm:"type:bigint"`
+	AssistantConversationId        uint64 `json:"assistantConversationId" gorm:"type:bigint;uniqueIndex:idx_tool_call_conversation"`
+	AssistantConversationMessageId string `json:"assistantConversationMessageId" gorm:"type:string;not null"`
+	ToolCallId                     string `json:"toolCallId" gorm:"type:string;size:255;not null;uniqueIndex:idx_tool_call_conversation"`
+	AssistantToolName              string `json:"assistantToolName" gorm:"type:string"`
+	AssetPrefix                    string `json:"assetPrefix" gorm:"type:string;size:200;not null"`
+	TimeTaken                      int64  `json:"timeTaken" gorm:"type:bigint;size:20"`
 }

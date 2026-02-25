@@ -103,7 +103,7 @@ func (f ConversationMetadataPacket) ConversationID() uint64 {
 }
 
 // ConversationMetricPacket represents a request to send metrics within a specific context.
-type MetricPacket struct {
+type MessageMetricPacket struct {
 
 	// ContextID identifies the context to be flushed.
 	ContextID string
@@ -112,11 +112,11 @@ type MetricPacket struct {
 	Metrics []*protos.Metric
 }
 
-func (f MetricPacket) ContextId() string {
+func (f MessageMetricPacket) ContextId() string {
 	return f.ContextID
 }
 
-type MetadataPacket struct {
+type MessageMetadataPacket struct {
 
 	// ContextID identifies the context to be flushed.
 	ContextID string
@@ -125,7 +125,7 @@ type MetadataPacket struct {
 	Metadata []*protos.Metadata
 }
 
-func (f MetadataPacket) ContextId() string {
+func (f MessageMetadataPacket) ContextId() string {
 	return f.ContextID
 }
 
@@ -247,6 +247,9 @@ type LLMToolResultPacket struct {
 
 	// contextID identifies the context to be flushed.
 	ContextID string
+
+	// time taken for tool execution in nanoseconds
+	TimeTaken int64
 
 	// result for tool call
 	Result map[string]interface{}

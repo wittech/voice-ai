@@ -110,19 +110,32 @@ func (cr *genericRequestor) CreateConversationToolLog(
 
 func (cr *genericRequestor) CreateToolLog(
 	ctx context.Context,
-	toolId uint64,
 	messageId string,
+	toolCallId string,
 	toolName string,
-	executionMethod string,
 	status type_enums.RecordState,
-	timeTaken int64,
-	request, response []byte) error {
+	request []byte) error {
 	dbCtx, cancel := context.WithTimeout(context.Background(), dbWriteTimeout)
 	defer cancel()
 	_, err := cr.assistantToolService.CreateLog(
 		dbCtx, cr.Auth(), cr.assistant.Id,
-		cr.assistantConversation.Id, toolId, messageId, toolName, timeTaken, executionMethod,
-		status, request, response,
+		cr.assistantConversation.Id, messageId, toolCallId, toolName,
+		status, request,
+	)
+	return err
+}
+
+func (cr *genericRequestor) UpdateToolLog(
+	ctx context.Context,
+	toolCallId string,
+	timeTaken int64,
+	status type_enums.RecordState,
+	response []byte) error {
+	dbCtx, cancel := context.WithTimeout(context.Background(), dbWriteTimeout)
+	defer cancel()
+	_, err := cr.assistantToolService.UpdateLog(
+		dbCtx, cr.Auth(), toolCallId, cr.assistantConversation.Id, timeTaken,
+		status, response,
 	)
 	return err
 }

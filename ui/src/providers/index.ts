@@ -24,21 +24,6 @@ export interface RapidaProvider {
  * @returns
  */
 
-export const SENTENCE_BOUNDRIES = [
-  '.', // Period
-  '!', // Exclamation mark
-  '?', // Question mark
-  '|', // Pipe
-  ';', // Semicolon
-  ':', // Colon
-  '…', // Ellipsis
-  '。', // Chinese/Japanese full stop
-  '．', // Katakana middle dot
-  '।', // Devanagari Danda (Hindi full stop)
-  '۔', // Arabic full stop
-  '--', // Double dash
-];
-
 export const PRONUNCIATION_DICTIONARIES = [
   'currency',
   'date',

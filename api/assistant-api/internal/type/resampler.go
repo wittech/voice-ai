@@ -18,7 +18,7 @@ type AudioInfo struct {
 	SamplesPerChannel int
 	BytesPerSample    int
 	TotalBytes        int
-	DurationSeconds   float64
+	DurationMs        float64
 }
 
 type AudioConverter interface {
@@ -47,7 +47,7 @@ func (info AudioInfo) String() string {
 		channelName = fmt.Sprintf("%d channels", info.Channels)
 	}
 
-	return fmt.Sprintf("Audio: %s, %d Hz, %s, %.2f seconds (%d samples, %d bytes)",
-		formatName, info.SampleRate, channelName, info.DurationSeconds,
+	return fmt.Sprintf("Audio: %s, %d Hz, %s, %.2f ms (%d samples, %d bytes)",
+		formatName, info.SampleRate, channelName, info.DurationMs,
 		info.SamplesPerChannel, info.TotalBytes)
 }

@@ -191,8 +191,6 @@ func TestConvertToByteSamples(t *testing.T) {
 
 // TestGetAudioInfo tests audio information extraction
 func TestGetAudioInfo(t *testing.T) {
-	resampler := newTestResampler(t)
-
 	tests := []struct {
 		name            string
 		dataSize        int
@@ -207,22 +205,21 @@ func TestGetAudioInfo(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			data := make([]byte, tt.dataSize)
-			info := resampler.GetAudioInfo(data, tt.config)
+			info := internal_audio.GetAudioInfo(data, tt.config)
 			assert.Equal(t, tt.config.SampleRate, info.SampleRate)
 			assert.Equal(t, tt.expectedSamples, info.SamplesPerChannel)
 			assert.Equal(t, tt.config.Channels, info.Channels)
-			assert.Greater(t, info.DurationSeconds, 0.0)
+			assert.Greater(t, info.DurationMs, 0.0)
 		})
 	}
 }
 
 // TestAudioInfoString tests the String() method
 func TestAudioInfoString(t *testing.T) {
-	resampler := newTestResampler(t)
 	config := internal_audio.NewLinear16khzMonoAudioConfig()
 	data := generateLinear16Data(16000)
 
-	info := resampler.GetAudioInfo(data, config)
+	info := internal_audio.GetAudioInfo(data, config)
 	infoStr := info.String()
 	assert.NotEmpty(t, infoStr)
 	assert.Contains(t, infoStr, "Linear16")
@@ -563,16 +560,15 @@ func max(a, b int16) int16 {
 
 // TestAudioInfoConsistency tests that AudioInfo values are consistent
 func TestAudioInfoConsistency(t *testing.T) {
-	resampler := newTestResampler(t)
 	config := internal_audio.NewLinear16khzMonoAudioConfig()
 	secondOfAudio := make([]byte, 16000*2)
-	info := resampler.GetAudioInfo(secondOfAudio, config)
+	info := internal_audio.GetAudioInfo(secondOfAudio, config)
 	assert.Equal(t, uint32(16000), info.SampleRate)
 	assert.Equal(t, int16(16000), int16(info.SamplesPerChannel))
 	assert.Equal(t, uint32(1), info.Channels)
 	assert.Equal(t, 2, info.BytesPerSample)
 	assert.Equal(t, 32000, info.TotalBytes)
-	assert.InDelta(t, 1.0, info.DurationSeconds, 0.01)
+	assert.InDelta(t, 1000.0, info.DurationMs, 0.01)
 }
 
 // TestDifferentSampleRates tests conversion across supported sample rates

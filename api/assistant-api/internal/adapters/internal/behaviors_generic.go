@@ -204,11 +204,25 @@ func (r *genericRequestor) startIdleTimeoutTimer(ctx context.Context, inputDurat
 		timeoutDuration += inputDuration[0]
 	}
 
+	r.idleTimeoutDeadline = time.Now().Add(timeoutDuration)
 	r.idleTimeoutTimer = time.AfterFunc(timeoutDuration, func() {
 		if err := r.onIdleTimeout(ctx); err != nil {
 			r.logger.Errorf("error while handling idle timeout: %v", err)
 		}
 	})
+}
+
+// extendIdleTimeoutTimer pushes the existing idle timeout further into the future
+// by the given duration. Used to account for buffered TTS audio that the client
+// is still playing back.
+func (r *genericRequestor) extendIdleTimeoutTimer(d time.Duration) {
+	if r.idleTimeoutTimer == nil || d <= 0 {
+		return
+	}
+	r.idleTimeoutDeadline = r.idleTimeoutDeadline.Add(d)
+	if remaining := time.Until(r.idleTimeoutDeadline); remaining > 0 {
+		r.idleTimeoutTimer.Reset(remaining)
+	}
 }
 
 // ResetIdleTimeoutTimer resets the idle timeout timer when the user responds,
@@ -229,4 +243,5 @@ func (r *genericRequestor) stopIdleTimeoutTimer() {
 		r.idleTimeoutTimer = nil
 	}
 	r.idleTimeoutCount = 0
+	r.idleTimeoutDeadline = time.Time{}
 }

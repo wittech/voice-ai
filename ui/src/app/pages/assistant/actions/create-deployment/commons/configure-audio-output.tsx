@@ -15,7 +15,6 @@ import {
 import {
   CONJUNCTION_BOUNDARIES,
   PRONUNCIATION_DICTIONARIES,
-  SENTENCE_BOUNDRIES,
 } from '@/providers';
 
 /**
@@ -111,52 +110,6 @@ export const ConfigureAudioOutputProvider: React.FC<
           >
             <div className="space-y-6 w-full max-w-6xl">
               <FieldSet className="relative">
-                <FormLabel>Sentence Boundaries</FormLabel>
-                <Dropdown
-                  multiple
-                  className="bg-light-background dark:bg-gray-950 max-w-6xl"
-                  currentValue={getParamValue(
-                    'speaker.sentence.boundaries',
-                    SENTENCE_BOUNDRIES.join('<|||>'),
-                  ).split('<|||>')}
-                  setValue={v => {
-                    updateParameter(
-                      'speaker.sentence.boundaries',
-                      v.join('<|||>'),
-                    );
-                  }}
-                  allValue={SENTENCE_BOUNDRIES}
-                  placeholder="Select all that applies"
-                  option={c => {
-                    return (
-                      <span className="inline-flex items-center gap-2 sm:gap-2.5 max-w-full text-sm font-medium">
-                        <span className="truncate capitalize">{c}</span>
-                      </span>
-                    );
-                  }}
-                  label={c => {
-                    return (
-                      <span className="inline-flex items-center gap-2 sm:gap-2.5 max-w-full text-sm font-medium">
-                        {c.map(x => {
-                          return (
-                            <span key={x} className="truncate">
-                              {x}
-                            </span>
-                          );
-                        })}
-                      </span>
-                    );
-                  }}
-                />
-                <InputHelper>
-                  These are the sentence that are considered valid boundaries or
-                  delimiters. This helps decides the chunks that are sent to the
-                  voice provider for the voice generation as the LLM tokens are
-                  streaming in
-                </InputHelper>
-              </FieldSet>
-
-              <FieldSet className="relative">
                 <FormLabel>Pronunciation Dictionaries</FormLabel>
                 <Dropdown
                   multiple
@@ -241,9 +194,9 @@ export const ConfigureAudioOutputProvider: React.FC<
                   }}
                 />
                 <InputHelper>
-                  These are the punctuations that are considered valid
-                  boundaries or delimiters. This helps decides to add pause
-                  before delivering to voice provider
+                  These are the conjunction that are considered valid boundaries
+                  or delimiters. This helps decides to add pause before
+                  delivering to voice provider
                 </InputHelper>
               </FieldSet>
               <FieldSet className="col-span-1">

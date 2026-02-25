@@ -420,22 +420,21 @@ func (app *AppRunner) Migrate() error {
 		return fmt.Errorf("error fetching migration version: %w", err)
 	}
 	if dirty {
-		app.Logger.Warnf("Database is in a dirty state at version: %d. Trying to force clean...", version)
+		app.Logger.Warnf("Database is in a dirty state at version: %d. Forcing clean...", version)
 		if err := m.Force(int(version - 1)); err != nil {
 			return fmt.Errorf("failed to force migration version: %w", err)
 		}
-		app.Logger.Infof("Migration state forced to clean. You can restart migration.")
-		return nil
+		app.Logger.Infof("Migration state forced to clean at version: %d. Proceeding with migration.", version-1)
 	}
+
 	if err := m.Up(); err != nil {
 		if err == migrate.ErrNoChange {
 			app.Logger.Infof("No migration changes detected.")
-		} else {
-			return fmt.Errorf("migration failed: %w", err)
+			return nil
 		}
-	} else {
-		app.Logger.Infof("Migrations completed successfully.")
+		return fmt.Errorf("migration failed: %w", err)
 	}
 
+	app.Logger.Infof("Migrations completed successfully.")
 	return nil
 }

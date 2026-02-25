@@ -103,9 +103,10 @@ type genericRequestor struct {
 	options  map[string]interface{}
 
 	// experience
-	idleTimeoutTimer *time.Timer
-	idleTimeoutCount uint64
-	maxSessionTimer  *time.Timer
+	idleTimeoutTimer    *time.Timer
+	idleTimeoutDeadline time.Time // when the current idle timer is set to fire
+	idleTimeoutCount    uint64
+	maxSessionTimer     *time.Timer
 }
 
 func NewGenericRequestor(

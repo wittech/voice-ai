@@ -289,13 +289,11 @@ func (eService *assistantToolService) CreateLog(
 	ctx context.Context,
 	auth types.SimplePrinciple,
 	assistantId, conversationId uint64,
-	toolId uint64,
 	messageId string,
+	toolCallId string,
 	toolName string,
-	timeTaken int64,
-	executionMethod string,
 	status type_enums.RecordState,
-	request, response []byte,
+	request []byte,
 ) (*internal_assistant_entity.AssistantToolLog, error) {
 	start := time.Now()
 	db := eService.postgres.DB(ctx)
@@ -306,11 +304,6 @@ func (eService *assistantToolService) CreateLog(
 		eService.storage.Store(ctx, key, request)
 	})
 
-	utils.Go(ctx, func() {
-		key := eService.ObjectKey(s3Prefix, _auditId, "response.json")
-		eService.storage.Store(ctx, key, response)
-	})
-
 	toolLog := &internal_assistant_entity.AssistantToolLog{
 		Audited: gorm_models.Audited{
 			Id: _auditId,
@@ -318,11 +311,9 @@ func (eService *assistantToolService) CreateLog(
 		AssistantId:                    assistantId,
 		AssistantConversationId:        conversationId,
 		AssistantConversationMessageId: messageId,
-		ExecutionMethod:                executionMethod,
-		AssistantToolId:                toolId,
+		ToolCallId:                     toolCallId,
 		AssistantToolName:              toolName,
 		AssetPrefix:                    s3Prefix,
-		TimeTaken:                      timeTaken,
 		Organizational: gorm_models.Organizational{
 			ProjectId:      *auth.GetCurrentProjectId(),
 			OrganizationId: *auth.GetCurrentOrganizationId(),
@@ -333,12 +324,48 @@ func (eService *assistantToolService) CreateLog(
 	}
 	tx := db.Create(&toolLog)
 	if tx.Error != nil {
-		eService.logger.Benchmark("eService.Create", time.Since(start))
-		eService.logger.Errorf("error while creating webhook log %v", tx.Error)
+		eService.logger.Benchmark("eService.CreateLog", time.Since(start))
+		eService.logger.Errorf("error while creating tool log %v", tx.Error)
 		return nil, tx.Error
 	}
-	eService.logger.Benchmark("eService.Create", time.Since(start))
+	eService.logger.Benchmark("eService.CreateLog", time.Since(start))
 	return toolLog, nil
+}
+
+func (eService *assistantToolService) UpdateLog(
+	ctx context.Context,
+	auth types.SimplePrinciple,
+	toolCallId string,
+	conversationId uint64,
+	timeTaken int64,
+	status type_enums.RecordState,
+	response []byte,
+) (*internal_assistant_entity.AssistantToolLog, error) {
+	start := time.Now()
+	db := eService.postgres.DB(ctx)
+
+	var toolLog internal_assistant_entity.AssistantToolLog
+	if tx := db.Where("tool_call_id = ? AND assistant_conversation_id = ?", toolCallId, conversationId).First(&toolLog); tx.Error != nil {
+		eService.logger.Errorf("error finding tool log for tool_call_id %s: %v", toolCallId, tx.Error)
+		return nil, tx.Error
+	}
+
+	utils.Go(ctx, func() {
+		key := eService.ObjectKey(toolLog.AssetPrefix, toolLog.Id, "response.json")
+		eService.storage.Store(ctx, key, response)
+	})
+
+	tx := db.Model(&toolLog).Updates(map[string]interface{}{
+		"time_taken": timeTaken,
+		"status":     status,
+	})
+	if tx.Error != nil {
+		eService.logger.Benchmark("eService.UpdateLog", time.Since(start))
+		eService.logger.Errorf("error while updating tool log %v", tx.Error)
+		return nil, tx.Error
+	}
+	eService.logger.Benchmark("eService.UpdateLog", time.Since(start))
+	return &toolLog, nil
 }
 
 func (eService *assistantToolService) GetLog(

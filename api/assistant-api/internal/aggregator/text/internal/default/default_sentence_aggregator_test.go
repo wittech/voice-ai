@@ -9,7 +9,6 @@ package internal_default_aggregator
 import (
 	"context"
 	"fmt"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -17,25 +16,9 @@ import (
 
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 	"github.com/rapidaai/pkg/commons"
-	"github.com/rapidaai/pkg/utils"
 )
 
-// Helper function to create mock options
-func newMockOptions(boundaries string) utils.Option {
-	opts := utils.Option(make(map[string]interface{}))
-	if boundaries != "" {
-		// Split boundaries into individual characters and join with commons.SEPARATOR
-		// This matches how the aggregator expects boundaries to be configured
-		var parts []string
-		for _, ch := range boundaries {
-			parts = append(parts, string(ch))
-		}
-		opts["speaker.sentence.boundaries"] = strings.Join(parts, commons.SEPARATOR)
-	}
-	return opts
-}
-
-// Helper function to collect results from aggregator
+// collectResults drains the result channel until closed, context cancelled, or timeout.
 func collectResults(ctx context.Context, resultChan <-chan internal_type.Packet) []internal_type.Packet {
 	var results []internal_type.Packet
 	for {
@@ -53,72 +36,27 @@ func collectResults(ctx context.Context, resultChan <-chan internal_type.Packet)
 	}
 }
 
-// Tests
-
 func TestNewDefaultLLMTextAggregator(t *testing.T) {
-	tests := []struct {
-		name           string
-		boundaries     string
-		shouldError    bool
-		expectedBounds bool
-	}{
-		{
-			name:           "with valid boundaries",
-			boundaries:     ".,?!",
-			shouldError:    false,
-			expectedBounds: true,
-		},
-		{
-			name:           "with empty boundaries",
-			boundaries:     "",
-			shouldError:    false,
-			expectedBounds: false,
-		},
-		{
-			name:           "with single boundary",
-			boundaries:     ".",
-			shouldError:    false,
-			expectedBounds: true,
-		},
-		{
-			name:           "with semicolon separated boundaries",
-			boundaries:     ".,?!;:",
-			shouldError:    false,
-			expectedBounds: true,
-		},
+	logger, _ := commons.NewApplicationLogger()
+
+	aggregator, err := NewDefaultLLMTextAggregator(t.Context(), logger)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
+	if aggregator == nil {
+		t.Fatal("aggregator is nil")
+	}
+	defer aggregator.Close()
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			logger, _ := commons.NewApplicationLogger()
-			opts := newMockOptions(tt.boundaries)
-
-			aggregator, err := NewDefaultLLMTextAggregator(t.Context(), logger, opts)
-			if tt.shouldError && err != nil {
-				return
-			}
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if aggregator == nil {
-				t.Fatal("aggregator is nil")
-			}
-
-			defer aggregator.Close()
-
-			st := aggregator.(*textAggregator)
-			if st.hasBoundaries != tt.expectedBounds {
-				t.Errorf("expected hasBoundaries=%v, got %v", tt.expectedBounds, st.hasBoundaries)
-			}
-		})
+	st := aggregator.(*textAggregator)
+	if st.boundaryRegex == nil {
+		t.Error("expected boundaryRegex to be set")
 	}
 }
 
 func TestSingleText(t *testing.T) {
 	logger, _ := commons.NewApplicationLogger()
-	opts := newMockOptions(".")
-	aggregator, _ := NewDefaultLLMTextAggregator(t.Context(), logger, opts)
+	aggregator, _ := NewDefaultLLMTextAggregator(t.Context(), logger)
 	defer aggregator.Close()
 
 	ctx := context.Background()
@@ -127,36 +65,32 @@ func TestSingleText(t *testing.T) {
 		Text:      "Hello world.",
 	})
 	if err != nil {
-		t.Fatalf("Assemble failed: %v", err)
+		t.Fatalf("Aggregate failed: %v", err)
 	}
 
 	results := collectResults(ctx, aggregator.Result())
 	if len(results) != 1 {
-		t.Errorf("expected 1 result, got %d", len(results))
-		return
+		t.Fatalf("expected 1 result, got %d", len(results))
 	}
 
-	// Handle both AssembledText and other AssemblerOutput types
-	if ts, ok := results[0].(internal_type.LLMResponseDeltaPacket); ok {
-		if ts.Text != "Hello world." {
-			t.Errorf("expected 'Hello world.', got '%s'", ts.Text)
-		}
-		if ts.ContextID != "speaker1" {
-			t.Errorf("expected context 'speaker1', got '%s'", ts.ContextID)
-		}
-	} else {
-		t.Errorf("unexpected result type: %T", results[0])
+	ts, ok := results[0].(internal_type.LLMResponseDeltaPacket)
+	if !ok {
+		t.Fatalf("unexpected result type: %T", results[0])
+	}
+	if ts.Text != "Hello world." {
+		t.Errorf("expected 'Hello world.', got %q", ts.Text)
+	}
+	if ts.ContextID != "speaker1" {
+		t.Errorf("expected context 'speaker1', got %q", ts.ContextID)
 	}
 }
 
 func TestMultipleTexts(t *testing.T) {
 	logger, _ := commons.NewApplicationLogger()
-	opts := newMockOptions(".")
-	aggregator, _ := NewDefaultLLMTextAggregator(t.Context(), logger, opts)
+	aggregator, _ := NewDefaultLLMTextAggregator(t.Context(), logger)
 	defer aggregator.Close()
 
 	ctx := context.Background()
-
 	sentences := []string{
 		"First sentence.",
 		" Second sentence.",
@@ -173,17 +107,15 @@ func TestMultipleTexts(t *testing.T) {
 	}()
 
 	results := collectResults(ctx, aggregator.Result())
-
 	if len(results) != 3 {
-		t.Errorf("expected 3 results, got %d", len(results))
-		return
+		t.Fatalf("expected 3 results, got %d", len(results))
 	}
 
 	expected := []string{"First sentence.", "Second sentence.", "Third sentence."}
 	for i, result := range results {
 		if ts, ok := result.(internal_type.LLMResponseDeltaPacket); ok {
 			if ts.Text != expected[i] {
-				t.Errorf("result %d: expected '%s', got '%s'", i, expected[i], ts.Text)
+				t.Errorf("result %d: expected %q, got %q", i, expected[i], ts.Text)
 			}
 		}
 	}
@@ -191,70 +123,111 @@ func TestMultipleTexts(t *testing.T) {
 
 func TestMultipleBoundaries(t *testing.T) {
 	logger, _ := commons.NewApplicationLogger()
-	opts := newMockOptions(".,?!")
 	ctx := context.Background()
 
+	// When all text is sent in a single Aggregate call, the aggregator emits
+	// all complete text up to the last boundary as one coalesced result.
 	testCases := []struct {
-		input    string
-		expected int
+		input        string
+		expected     int
+		expectedText string
 	}{
-		{"What a day!", 1},
-		{"Is this real?", 1},
-		{"Sure, let's go.", 2}, // Now correctly splits on both comma and period
-		{"One. Two? Three!", 3},
+		{"What a day!", 1, "What a day!"},
+		{"Is this real?", 1, "Is this real?"},
+		{"Sure; let's go.", 1, "Sure; let's go."},
+		{"One. Two? Three!", 1, "One. Two? Three!"},
 	}
 
 	for _, tc := range testCases {
-		aggregator, _ := NewDefaultLLMTextAggregator(t.Context(), logger, opts)
+		aggregator, _ := NewDefaultLLMTextAggregator(t.Context(), logger)
 
-		// Count results through channel
-		resultCount := 0
-		go func() {
-			aggregator.Aggregate(ctx, internal_type.LLMResponseDeltaPacket{
-				ContextID: "speaker1",
-				Text:      tc.input,
-			})
-		}()
-
-		// Give it time to process
-		time.Sleep(50 * time.Millisecond)
-
-		// Drain channel
-		for len(aggregator.Result()) > 0 {
-			select {
-			case _, ok := <-aggregator.Result():
-				if ok {
-					resultCount++
-				}
-			default:
-				break
-			}
+		err := aggregator.Aggregate(ctx, internal_type.LLMResponseDeltaPacket{
+			ContextID: "speaker1",
+			Text:      tc.input,
+		})
+		if err != nil {
+			t.Fatalf("Aggregate failed: %v", err)
 		}
 
-		if resultCount != tc.expected {
-			t.Logf("input '%s': got %d results (expected %d)", tc.input, resultCount, tc.expected)
+		results := collectResults(ctx, aggregator.Result())
+
+		if len(results) != tc.expected {
+			t.Errorf("input %q: got %d results (expected %d)", tc.input, len(results), tc.expected)
+		}
+
+		if len(results) > 0 {
+			if ts, ok := results[0].(internal_type.LLMResponseDeltaPacket); ok {
+				if ts.Text != tc.expectedText {
+					t.Errorf("input %q: expected text %q, got %q", tc.input, tc.expectedText, ts.Text)
+				}
+			}
 		}
 
 		aggregator.Close()
 	}
 }
 
+func TestUnicodeBoundaries(t *testing.T) {
+	logger, _ := commons.NewApplicationLogger()
+	ctx := context.Background()
+
+	// When all text is sent in a single Aggregate call, the aggregator coalesces
+	// all complete text up to the last boundary into one result.
+	testCases := []struct {
+		name         string
+		input        string
+		expected     int
+		expectedText string
+	}{
+		{"Japanese period", "こんにちは。元気ですか。", 1, "こんにちは。元気ですか。"},
+		{"Devanagari danda", "नमस्ते। कैसे हैं।", 1, "नमस्ते। कैसे हैं।"},
+		{"Ellipsis", "Wait… Really…", 1, "Wait… Really…"},
+		{"Fullwidth period", "テスト．完了．", 1, "テスト．完了．"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			aggregator, _ := NewDefaultLLMTextAggregator(t.Context(), logger)
+
+			err := aggregator.Aggregate(ctx, internal_type.LLMResponseDeltaPacket{
+				ContextID: "speaker1",
+				Text:      tc.input,
+			})
+			if err != nil {
+				t.Fatalf("Aggregate failed: %v", err)
+			}
+
+			results := collectResults(ctx, aggregator.Result())
+
+			if len(results) != tc.expected {
+				t.Errorf("input %q: got %d results (expected %d)", tc.input, len(results), tc.expected)
+			}
+
+			if len(results) > 0 {
+				if ts, ok := results[0].(internal_type.LLMResponseDeltaPacket); ok {
+					if ts.Text != tc.expectedText {
+						t.Errorf("input %q: expected text %q, got %q", tc.input, tc.expectedText, ts.Text)
+					}
+				}
+			}
+
+			aggregator.Close()
+		})
+	}
+}
+
 func TestContextSwitching(t *testing.T) {
 	logger, _ := commons.NewApplicationLogger()
-	opts := newMockOptions(".")
-	aggregator, _ := NewDefaultLLMTextAggregator(t.Context(), logger, opts)
+	aggregator, _ := NewDefaultLLMTextAggregator(t.Context(), logger)
 	defer aggregator.Close()
 
 	ctx := context.Background()
 
 	go func() {
-		// Speaker 1 starts with boundary
 		aggregator.Aggregate(ctx, internal_type.LLMResponseDeltaPacket{
 			ContextID: "speaker1",
 			Text:      "Hello there.",
 		})
-
-		// Speaker 2 continues with boundary
 		aggregator.Aggregate(ctx, internal_type.LLMResponseDeltaPacket{
 			ContextID: "speaker2",
 			Text:      "Goodbye.",
@@ -262,27 +235,23 @@ func TestContextSwitching(t *testing.T) {
 	}()
 
 	results := collectResults(ctx, aggregator.Result())
-
 	if len(results) < 2 {
-		t.Errorf("expected at least 2 results, got %d", len(results))
-		return
+		t.Fatalf("expected at least 2 results, got %d", len(results))
 	}
 
-	// Check speaker1 and speaker2 results
-	foundSpeaker1 := false
-	foundSpeaker2 := false
+	foundSpeaker1, foundSpeaker2 := false, false
 	for _, result := range results {
 		if ts, ok := result.(internal_type.LLMResponseDeltaPacket); ok {
-			if ts.ContextID == "speaker1" {
+			switch ts.ContextID {
+			case "speaker1":
 				foundSpeaker1 = true
 				if ts.Text != "Hello there." {
-					t.Errorf("speaker1 expected 'Hello there.', got '%s'", ts.Text)
+					t.Errorf("speaker1 expected 'Hello there.', got %q", ts.Text)
 				}
-			}
-			if ts.ContextID == "speaker2" {
+			case "speaker2":
 				foundSpeaker2 = true
 				if ts.Text != "Goodbye." {
-					t.Errorf("speaker2 expected 'Goodbye.', got '%s'", ts.Text)
+					t.Errorf("speaker2 expected 'Goodbye.', got %q", ts.Text)
 				}
 			}
 		}
@@ -295,70 +264,51 @@ func TestContextSwitching(t *testing.T) {
 	}
 }
 
-func TestIsCompleteFlag(t *testing.T) {
+func TestDonePacketFlush(t *testing.T) {
 	logger, _ := commons.NewApplicationLogger()
-	opts := newMockOptions(".")
-	aggregator, _ := NewDefaultLLMTextAggregator(t.Context(), logger, opts)
+	aggregator, _ := NewDefaultLLMTextAggregator(t.Context(), logger)
 	defer aggregator.Close()
 
 	ctx := context.Background()
 
 	go func() {
-		// Send incomplete sentence without boundary
 		aggregator.Aggregate(ctx, internal_type.LLMResponseDeltaPacket{
 			ContextID: "speaker1",
 			Text:      "This is incomplete",
 		})
-		// Force completion with Flush
 		aggregator.Aggregate(ctx, internal_type.LLMResponseDonePacket{
 			ContextID: "speaker1",
 		})
 	}()
 
 	results := collectResults(ctx, aggregator.Result())
-
-	// Should get: AssembledText + Flush message
 	if len(results) != 2 {
-		t.Errorf("expected 2 results (sentence + flush), got %d", len(results))
-		return
+		t.Fatalf("expected 2 results (flushed text + done), got %d", len(results))
 	}
 
-	// First result should be the flushed sentence (can be value or pointer)
-	var sentence string
-	if ts, ok := results[0].(internal_type.LLMResponseDeltaPacket); ok {
-		sentence = ts.Text
-	} else if ts, ok := results[0].(internal_type.LLMResponseDeltaPacket); ok {
-		sentence = ts.Text
-	} else {
-		t.Errorf("expected first result to be AssembledText, got %T", results[0])
-		return
+	if ts, ok := results[0].(internal_type.LLMResponseDeltaPacket); !ok {
+		t.Errorf("expected first result to be LLMResponseDeltaPacket, got %T", results[0])
+	} else if ts.Text != "This is incomplete" {
+		t.Errorf("expected flushed text 'This is incomplete', got %q", ts.Text)
 	}
 
-	if sentence != "This is incomplete" {
-		t.Errorf("expected 'This is incomplete', got '%s'", sentence)
-	}
-
-	// Second result should be the Flush message
 	if _, ok := results[1].(internal_type.LLMResponseDonePacket); !ok {
-		t.Errorf("expected second result to be Flush message, got %T", results[1])
+		t.Errorf("expected second result to be LLMResponseDonePacket, got %T", results[1])
 	}
 }
 
 func TestEmptyInput(t *testing.T) {
 	logger, _ := commons.NewApplicationLogger()
-	opts := newMockOptions(".")
-	aggregator, _ := NewDefaultLLMTextAggregator(t.Context(), logger, opts)
+	aggregator, _ := NewDefaultLLMTextAggregator(t.Context(), logger)
 	defer aggregator.Close()
 
 	ctx := context.Background()
-
 	err := aggregator.Aggregate(ctx, internal_type.LLMResponseDeltaPacket{
 		ContextID: "speaker1",
 		Text:      "",
 	})
-
 	if err != nil {
-		t.Fatalf("Assemble should not error on empty input: %v", err)
+		t.Fatalf("Aggregate should not error on empty input: %v", err)
 	}
 
 	results := collectResults(ctx, aggregator.Result())
@@ -367,56 +317,12 @@ func TestEmptyInput(t *testing.T) {
 	}
 }
 
-func TestNoBoundariesDefined(t *testing.T) {
-	logger, _ := commons.NewApplicationLogger()
-	opts := newMockOptions("")
-	aggregator, _ := NewDefaultLLMTextAggregator(t.Context(), logger, opts)
-	defer aggregator.Close()
-
-	ctx := context.Background()
-
-	go func() {
-		// Without boundaries, we can only get output with Flush
-		aggregator.Aggregate(ctx, internal_type.LLMResponseDeltaPacket{
-			ContextID: "speaker1",
-			Text:      "Hello world",
-		})
-
-		aggregator.Aggregate(ctx, internal_type.LLMResponseDeltaPacket{
-			ContextID: "speaker1",
-			Text:      " this is great",
-		})
-
-		// Flush to trigger output
-		aggregator.Aggregate(ctx, internal_type.LLMResponseDonePacket{
-			ContextID: "speaker1",
-		})
-	}()
-
-	results := collectResults(ctx, aggregator.Result())
-
-	// Should have at least one result (the flushed one)
-	if len(results) < 1 {
-		t.Errorf("expected at least 1 result without boundaries, got %d", len(results))
-		return
-	}
-
-	if ts, ok := results[0].(internal_type.LLMResponseDeltaPacket); ok {
-		if ts.Text != "Hello world this is great" {
-			t.Errorf("expected 'Hello world this is great', got '%s'", ts.Text)
-		}
-	}
-}
-
 func TestContextCancellation(t *testing.T) {
 	logger, _ := commons.NewApplicationLogger()
-	opts := newMockOptions(".")
-	aggregator, _ := NewDefaultLLMTextAggregator(t.Context(), logger, opts)
+	aggregator, _ := NewDefaultLLMTextAggregator(t.Context(), logger)
 	defer aggregator.Close()
 
 	ctx, cancel := context.WithCancel(context.Background())
-
-	// Cancel context immediately
 	cancel()
 
 	err := aggregator.Aggregate(ctx, internal_type.LLMResponseDeltaPacket{
@@ -424,29 +330,22 @@ func TestContextCancellation(t *testing.T) {
 		Text:      "Hello.",
 	})
 
-	if err == nil {
-		// When context is already cancelled, Assemble may not return an error
-		// if the select case for sending on the channel is not reached
-		// This is acceptable behavior
-		return
-	}
-
-	if err != context.Canceled {
-		t.Errorf("expected context.Canceled error, got %v", err)
+	// When context is already cancelled, Aggregate may or may not return an error
+	// depending on whether the channel send or ctx.Done() wins the select race.
+	if err != nil && err != context.Canceled {
+		t.Errorf("expected nil or context.Canceled, got %v", err)
 	}
 }
 
 func TestConcurrentContexts(t *testing.T) {
 	logger, _ := commons.NewApplicationLogger()
-	opts := newMockOptions(".")
-	aggregator, _ := NewDefaultLLMTextAggregator(t.Context(), logger, opts)
+	aggregator, _ := NewDefaultLLMTextAggregator(t.Context(), logger)
 	defer aggregator.Close()
 
 	ctx := context.Background()
 	var wg sync.WaitGroup
 	resultCount := atomic.Int32{}
 
-	// Simulate multiple speakers concurrently
 	for speaker := 0; speaker < 3; speaker++ {
 		wg.Add(1)
 		go func(speakerID int) {
@@ -466,39 +365,31 @@ func TestConcurrentContexts(t *testing.T) {
 		aggregator.Close()
 	}()
 
-	// Collect results
 	for range aggregator.Result() {
 		resultCount.Add(1)
 	}
 
-	// Should have received multiple sentences
 	if resultCount.Load() == 0 {
-		t.Error("expected to receive some results from concurrent tokenization")
+		t.Error("expected to receive some results from concurrent aggregation")
 	}
 }
 
 func TestBufferStateMaintenance(t *testing.T) {
 	logger, _ := commons.NewApplicationLogger()
-	opts := newMockOptions(".")
-	aggregator, _ := NewDefaultLLMTextAggregator(t.Context(), logger, opts)
+	aggregator, _ := NewDefaultLLMTextAggregator(t.Context(), logger)
 	defer aggregator.Close()
 
 	ctx := context.Background()
 
 	go func() {
-		// Send partial sentence
 		aggregator.Aggregate(ctx, internal_type.LLMResponseDeltaPacket{
 			ContextID: "speaker1",
 			Text:      "Hello",
 		})
-
-		// Continue with no boundary
 		aggregator.Aggregate(ctx, internal_type.LLMResponseDeltaPacket{
 			ContextID: "speaker1",
 			Text:      " world",
 		})
-
-		// Now add boundary
 		aggregator.Aggregate(ctx, internal_type.LLMResponseDeltaPacket{
 			ContextID: "speaker1",
 			Text:      ".",
@@ -506,21 +397,18 @@ func TestBufferStateMaintenance(t *testing.T) {
 	}()
 
 	results := collectResults(ctx, aggregator.Result())
-
 	if len(results) != 1 {
-		t.Errorf("expected 1 result, got %d", len(results))
-		return
+		t.Fatalf("expected 1 result, got %d", len(results))
 	}
 
 	if ts, ok := results[0].(internal_type.LLMResponseDeltaPacket); ok && ts.Text != "Hello world." {
-		t.Errorf("expected 'Hello world.', got '%s'", ts.Text)
+		t.Errorf("expected 'Hello world.', got %q", ts.Text)
 	}
 }
 
 func TestWhitespaceHandling(t *testing.T) {
 	logger, _ := commons.NewApplicationLogger()
-	opts := newMockOptions(".")
-	aggregator, _ := NewDefaultLLMTextAggregator(t.Context(), logger, opts)
+	aggregator, _ := NewDefaultLLMTextAggregator(t.Context(), logger)
 	defer aggregator.Close()
 
 	ctx := context.Background()
@@ -537,25 +425,19 @@ func TestWhitespaceHandling(t *testing.T) {
 	}()
 
 	results := collectResults(ctx, aggregator.Result())
-
-	// Should trim whitespace appropriately
 	if len(results) < 1 {
-		t.Errorf("expected at least 1 result, got %d", len(results))
-		return
+		t.Fatalf("expected at least 1 result, got %d", len(results))
 	}
 
-	// First sentence should be trimmed
 	if ts, ok := results[0].(internal_type.LLMResponseDeltaPacket); ok && ts.Text != "Hello." {
-		t.Errorf("expected 'Hello.', got '%s'", ts.Text)
+		t.Errorf("expected 'Hello.', got %q", ts.Text)
 	}
 }
 
 func TestMultipleClose(t *testing.T) {
 	logger, _ := commons.NewApplicationLogger()
-	opts := newMockOptions(".")
-	aggregator, _ := NewDefaultLLMTextAggregator(t.Context(), logger, opts)
+	aggregator, _ := NewDefaultLLMTextAggregator(t.Context(), logger)
 
-	// Close multiple times should not panic
 	err1 := aggregator.Close()
 	err2 := aggregator.Close()
 
@@ -566,13 +448,11 @@ func TestMultipleClose(t *testing.T) {
 
 func TestResultChannelClosure(t *testing.T) {
 	logger, _ := commons.NewApplicationLogger()
-	opts := newMockOptions(".")
-	aggregator, _ := NewDefaultLLMTextAggregator(t.Context(), logger, opts)
+	aggregator, _ := NewDefaultLLMTextAggregator(t.Context(), logger)
 
 	resultChan := aggregator.Result()
 	aggregator.Close()
 
-	// Try to read from closed channel
 	_, ok := <-resultChan
 	if ok {
 		t.Error("expected channel to be closed")
@@ -581,10 +461,7 @@ func TestResultChannelClosure(t *testing.T) {
 
 func TestSpecialCharacterBoundaries(t *testing.T) {
 	logger, _ := commons.NewApplicationLogger()
-
-	// Test with regex special characters
-	opts := newMockOptions(".?!*+")
-	aggregator, _ := NewDefaultLLMTextAggregator(t.Context(), logger, opts)
+	aggregator, _ := NewDefaultLLMTextAggregator(t.Context(), logger)
 	defer aggregator.Close()
 
 	ctx := context.Background()
@@ -597,17 +474,18 @@ func TestSpecialCharacterBoundaries(t *testing.T) {
 	}()
 
 	results := collectResults(ctx, aggregator.Result())
-	if len(results) > 0 {
-		if ts, ok := results[0].(internal_type.LLMResponseDeltaPacket); ok && ts.Text != "Really?" {
-			t.Errorf("special character boundary failed: got '%s'", ts.Text)
-		}
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+
+	if ts, ok := results[0].(internal_type.LLMResponseDeltaPacket); ok && ts.Text != "Really?" {
+		t.Errorf("special character boundary failed: got %q", ts.Text)
 	}
 }
 
 func TestLargeBatch(t *testing.T) {
 	logger, _ := commons.NewApplicationLogger()
-	opts := newMockOptions(".")
-	aggregator, _ := NewDefaultLLMTextAggregator(t.Context(), logger, opts)
+	aggregator, _ := NewDefaultLLMTextAggregator(t.Context(), logger)
 	defer aggregator.Close()
 
 	ctx := context.Background()
@@ -623,7 +501,6 @@ func TestLargeBatch(t *testing.T) {
 	}()
 
 	results := collectResults(ctx, aggregator.Result())
-
 	if len(results) != batchSize {
 		t.Errorf("expected %d results, got %d", batchSize, len(results))
 	}
@@ -631,13 +508,11 @@ func TestLargeBatch(t *testing.T) {
 
 func TestLLMStreamingInput(t *testing.T) {
 	logger, _ := commons.NewApplicationLogger()
-	opts := newMockOptions(".!?")
-	aggregator, _ := NewDefaultLLMTextAggregator(t.Context(), logger, opts)
+	aggregator, _ := NewDefaultLLMTextAggregator(t.Context(), logger)
 	defer aggregator.Close()
 
 	ctx := context.Background()
 
-	// Simulate LLM streaming tokens/chunks
 	llmChunks := []string{
 		"Hello",
 		" world",
@@ -653,64 +528,44 @@ func TestLLMStreamingInput(t *testing.T) {
 		"!",
 	}
 
-	// Channel to signal when streaming is done
 	done := make(chan bool)
 	var results []internal_type.Packet
 
-	// Start goroutine to collect results WHILE streaming happens
 	go func() {
 		resultChan := aggregator.Result()
 		for {
 			select {
 			case result, ok := <-resultChan:
 				if !ok {
-					t.Logf("Result channel closed")
 					done <- true
 					return
 				}
 				results = append(results, result)
-				if ts, ok := result.(internal_type.LLMResponseDeltaPacket); ok {
-					t.Logf("Received result: %q", ts.Text)
-				}
-
 			case <-time.After(500 * time.Millisecond):
-				// Timeout - no more results coming
-				t.Logf("Result collection timeout")
 				done <- true
 				return
 			}
 		}
 	}()
 
-	// Send all chunks
 	go func() {
-		for i, chunk := range llmChunks {
-			t.Logf("Sending chunk %d: %q", i, chunk)
-			err := aggregator.Aggregate(ctx, internal_type.LLMResponseDeltaPacket{
+		for _, chunk := range llmChunks {
+			if err := aggregator.Aggregate(ctx, internal_type.LLMResponseDeltaPacket{
 				ContextID: "llm",
 				Text:      chunk,
-			})
-			if err != nil {
-				t.Errorf("Assemble failed: %v", err)
+			}); err != nil {
+				t.Errorf("Aggregate failed: %v", err)
 				return
 			}
 			time.Sleep(5 * time.Millisecond)
 		}
-		t.Logf("All chunks sent, closing aggregator...")
 		aggregator.Close()
 	}()
 
-	// Wait for collection to finish
 	<-done
 
-	t.Logf("Total results received: %d", len(results))
-
 	if len(results) != 2 {
-		t.Logf("WARNING: expected 2 sentences from LLM stream, got %d", len(results))
-		if len(results) == 0 {
-			t.Log("No results received - this indicates the aggregator is not emitting sentences")
-		}
-		return
+		t.Fatalf("expected 2 sentences from LLM stream, got %d", len(results))
 	}
 
 	expected := []string{
@@ -719,39 +574,32 @@ func TestLLMStreamingInput(t *testing.T) {
 	}
 
 	for i, r := range results {
-		logger.Debugf("result %+v", r)
-		if ts, ok := r.(internal_type.LLMResponseDeltaPacket); ok {
-			if ts.ContextID != "llm" {
-				t.Errorf("result %d: expected context 'llm', got '%s'", i, ts.ContextID)
-			}
-			if ts.Text != expected[i] {
-				t.Errorf("result %d: expected '%s', got '%s'", i, expected[i], ts.Text)
-			}
+		ts, ok := r.(internal_type.LLMResponseDeltaPacket)
+		if !ok {
+			t.Errorf("result %d: unexpected type %T", i, r)
+			continue
+		}
+		if ts.ContextID != "llm" {
+			t.Errorf("result %d: expected context 'llm', got %q", i, ts.ContextID)
+		}
+		if ts.Text != expected[i] {
+			t.Errorf("result %d: expected %q, got %q", i, expected[i], ts.Text)
 		}
 	}
 }
 
 func TestLLMStreamingWithPauses(t *testing.T) {
 	logger, _ := commons.NewApplicationLogger()
-	opts := newMockOptions(".!?")
-	aggregator, _ := NewDefaultLLMTextAggregator(t.Context(), logger, opts)
+	aggregator, _ := NewDefaultLLMTextAggregator(t.Context(), logger)
 	defer aggregator.Close()
 
 	ctx := context.Background()
-
-	chunks := []string{
-		"This",
-		" sentence",
-		" arrives",
-		" slowly",
-		".",
-	}
+	chunks := []string{"This", " sentence", " arrives", " slowly", "."}
 
 	var results []internal_type.Packet
-
 	go func() {
 		for _, chunk := range chunks {
-			time.Sleep(50 * time.Millisecond) // simulate slow LLM token stream
+			time.Sleep(50 * time.Millisecond)
 			_ = aggregator.Aggregate(ctx, internal_type.LLMResponseDeltaPacket{
 				ContextID: "llm",
 				Text:      chunk,
@@ -775,26 +623,21 @@ func TestLLMStreamingWithPauses(t *testing.T) {
 
 func TestLLMStreamingWithContextSwitch(t *testing.T) {
 	logger, _ := commons.NewApplicationLogger()
-	opts := newMockOptions(".!?")
-	aggregator, _ := NewDefaultLLMTextAggregator(t.Context(), logger, opts)
+	aggregator, _ := NewDefaultLLMTextAggregator(t.Context(), logger)
 	defer aggregator.Close()
 
 	ctx := context.Background()
 	var results []internal_type.Packet
 
 	go func() {
-		// LLM A starts streaming (with boundary to get output)
 		_ = aggregator.Aggregate(ctx, internal_type.LLMResponseDeltaPacket{
 			ContextID: "llm-A",
 			Text:      "LLM A is speaking.",
 		})
-
-		// LLM B interrupts
 		_ = aggregator.Aggregate(ctx, internal_type.LLMResponseDeltaPacket{
 			ContextID: "llm-B",
 			Text:      "Hello from B.",
 		})
-
 		aggregator.Close()
 	}()
 
@@ -814,13 +657,10 @@ func TestLLMStreamingWithContextSwitch(t *testing.T) {
 
 	foundB := false
 	for _, r := range results {
-		if ts, ok := r.(internal_type.LLMResponseDeltaPacket); ok {
-			if ts.ContextID == "llm-B" {
-				foundB = true
-			}
+		if ts, ok := r.(internal_type.LLMResponseDeltaPacket); ok && ts.ContextID == "llm-B" {
+			foundB = true
 		}
 	}
-
 	if !foundB {
 		t.Error("expected output from llm-B after context switch")
 	}
@@ -828,25 +668,20 @@ func TestLLMStreamingWithContextSwitch(t *testing.T) {
 
 func TestLLMStreamingForcedCompletion(t *testing.T) {
 	logger, _ := commons.NewApplicationLogger()
-	opts := newMockOptions(".!?")
-	aggregator, _ := NewDefaultLLMTextAggregator(t.Context(), logger, opts)
+	aggregator, _ := NewDefaultLLMTextAggregator(t.Context(), logger)
 	defer aggregator.Close()
 
 	ctx := context.Background()
 	var results []internal_type.Packet
 
 	go func() {
-		// Stream without punctuation
 		_ = aggregator.Aggregate(ctx, internal_type.LLMResponseDeltaPacket{
 			ContextID: "llm",
 			Text:      "This sentence never ends",
 		})
-
-		// Force flush to emit the buffered sentence
 		_ = aggregator.Aggregate(ctx, internal_type.LLMResponseDonePacket{
 			ContextID: "llm",
 		})
-
 		aggregator.Close()
 	}()
 
@@ -854,60 +689,40 @@ func TestLLMStreamingForcedCompletion(t *testing.T) {
 		results = append(results, r)
 	}
 
-	// Should get: AssembledText + Flush
 	if len(results) != 2 {
-		t.Fatalf("expected 2 results (sentence + flush), got %d", len(results))
+		t.Fatalf("expected 2 results (flushed text + done), got %d", len(results))
 	}
 
-	var sentence string
-	if ts, ok := results[0].(internal_type.LLMResponseDeltaPacket); ok {
-		sentence = ts.Text
-	} else if ts, ok := results[0].(internal_type.LLMResponseDeltaPacket); ok {
-		sentence = ts.Text
-	} else {
-		t.Fatalf("expected first result to be AssembledText, got %T", results[0])
-	}
-
-	if sentence != "This sentence never ends" {
-		t.Errorf("unexpected sentence: %q", sentence)
+	if ts, ok := results[0].(internal_type.LLMResponseDeltaPacket); !ok {
+		t.Errorf("expected first result to be LLMResponseDeltaPacket, got %T", results[0])
+	} else if ts.Text != "This sentence never ends" {
+		t.Errorf("expected flushed text 'This sentence never ends', got %q", ts.Text)
 	}
 
 	if _, ok := results[1].(internal_type.LLMResponseDonePacket); !ok {
-		t.Errorf("expected second result to be Flush message, got %T", results[1])
+		t.Errorf("expected second result to be LLMResponseDonePacket, got %T", results[1])
 	}
 }
+
 func TestLLMStreamingUnformattedButComplete(t *testing.T) {
 	logger, _ := commons.NewApplicationLogger()
-	opts := newMockOptions(".!?") // boundaries exist but are NOT used
-	aggregator, _ := NewDefaultLLMTextAggregator(t.Context(), logger, opts)
+	aggregator, _ := NewDefaultLLMTextAggregator(t.Context(), logger)
 	defer aggregator.Close()
 
 	ctx := context.Background()
 	var results []internal_type.Packet
 
 	go func() {
-		// Simulate raw LLM streaming (no punctuation)
-		chunks := []string{
-			"this",
-			" is",
-			" a",
-			" raw",
-			" llm",
-			" response",
-		}
-
+		chunks := []string{"this", " is", " a", " raw", " llm", " response"}
 		for _, chunk := range chunks {
 			_ = aggregator.Aggregate(ctx, internal_type.LLMResponseDeltaPacket{
 				ContextID: "llm",
 				Text:      chunk,
 			})
 		}
-
-		// End of stream — force completion with Flush
 		_ = aggregator.Aggregate(ctx, internal_type.LLMResponseDonePacket{
 			ContextID: "llm",
 		})
-
 		aggregator.Close()
 	}()
 
@@ -915,58 +730,17 @@ func TestLLMStreamingUnformattedButComplete(t *testing.T) {
 		results = append(results, r)
 	}
 
-	// Should get: AssembledText + Flush
 	if len(results) != 2 {
-		t.Fatalf("expected 2 results (sentence + flush), got %d", len(results))
+		t.Fatalf("expected 2 results (flushed text + done), got %d", len(results))
 	}
 
-	expected := "this is a raw llm response"
-	var sentence, contextID string
-	if ts, ok := results[0].(internal_type.LLMResponseDeltaPacket); ok {
-		sentence = ts.Text
-		contextID = ts.ContextID
-	} else if ts, ok := results[0].(internal_type.LLMResponseDeltaPacket); ok {
-		sentence = ts.Text
-		contextID = ts.ContextID
-	} else {
-		t.Fatalf("expected first result to be AssembledText, got %T", results[0])
-	}
-
-	if sentence != expected {
-		t.Errorf("expected %q, got %q", expected, sentence)
-	}
-	if contextID != "llm" {
-		t.Errorf("expected context 'llm', got %s", contextID)
+	if ts, ok := results[0].(internal_type.LLMResponseDeltaPacket); !ok {
+		t.Errorf("expected first result to be LLMResponseDeltaPacket, got %T", results[0])
+	} else if ts.Text != "this is a raw llm response" {
+		t.Errorf("expected flushed text 'this is a raw llm response', got %q", ts.Text)
 	}
 
 	if _, ok := results[1].(internal_type.LLMResponseDonePacket); !ok {
-		t.Errorf("expected second result to be Flush message, got %T", results[1])
+		t.Errorf("expected second result to be LLMResponseDonePacket, got %T", results[1])
 	}
-}
-func TestStringRepresentation(t *testing.T) {
-	logger, _ := commons.NewApplicationLogger()
-	opts := newMockOptions(".")
-	aggregator, _ := NewDefaultLLMTextAggregator(t.Context(), logger, opts)
-	defer aggregator.Close()
-
-	st := aggregator.(*textAggregator)
-	str := st.String()
-
-	if str == "" {
-		t.Error("String() should return non-empty string")
-	}
-
-	if !contains(str, "TextAggregator") {
-		t.Errorf("String() should contain 'TextAggregator', got '%s'", str)
-	}
-}
-
-// Helper function
-func contains(s, substr string) bool {
-	for i := 0; i < len(s)-len(substr)+1; i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }

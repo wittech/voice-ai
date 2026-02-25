@@ -53,13 +53,12 @@ func BenchmarkConvertToByteSamples(b *testing.B) {
 }
 
 func BenchmarkGetAudioInfo(b *testing.B) {
-	resampler := newTestResampler(b)
 	config := internal_audio.NewLinear16khzMonoAudioConfig()
 	data := generateLinear16Data(100000)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_ = resampler.GetAudioInfo(data, config)
+		_ = internal_audio.GetAudioInfo(data, config)
 	}
 }
 
@@ -239,7 +238,7 @@ func BenchmarkMixedOperationsParallel(b *testing.B) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				_ = resampler.GetAudioInfo(data, source)
+				_ = internal_audio.GetAudioInfo(data, source)
 			}()
 		}
 

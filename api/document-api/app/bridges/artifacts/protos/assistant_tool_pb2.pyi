@@ -168,7 +168,7 @@ class GetAllAssistantToolLogResponse(_message.Message):
     def __init__(self, code: _Optional[int] = ..., success: bool = ..., data: _Optional[_Iterable[_Union[AssistantToolLog, _Mapping]]] = ..., error: _Optional[_Union[_common_pb2.Error, _Mapping]] = ..., paginated: _Optional[_Union[_common_pb2.Paginated, _Mapping]] = ...) -> None: ...
 
 class AssistantToolLog(_message.Message):
-    __slots__ = ("id", "action", "request", "response", "status", "createdDate", "updatedDate", "assistantId", "projectId", "organizationId", "assistantConversationId", "assistantConversationMessageId", "assetPrefix", "executionMethod", "timeTaken", "assistantToolId", "assistantToolName", "assistantTool")
+    __slots__ = ("id", "action", "request", "response", "status", "createdDate", "updatedDate", "assistantId", "projectId", "organizationId", "assistantConversationId", "assistantConversationMessageId", "assetPrefix", "timeTaken", "assistantToolName", "toolCallId")
     ID_FIELD_NUMBER: _ClassVar[int]
     ACTION_FIELD_NUMBER: _ClassVar[int]
     REQUEST_FIELD_NUMBER: _ClassVar[int]
@@ -182,11 +182,9 @@ class AssistantToolLog(_message.Message):
     ASSISTANTCONVERSATIONID_FIELD_NUMBER: _ClassVar[int]
     ASSISTANTCONVERSATIONMESSAGEID_FIELD_NUMBER: _ClassVar[int]
     ASSETPREFIX_FIELD_NUMBER: _ClassVar[int]
-    EXECUTIONMETHOD_FIELD_NUMBER: _ClassVar[int]
     TIMETAKEN_FIELD_NUMBER: _ClassVar[int]
-    ASSISTANTTOOLID_FIELD_NUMBER: _ClassVar[int]
     ASSISTANTTOOLNAME_FIELD_NUMBER: _ClassVar[int]
-    ASSISTANTTOOL_FIELD_NUMBER: _ClassVar[int]
+    TOOLCALLID_FIELD_NUMBER: _ClassVar[int]
     id: int
     action: _struct_pb2.Struct
     request: _struct_pb2.Struct
@@ -200,9 +198,7 @@ class AssistantToolLog(_message.Message):
     assistantConversationId: int
     assistantConversationMessageId: str
     assetPrefix: str
-    executionMethod: str
     timeTaken: int
-    assistantToolId: int
     assistantToolName: str
-    assistantTool: AssistantTool
-    def __init__(self, id: _Optional[int] = ..., action: _Optional[_Union[_struct_pb2.Struct, _Mapping]] = ..., request: _Optional[_Union[_struct_pb2.Struct, _Mapping]] = ..., response: _Optional[_Union[_struct_pb2.Struct, _Mapping]] = ..., status: _Optional[str] = ..., createdDate: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., updatedDate: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., assistantId: _Optional[int] = ..., projectId: _Optional[int] = ..., organizationId: _Optional[int] = ..., assistantConversationId: _Optional[int] = ..., assistantConversationMessageId: _Optional[str] = ..., assetPrefix: _Optional[str] = ..., executionMethod: _Optional[str] = ..., timeTaken: _Optional[int] = ..., assistantToolId: _Optional[int] = ..., assistantToolName: _Optional[str] = ..., assistantTool: _Optional[_Union[AssistantTool, _Mapping]] = ...) -> None: ...
+    toolCallId: str
+    def __init__(self, id: _Optional[int] = ..., action: _Optional[_Union[_struct_pb2.Struct, _Mapping]] = ..., request: _Optional[_Union[_struct_pb2.Struct, _Mapping]] = ..., response: _Optional[_Union[_struct_pb2.Struct, _Mapping]] = ..., status: _Optional[str] = ..., createdDate: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., updatedDate: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., assistantId: _Optional[int] = ..., projectId: _Optional[int] = ..., organizationId: _Optional[int] = ..., assistantConversationId: _Optional[int] = ..., assistantConversationMessageId: _Optional[str] = ..., assetPrefix: _Optional[str] = ..., timeTaken: _Optional[int] = ..., assistantToolName: _Optional[str] = ..., toolCallId: _Optional[str] = ...) -> None: ...

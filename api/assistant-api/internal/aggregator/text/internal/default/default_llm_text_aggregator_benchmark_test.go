@@ -4,7 +4,7 @@
 // Licensed under GPL-2.0 with Rapida Additional Terms.
 // See LICENSE.md or contact sales@rapida.ai for commercial usage.
 
-package internal_aggregator
+package internal_default_aggregator
 
 import (
 	"context"
@@ -13,33 +13,17 @@ import (
 
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 	"github.com/rapidaai/pkg/commons"
-	"github.com/rapidaai/pkg/utils"
 )
 
-// BenchmarkNewLLMTextAggregator measures the creation time of a aggregator
-func BenchmarkNewLLMTextAggregator(b *testing.B) {
+// BenchmarkNewDefaultLLMTextAggregator measures the creation time of an aggregator
+func BenchmarkNewDefaultLLMTextAggregator(b *testing.B) {
 	logger, _ := commons.NewApplicationLogger()
-	opts := utils.Option{"speaker.sentence.boundaries": ".,?!"}
 
 	b.ReportAllocs()
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		aggregator, _ := NewLLMTextAggregator(b.Context(), logger, opts)
-		aggregator.Close()
-	}
-}
-
-// BenchmarkNewLLMTextAggregatorNoBoundaries measures creation without boundaries
-func BenchmarkNewLLMTextAggregatorNoBoundaries(b *testing.B) {
-	logger, _ := commons.NewApplicationLogger()
-	opts := utils.Option{}
-
-	b.ReportAllocs()
-	b.ResetTimer()
-
-	for i := 0; i < b.N; i++ {
-		aggregator, _ := NewLLMTextAggregator(b.Context(), logger, opts)
+		aggregator, _ := NewDefaultLLMTextAggregator(b.Context(), logger)
 		aggregator.Close()
 	}
 }
@@ -47,14 +31,13 @@ func BenchmarkNewLLMTextAggregatorNoBoundaries(b *testing.B) {
 // BenchmarkSingleTextTokenization measures processing a single sentence
 func BenchmarkSingleTextTokenization(b *testing.B) {
 	logger, _ := commons.NewApplicationLogger()
-	opts := utils.Option{"speaker.sentence.boundaries": "."}
 	ctx := context.Background()
 
 	b.ReportAllocs()
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		aggregator, _ := NewLLMTextAggregator(b.Context(), logger, opts)
+		aggregator, _ := NewDefaultLLMTextAggregator(b.Context(), logger)
 		aggregator.Aggregate(ctx, internal_type.LLMResponseDeltaPacket{
 			ContextID: "speaker1",
 			Text:      "Hello world.",
@@ -66,7 +49,6 @@ func BenchmarkSingleTextTokenization(b *testing.B) {
 // BenchmarkMultipleTexts measures processing multiple sentences
 func BenchmarkMultipleTexts(b *testing.B) {
 	logger, _ := commons.NewApplicationLogger()
-	opts := utils.Option{"speaker.sentence.boundaries": "."}
 	ctx := context.Background()
 
 	sentences := []*internal_type.LLMResponseDeltaPacket{
@@ -79,7 +61,7 @@ func BenchmarkMultipleTexts(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		aggregator, _ := NewLLMTextAggregator(b.Context(), logger, opts)
+		aggregator, _ := NewDefaultLLMTextAggregator(b.Context(), logger)
 		for _, s := range sentences {
 			aggregator.Aggregate(ctx, s)
 		}
@@ -90,7 +72,6 @@ func BenchmarkMultipleTexts(b *testing.B) {
 // BenchmarkLargeTexts measures processing large sentences
 func BenchmarkLargeTexts(b *testing.B) {
 	logger, _ := commons.NewApplicationLogger()
-	opts := utils.Option{"speaker.sentence.boundaries": "."}
 	ctx := context.Background()
 
 	// Create a large sentence
@@ -104,7 +85,7 @@ func BenchmarkLargeTexts(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		aggregator, _ := NewLLMTextAggregator(b.Context(), logger, opts)
+		aggregator, _ := NewDefaultLLMTextAggregator(b.Context(), logger)
 		aggregator.Aggregate(ctx, internal_type.LLMResponseDeltaPacket{
 			ContextID: "speaker1",
 			Text:      largeText,
@@ -113,10 +94,9 @@ func BenchmarkLargeTexts(b *testing.B) {
 	}
 }
 
-// BenchmarkMultipleBoundaries measures processing with multiple boundaries
+// BenchmarkMultipleBoundaries measures processing with multiple static boundaries
 func BenchmarkMultipleBoundaries(b *testing.B) {
 	logger, _ := commons.NewApplicationLogger()
-	opts := utils.Option{"speaker.sentence.boundaries": ".,?!;:"}
 	ctx := context.Background()
 
 	testTexts := []string{
@@ -130,7 +110,7 @@ func BenchmarkMultipleBoundaries(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		aggregator, _ := NewLLMTextAggregator(b.Context(), logger, opts)
+		aggregator, _ := NewDefaultLLMTextAggregator(b.Context(), logger)
 		for _, s := range testTexts {
 			aggregator.Aggregate(ctx, internal_type.LLMResponseDeltaPacket{
 				ContextID: "speaker1",
@@ -144,14 +124,13 @@ func BenchmarkMultipleBoundaries(b *testing.B) {
 // BenchmarkContextSwitching measures context switching overhead
 func BenchmarkContextSwitching(b *testing.B) {
 	logger, _ := commons.NewApplicationLogger()
-	opts := utils.Option{"speaker.sentence.boundaries": "."}
 	ctx := context.Background()
 
 	b.ReportAllocs()
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		aggregator, _ := NewLLMTextAggregator(b.Context(), logger, opts)
+		aggregator, _ := NewDefaultLLMTextAggregator(b.Context(), logger)
 		for speaker := 0; speaker < 5; speaker++ {
 			for j := 0; j < 3; j++ {
 				aggregator.Aggregate(ctx, internal_type.LLMResponseDeltaPacket{
@@ -167,14 +146,13 @@ func BenchmarkContextSwitching(b *testing.B) {
 // BenchmarkResultChannelConsumption measures the overhead of consuming results
 func BenchmarkResultChannelConsumption(b *testing.B) {
 	logger, _ := commons.NewApplicationLogger()
-	opts := utils.Option{"speaker.sentence.boundaries": "."}
 	ctx := context.Background()
 
 	b.ReportAllocs()
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		aggregator, _ := NewLLMTextAggregator(b.Context(), logger, opts)
+		aggregator, _ := NewDefaultLLMTextAggregator(b.Context(), logger)
 
 		// Send sentences
 		for j := 0; j < 10; j++ {
@@ -188,17 +166,16 @@ func BenchmarkResultChannelConsumption(b *testing.B) {
 	}
 }
 
-// BenchmarkCompleteFlag measures processing with IsComplete flag
+// BenchmarkCompleteFlag measures processing with LLMResponseDonePacket
 func BenchmarkCompleteFlag(b *testing.B) {
 	logger, _ := commons.NewApplicationLogger()
-	opts := utils.Option{}
 	ctx := context.Background()
 
 	b.ReportAllocs()
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		aggregator, _ := NewLLMTextAggregator(b.Context(), logger, opts)
+		aggregator, _ := NewDefaultLLMTextAggregator(b.Context(), logger)
 		aggregator.Aggregate(ctx, internal_type.LLMResponseDeltaPacket{
 			ContextID: "speaker1",
 			Text:      "This is a test",
@@ -210,17 +187,16 @@ func BenchmarkCompleteFlag(b *testing.B) {
 	}
 }
 
-// BenchmarkBufferingWithoutBoundaries measures buffering with no boundaries
-func BenchmarkBufferingWithoutBoundaries(b *testing.B) {
+// BenchmarkBufferingWithoutPunctuation measures buffering text without sentence boundaries
+func BenchmarkBufferingWithoutPunctuation(b *testing.B) {
 	logger, _ := commons.NewApplicationLogger()
-	opts := utils.Option{}
 	ctx := context.Background()
 
 	b.ReportAllocs()
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		aggregator, _ := NewLLMTextAggregator(b.Context(), logger, opts)
+		aggregator, _ := NewDefaultLLMTextAggregator(b.Context(), logger)
 		for j := 0; j < 5; j++ {
 			aggregator.Aggregate(ctx, internal_type.LLMResponseDeltaPacket{
 				ContextID: "speaker1",
@@ -234,7 +210,6 @@ func BenchmarkBufferingWithoutBoundaries(b *testing.B) {
 // BenchmarkStreamingLargeText measures processing streaming text
 func BenchmarkStreamingLargeText(b *testing.B) {
 	logger, _ := commons.NewApplicationLogger()
-	opts := utils.Option{"speaker.sentence.boundaries": "."}
 	ctx := context.Background()
 
 	// Simulate streaming text chunks
@@ -250,7 +225,7 @@ func BenchmarkStreamingLargeText(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		aggregator, _ := NewLLMTextAggregator(b.Context(), logger, opts)
+		aggregator, _ := NewDefaultLLMTextAggregator(b.Context(), logger)
 		for _, chunk := range chunks {
 			aggregator.Aggregate(ctx, internal_type.LLMResponseDeltaPacket{
 				ContextID: "speaker1",
@@ -261,16 +236,15 @@ func BenchmarkStreamingLargeText(b *testing.B) {
 	}
 }
 
-// BenchmarkClosing measures the cost of closing a aggregator
+// BenchmarkClosing measures the cost of closing an aggregator
 func BenchmarkClosing(b *testing.B) {
 	logger, _ := commons.NewApplicationLogger()
-	opts := utils.Option{"speaker.sentence.boundaries": "."}
 
 	b.ReportAllocs()
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		aggregator, _ := NewLLMTextAggregator(b.Context(), logger, opts)
+		aggregator, _ := NewDefaultLLMTextAggregator(b.Context(), logger)
 		aggregator.Close()
 	}
 }
@@ -278,14 +252,13 @@ func BenchmarkClosing(b *testing.B) {
 // BenchmarkEmptyAndCompleteFlush measures flushing empty buffers
 func BenchmarkEmptyAndCompleteFlush(b *testing.B) {
 	logger, _ := commons.NewApplicationLogger()
-	opts := utils.Option{"speaker.sentence.boundaries": "."}
 	ctx := context.Background()
 
 	b.ReportAllocs()
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		aggregator, _ := NewLLMTextAggregator(b.Context(), logger, opts)
+		aggregator, _ := NewDefaultLLMTextAggregator(b.Context(), logger)
 		// Send empty with complete flag
 		aggregator.Aggregate(ctx, internal_type.LLMResponseDeltaPacket{
 			ContextID: "speaker1",
@@ -300,14 +273,13 @@ func BenchmarkEmptyAndCompleteFlush(b *testing.B) {
 // BenchmarkComplexScenario measures a realistic complex scenario
 func BenchmarkComplexScenario(b *testing.B) {
 	logger, _ := commons.NewApplicationLogger()
-	opts := utils.Option{"speaker.sentence.boundaries": ".,?!;:"}
 	ctx := context.Background()
 
 	b.ReportAllocs()
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		aggregator, _ := NewLLMTextAggregator(b.Context(), logger, opts)
+		aggregator, _ := NewDefaultLLMTextAggregator(b.Context(), logger)
 
 		// Simulate a realistic conversation
 		conversationTurns := []struct {
@@ -344,12 +316,11 @@ func BenchmarkComplexScenario(b *testing.B) {
 // BenchmarkParallelProcessing measures parallel token processing
 func BenchmarkParallelProcessing(b *testing.B) {
 	logger, _ := commons.NewApplicationLogger()
-	opts := utils.Option{"speaker.sentence.boundaries": "."}
 	ctx := context.Background()
 
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			aggregator, _ := NewLLMTextAggregator(b.Context(), logger, opts)
+			aggregator, _ := NewDefaultLLMTextAggregator(b.Context(), logger)
 			aggregator.Aggregate(ctx, internal_type.LLMResponseDeltaPacket{
 				ContextID: "speaker1",
 				Text:      "Hello world.",
@@ -362,7 +333,6 @@ func BenchmarkParallelProcessing(b *testing.B) {
 // BenchmarkWhitespaceProcessing measures text with various whitespace
 func BenchmarkWhitespaceProcessing(b *testing.B) {
 	logger, _ := commons.NewApplicationLogger()
-	opts := utils.Option{"speaker.sentence.boundaries": "."}
 	ctx := context.Background()
 
 	textWithWhitespace := "  \n\tHello  \n  world.  \t\n  "
@@ -371,11 +341,38 @@ func BenchmarkWhitespaceProcessing(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		aggregator, _ := NewLLMTextAggregator(b.Context(), logger, opts)
+		aggregator, _ := NewDefaultLLMTextAggregator(b.Context(), logger)
 		aggregator.Aggregate(ctx, internal_type.LLMResponseDeltaPacket{
 			ContextID: "speaker1",
 			Text:      textWithWhitespace,
 		})
+		aggregator.Close()
+	}
+}
+
+// BenchmarkUnicodeBoundaries measures processing text with unicode boundaries
+func BenchmarkUnicodeBoundaries(b *testing.B) {
+	logger, _ := commons.NewApplicationLogger()
+	ctx := context.Background()
+
+	unicodeTexts := []string{
+		"こんにちは。元気ですか。",
+		"नमस्ते। कैसे हैं।",
+		"Wait… Really…",
+		"テスト．完了．",
+	}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		aggregator, _ := NewDefaultLLMTextAggregator(b.Context(), logger)
+		for _, text := range unicodeTexts {
+			aggregator.Aggregate(ctx, internal_type.LLMResponseDeltaPacket{
+				ContextID: "speaker1",
+				Text:      text,
+			})
+		}
 		aggregator.Close()
 	}
 }

@@ -23,7 +23,6 @@ import (
 	"github.com/rapidaai/protos"
 
 	"github.com/rapidaai/pkg/commons"
-	type_enums "github.com/rapidaai/pkg/types/enums"
 	"github.com/rapidaai/pkg/utils"
 )
 
@@ -137,28 +136,20 @@ func (executor *toolExecutor) execute(ctx context.Context, contextID string, cal
 		internal_adapter_telemetry.KV{K: "argument", V: internal_adapter_telemetry.StringValue(call.GetFunction().GetArguments())})
 
 	arguments := executor.parseArgument(call.GetFunction().GetArguments())
-	// on packge
-	communication.OnPacket(ctx, internal_type.LLMToolCallPacket{ToolID: call.GetId(), Name: call.GetFunction().GetName(), Arguments: arguments})
-	// output
+	communication.OnPacket(ctx, internal_type.LLMToolCallPacket{
+		ToolID:    call.GetId(),
+		Name:      call.GetFunction().GetName(),
+		ContextID: contextID,
+		Arguments: arguments,
+	})
 	output := funC.Call(ctx, contextID, call.GetId(), arguments, communication)
-
-	communication.OnPacket(ctx, internal_type.LLMToolResultPacket{ToolID: call.GetId(), Name: call.GetFunction().GetName(), Result: output})
-
-	// log tool execution
-	// executor.tool(contextID, map[string]interface{}{
-	// 	"id":        call.Id,
-	// 	"name":      call.GetFunction().GetName(),
-	// 	"arguments": arguments,
-	// }, output, append(metrics, types.NewTimeTakenMetric(time.Since(start))), communication)
-
-	// log execution record
-	executor.log(ctx, funC, communication, contextID, type_enums.RECORD_COMPLETE, int64(time.Since(start)),
-		map[string]interface{}{
-			"id":        call.Id,
-			"name":      call.GetFunction().GetName(),
-			"arguments": arguments,
-		}, output)
-
+	communication.OnPacket(ctx, internal_type.LLMToolResultPacket{
+		ToolID:    call.GetId(),
+		Name:      call.GetFunction().GetName(),
+		ContextID: contextID,
+		TimeTaken: int64(time.Since(start)),
+		Result:    output,
+	})
 	return &protos.ToolMessage_Tool{Name: call.GetFunction().GetName(), Id: call.Id, Content: output.Result()}
 }
 
@@ -199,24 +190,4 @@ func (executor *toolExecutor) Close(ctx context.Context) error {
 		}
 	}
 	return nil
-}
-
-func (executor *toolExecutor) log(ctx context.Context, toolCaller internal_tool.ToolCaller, communication internal_type.Communication, assistantConversationMessageId string, recordStatus type_enums.RecordState, timeTaken int64, in, out map[string]interface{}) {
-	utils.Go(ctx, func() {
-		// Include function definition in log
-		if def, err := toolCaller.Definition(); err == nil {
-			in["llm_definition"] = map[string]interface{}{
-				"name":        def.Name,
-				"description": def.Description,
-				"parameters": map[string]interface{}{
-					"type":       def.Parameters.Type,
-					"required":   def.Parameters.Required,
-					"properties": def.Parameters.Properties,
-				},
-			}
-		}
-		i, _ := json.Marshal(in)
-		o, _ := json.Marshal(out)
-		communication.CreateToolLog(ctx, toolCaller.Id(), assistantConversationMessageId, toolCaller.Name(), toolCaller.ExecutionMethod(), recordStatus, timeTaken, i, o)
-	})
 }

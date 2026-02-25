@@ -57,13 +57,21 @@ type AssistantToolService interface {
 		ctx context.Context,
 		auth types.SimplePrinciple,
 		assistantId, conversationId uint64,
-		toolId uint64,
 		messageId string,
+		toolCallId string,
 		toolName string,
-		timeTaken int64,
-		executionMethod string,
 		status type_enums.RecordState,
-		request, response []byte,
+		request []byte,
+	) (*internal_assistant_entity.AssistantToolLog, error)
+
+	UpdateLog(
+		ctx context.Context,
+		auth types.SimplePrinciple,
+		toolCallId string,
+		conversationId uint64,
+		timeTaken int64,
+		status type_enums.RecordState,
+		response []byte,
 	) (*internal_assistant_entity.AssistantToolLog, error)
 
 	GetLog(

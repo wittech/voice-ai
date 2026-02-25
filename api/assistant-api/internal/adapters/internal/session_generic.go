@@ -261,7 +261,6 @@ func (r *genericRequestor) resumeSession(
 			r.messaging.SwitchMode(type_enums.TextMode)
 		case protos.StreamMode_STREAM_MODE_AUDIO:
 			r.initializeTextToSpeech(ctx)
-			r.initializeBehavior(ctx)
 			r.messaging.SwitchMode(type_enums.AudioMode)
 		}
 		return nil
@@ -317,7 +316,10 @@ func (r *genericRequestor) resumeSession(
 	})
 
 	r.notifyConfiguration(ctx, config, conversation, assistant)
-	return errGroup.Wait()
+
+	err = errGroup.Wait()
+	r.initializeBehavior(ctx)
+	return err
 }
 
 // createSession delegates to OnCreateSession with extracted configuration values.
@@ -359,7 +361,6 @@ func (r *genericRequestor) createSession(
 			r.messaging.SwitchMode(type_enums.TextMode)
 		case protos.StreamMode_STREAM_MODE_AUDIO:
 			r.initializeTextToSpeech(ctx)
-			r.initializeBehavior(ctx)
 			r.messaging.SwitchMode(type_enums.AudioMode)
 		}
 		return nil
@@ -421,7 +422,9 @@ func (r *genericRequestor) createSession(
 		}
 	})
 	r.notifyConfiguration(ctx, config, conversation, assistant)
-	return errGroup.Wait()
+	err = errGroup.Wait()
+	r.initializeBehavior(ctx)
+	return err
 }
 
 // notifyConfiguration sends the initial conversation configuration to the client.

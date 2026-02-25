@@ -127,7 +127,6 @@ func (google *googleTextToSpeech) Transform(ctx context.Context, in internal_typ
 	case internal_type.InterruptionPacket:
 		// only stop speaking on word-level interruptions
 		if input.Source == internal_type.InterruptionSourceWord && currentCtx != "" {
-			google.logger.Debugf("google-tts: context changed from old to %s, reinitializing stream", in.ContextId())
 			if err := google.Initialize(); err != nil {
 				return fmt.Errorf("failed to reinitialize stream on context change: %w", err)
 			}
@@ -137,6 +136,7 @@ func (google *googleTextToSpeech) Transform(ctx context.Context, in internal_typ
 		}
 		return nil
 	case internal_type.LLMResponseDeltaPacket:
+		google.logger.Debugf("google-tts: sending text for synthesis: %s", input.Text)
 		if err := sCli.Send(&texttospeechpb.StreamingSynthesizeRequest{
 			StreamingRequest: &texttospeechpb.StreamingSynthesizeRequest_Input{
 				Input: &texttospeechpb.StreamingSynthesisInput{

@@ -236,21 +236,16 @@ func (spk *genericRequestor) disconnectTextToSpeech(ctx context.Context) error {
 
 // Initialize the text aggregator for assembling sentences from tokens.
 func (spk *genericRequestor) initializeTextAggregator(ctx context.Context) error {
-	speakerOpts := spk.GetOptions()
-	outputTransformer, _ := spk.GetTextToSpeechTransformer()
-	if outputTransformer != nil {
-		speakerOpts = utils.MergeMaps(outputTransformer.GetOptions())
-	}
-	if textAggregator, err := internal_sentence_aggregator.GetLLMTextAggregator(ctx, spk.logger, speakerOpts); err == nil {
+	if textAggregator, err := internal_sentence_aggregator.GetLLMTextAggregator(ctx, spk.logger); err == nil {
 		spk.textAggregator = textAggregator
 		go spk.onAssembleSentence(ctx)
 	}
 	return nil
 }
 
-func (spk *genericRequestor) disconnectTextAggregator() error {
-	if spk.textAggregator != nil {
-		spk.textAggregator.Close()
+func (io *genericRequestor) disconnectTextAggregator() error {
+	if io.textAggregator != nil {
+		io.textAggregator.Close()
 	}
 	return nil
 }

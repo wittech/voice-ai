@@ -89,33 +89,6 @@ func (r *audioResampler) ConvertToByteSamples(samples []float32, config *protos.
 	return r.encodeFromFloat64(float64Samples, config)
 }
 
-// GetAudioInfo returns information about the byte audio data
-func (r *audioResampler) GetAudioInfo(data []byte, config *protos.AudioConfig) internal_type.AudioInfo {
-	var samplesPerChannel int
-	var bytesPerSample int
-
-	switch config.GetAudioFormat() {
-	case protos.AudioConfig_LINEAR16:
-		bytesPerSample = 2
-		samplesPerChannel = len(data) / (bytesPerSample * int(config.Channels))
-	case protos.AudioConfig_MuLaw8:
-		bytesPerSample = 1
-		samplesPerChannel = len(data) / (bytesPerSample * int(config.Channels))
-	}
-
-	duration := float64(samplesPerChannel) / float64(config.SampleRate)
-
-	return internal_type.AudioInfo{
-		SampleRate:        config.SampleRate,
-		Format:            config.GetAudioFormat(),
-		Channels:          config.GetChannels(),
-		SamplesPerChannel: samplesPerChannel,
-		BytesPerSample:    bytesPerSample,
-		TotalBytes:        len(data),
-		DurationSeconds:   duration,
-	}
-}
-
 // -------------------- Decode / Encode --------------------
 
 // decodeToFloat64 converts audio bytes to normalized float64 samples
