@@ -1,39 +1,16 @@
-# Build stage
-FROM node:22-alpine AS builder
+# syntax=docker/dockerfile:1
+FROM rapidaai/rapida-node:22-alpine AS builder
+
 WORKDIR /app
-RUN apk add --no-cache curl
 
 # Copy package files and install dependencies
 COPY ui/package.json ui/yarn.lock ./
-RUN yarn config set network-timeout 300000 && \
-    yarn config set network-concurrency 1 && \
-    yarn install --frozen-lockfile --cache-folder .yarn-cache && \
-    rm -rf .yarn-cache
+RUN --mount=type=cache,target=/root/.cache/yarn \
+    yarn config set network-timeout 300000 && \
+    yarn install --frozen-lockfile
 
-# Copy all necessary source files
-COPY ui/.babel-plugin-macrosrc.js ./
-COPY ui/.dockerignore ./
-COPY ui/.editorconfig ./
-COPY ui/.env.production ./
-COPY ui/.eslintrc.js ./
-COPY ui/.gitattributes ./
-COPY ui/.gitignore ./
-COPY ui/.npmrc ./
-COPY ui/.nvmrc ./
-COPY ui/.pre-commit-config.yaml ./
-COPY ui/.prettierignore ./
-COPY ui/.prettierrc ./
-COPY ui/.stylelintrc ./
-COPY ui/commitlint.config.js ./
-COPY ui/craco.config.js ./
-COPY ui/package.json ./
-COPY ui/postcss.config.js ./
-COPY ui/tsconfig.json ./
-COPY ui/yarn.lock ./
-
-# Copy directories for public and source files
-COPY ui/public ./public
-COPY ui/src ./src
+# Copy all UI source files at once (rely on .dockerignore to exclude unnecessary files)
+COPY ui/ ./
 
 # Expose the port to serve the app
 EXPOSE 3000

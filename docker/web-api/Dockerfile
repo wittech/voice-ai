@@ -1,35 +1,30 @@
+# syntax=docker/dockerfile:1
 # Build stage
-FROM golang:1.25.7-alpine AS builder
+FROM rapidaai/rapida-golang:1.25.7-alpine AS builder
 
 WORKDIR /app
 
 # Copy go mod files from root
 COPY go.mod go.sum ./
 
-# Download dependencies
-RUN go mod download
+# Download dependencies (cached unless go.mod/go.sum change)
+RUN --mount=type=cache,target=/go/pkg/mod \
+    go mod download
 
-# Copy all necessary directories (from root context)
-COPY api/web-api ./api/web-api
-COPY bin/ ./bin/
+# Copy only what this service needs
 COPY config/ ./config/
-COPY cmd/ ./cmd/
 COPY protos/ ./protos/
 COPY pkg/ ./pkg/
+COPY api/web-api ./api/web-api
+COPY cmd/web/ ./cmd/web/
 
-# Build the application from cmd/web/web.go
-RUN CGO_ENABLED=0 GOOS=linux go build -o web-api ./cmd/web/web.go
+# Build with cache mounts for Go build cache
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=linux go build -o web-api ./cmd/web/web.go
 
 # Final stage
-FROM alpine:latest
-
-RUN apk --no-cache add ca-certificates wget netcat-openbsd
-
-# Create rapida-app user
-RUN addgroup -g 1000 rapida-app && \
-    adduser -D -u 1000 -G rapida-app rapida-app
-
-WORKDIR /opt/apps
+FROM rapidaai/rapida-alpine:3.21
 
 # Copy compiled binary from builder
 COPY --from=builder /app/web-api .
@@ -40,14 +35,9 @@ COPY api/web-api/migrations/ ./api/web-api/migrations/
 # Copy environment file from docker/web-api
 COPY docker/web-api/.web.env ./env/.web.env
 
-
-# Create directory for assets
-RUN mkdir -p /opt/apps/assets
-RUN mkdir -p /var/log/go-app
-
-# Change ownership to rapida-app user
-RUN chown -R rapida-app:rapida-app /opt/apps
-RUN chown -R rapida-app:rapida-app /var/log/go-app
+# Create directories and set ownership
+RUN mkdir -p /opt/apps/assets /var/log/go-app && \
+    chown -R rapida-app:rapida-app /opt/apps /var/log/go-app
 
 # Switch to rapida-app user
 USER rapida-app

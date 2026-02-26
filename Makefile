@@ -5,10 +5,13 @@
         rebuild-all rebuild-all-with-knowledge rebuild-web rebuild-integration rebuild-endpoint \
         logs-all logs-web logs-integration logs-endpoint logs-db logs-redis logs-opensearch \
         restart-all restart-web restart-integration restart-endpoint \
-        ps-all shell-web shell-integration shell-endpoint db-shell
+        ps-all shell-web shell-integration shell-endpoint db-shell \
+        push-base-images \
+        push-rapida-golang-bookworm push-rapida-golang-alpine push-rapida-alpine \
+        push-rapida-debian-slim push-rapida-node-alpine push-rapida-python
 
-COMPOSE           := docker compose -f docker-compose.yml
-COMPOSE_KNOWLEDGE := docker compose -f docker-compose.yml -f docker-compose.knowledge.yml
+COMPOSE           := DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 docker compose -f docker-compose.yml
+COMPOSE_KNOWLEDGE := DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 docker compose -f docker-compose.yml -f docker-compose.knowledge.yml
 
 help:
 	@echo ""
@@ -44,7 +47,14 @@ help:
 	@echo "  make down-nginx       	  - Stop nginx only"
 	@echo ""
 	@echo "BUILD COMMANDS:"
-	@echo "  make build-all                 - Build all services (no document-api)"
+	@echo "  make build-all                 - Build all services (pulls rapida-* base images from Docker Hub)"
+	@echo "  make push-base-images          - Build + push all rapida-* base images (run when versions change)"
+	@echo "  make push-rapida-golang-bookworm - Rebuild + push rapidaai/rapida-golang:1.25.7-bookworm"
+	@echo "  make push-rapida-golang-alpine   - Rebuild + push rapidaai/rapida-golang:1.25.7-alpine"
+	@echo "  make push-rapida-alpine          - Rebuild + push rapidaai/rapida-alpine:3.21"
+	@echo "  make push-rapida-debian-slim     - Rebuild + push rapidaai/rapida-debian:bookworm-slim"
+	@echo "  make push-rapida-node-alpine     - Rebuild + push rapidaai/rapida-node:22-alpine"
+	@echo "  make push-rapida-python          - Rebuild + push rapidaai/rapida-python:3.11"
 	@echo "  make build-all-with-knowledge  - Build all services including document-api"
 	@echo "  make build-web                 - Build web-api image"
 	@echo "  make build-integration         - Build integration-api image"
@@ -232,6 +242,45 @@ down: down-all
 # ============================================================================
 # BUILD TARGETS
 # ============================================================================
+
+push-rapida-golang-bookworm:
+	@echo "Building rapidaai/rapida-golang:1.25.7-bookworm..."
+	DOCKER_BUILDKIT=1 docker build -f docker/base/rapida-golang-bookworm.Dockerfile -t rapidaai/rapida-golang:1.25.7-bookworm .
+	docker push rapidaai/rapida-golang:1.25.7-bookworm
+	@echo "✓ rapidaai/rapida-golang:1.25.7-bookworm pushed"
+
+push-rapida-golang-alpine:
+	@echo "Building rapidaai/rapida-golang:1.25.7-alpine..."
+	DOCKER_BUILDKIT=1 docker build -f docker/base/rapida-golang-alpine.Dockerfile -t rapidaai/rapida-golang:1.25.7-alpine .
+	docker push rapidaai/rapida-golang:1.25.7-alpine
+	@echo "✓ rapidaai/rapida-golang:1.25.7-alpine pushed"
+
+push-rapida-alpine:
+	@echo "Building rapidaai/rapida-alpine:3.21..."
+	DOCKER_BUILDKIT=1 docker build -f docker/base/rapida-alpine.Dockerfile -t rapidaai/rapida-alpine:3.21 .
+	docker push rapidaai/rapida-alpine:3.21
+	@echo "✓ rapidaai/rapida-alpine:3.21 pushed"
+
+push-rapida-debian-slim:
+	@echo "Building rapidaai/rapida-debian:bookworm-slim..."
+	DOCKER_BUILDKIT=1 docker build -f docker/base/rapida-debian-slim.Dockerfile -t rapidaai/rapida-debian:bookworm-slim .
+	docker push rapidaai/rapida-debian:bookworm-slim
+	@echo "✓ rapidaai/rapida-debian:bookworm-slim pushed"
+
+push-rapida-node-alpine:
+	@echo "Building rapidaai/rapida-node:22-alpine..."
+	DOCKER_BUILDKIT=1 docker build -f docker/base/rapida-node-alpine.Dockerfile -t rapidaai/rapida-node:22-alpine .
+	docker push rapidaai/rapida-node:22-alpine
+	@echo "✓ rapidaai/rapida-node:22-alpine pushed"
+
+push-rapida-python:
+	@echo "Building rapidaai/rapida-python:3.11..."
+	DOCKER_BUILDKIT=1 docker build -f docker/base/rapida-python.Dockerfile -t rapidaai/rapida-python:3.11 .
+	docker push rapidaai/rapida-python:3.11
+	@echo "✓ rapidaai/rapida-python:3.11 pushed"
+
+push-base-images: push-rapida-golang-bookworm push-rapida-golang-alpine push-rapida-alpine push-rapida-debian-slim push-rapida-node-alpine push-rapida-python
+	@echo "✓ All base images pushed to Docker Hub"
 
 build-all:
 	@echo "Building all services (without document-api/opensearch)..."

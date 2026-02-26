@@ -1,35 +1,30 @@
+# syntax=docker/dockerfile:1
 # Build stage
-FROM golang:1.25.7-alpine AS builder
+FROM rapidaai/rapida-golang:1.25.7-alpine AS builder
 
 WORKDIR /app
 
 # Copy go mod files from root
 COPY go.mod go.sum ./
 
-# Download dependencies
-RUN go mod download
+# Download dependencies (cached unless go.mod/go.sum change)
+RUN --mount=type=cache,target=/go/pkg/mod \
+    go mod download
 
-# Copy all necessary directories (from root context)
-COPY api/endpoint-api ./api/endpoint-api
-COPY bin/ ./bin/
+# Copy only what this service needs
 COPY config/ ./config/
-COPY cmd/ ./cmd/
 COPY protos/ ./protos/
 COPY pkg/ ./pkg/
+COPY api/endpoint-api ./api/endpoint-api
+COPY cmd/endpoint/ ./cmd/endpoint/
 
-# Build the application from cmd/endpoint/endpoint.go
-RUN CGO_ENABLED=0 GOOS=linux go build -o endpoint-api ./cmd/endpoint/endpoint.go
+# Build with cache mounts for Go build cache
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=linux go build -o endpoint-api ./cmd/endpoint/endpoint.go
 
 # Final stage
-FROM alpine:latest
-
-RUN apk --no-cache add ca-certificates wget netcat-openbsd
-
-# Create rapida-app user
-RUN addgroup -g 1000 rapida-app && \
-    adduser -D -u 1000 -G rapida-app rapida-app
-
-WORKDIR /opt/apps
+FROM rapidaai/rapida-alpine:3.21
 
 # Copy compiled binary from builder
 COPY --from=builder /app/endpoint-api .
@@ -40,14 +35,9 @@ COPY api/endpoint-api/migrations/ ./api/endpoint-api/migrations/
 # Copy environment file from docker/endpoint-api
 COPY docker/endpoint-api/.endpoint.env ./env/.endpoint.env
 
-
-# Create directory for assets
-RUN mkdir -p /opt/apps/assets
-RUN mkdir -p /var/log/go-app
-
-# Change ownership to rapida-app user
-RUN chown -R rapida-app:rapida-app /opt/apps
-RUN chown -R rapida-app:rapida-app /var/log/go-app
+# Create directories and set ownership
+RUN mkdir -p /opt/apps/assets /var/log/go-app && \
+    chown -R rapida-app:rapida-app /opt/apps /var/log/go-app
 
 # Switch to rapida-app user
 USER rapida-app

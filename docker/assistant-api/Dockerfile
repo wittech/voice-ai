@@ -1,77 +1,37 @@
+# syntax=docker/dockerfile:1
 # ---- Build stage ----
-FROM golang:1.25.7-bookworm AS builder
+FROM rapidaai/rapida-golang:1.25.7-bookworm AS builder
 
 WORKDIR /app
 
-# Install system dependencies for CGO
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    gcc g++ make autoconf automake libtool pkg-config \
-    curl git wget unzip ca-certificates tar \
-    libopus-dev libopusfile-dev \
-    && rm -rf /var/lib/apt/lists/*
-
 # Copy go mod files first for caching
 COPY go.mod go.sum ./
-RUN go mod download
+RUN --mount=type=cache,target=/go/pkg/mod \
+    go mod download
 
-# ---- Install ONNX Runtime ----
-RUN mkdir -p /tmp/build && cd /tmp/build && \
-    wget -q https://github.com/microsoft/onnxruntime/releases/download/v1.16.0/onnxruntime-linux-x64-1.16.0.tgz && \
-    mkdir -p /opt/onnxruntime && \
-    tar -xzf onnxruntime-linux-x64-1.16.0.tgz -C /opt/onnxruntime --strip-components=1 && \
-    rm onnxruntime-linux-x64-1.16.0.tgz
-
-# ---- Build RNNoise ----
-
-RUN cd /tmp/build && \
-    curl -fsSL https://github.com/rapidaai/rnnoise/archive/refs/heads/main.tar.gz -o rnnoise.tar.gz && \
-    tar -xzf rnnoise.tar.gz && \
-    cd rnnoise-main && \
-    ./autogen.sh && \
-    ./configure --prefix=/usr/local && \
-    make -j$(nproc) && \
-    make install && \
-    cd /tmp/build && \
-    rm -rf rnnoise.tar.gz rnnoise-main
-
-
-# ---- Install Azure Speech SDK ----
-RUN cd /tmp/build && \
-    wget -q -O SpeechSDK-Linux.tar.gz https://aka.ms/csspeech/linuxbinary && \
-    mkdir -p /opt/azure-speech-sdk && \
-    tar --strip 1 -xzf SpeechSDK-Linux.tar.gz -C /opt/azure-speech-sdk && \
-    rm SpeechSDK-Linux.tar.gz && \
-    sed -i '/Speech_SegmentationMaximumTimeMs = 9004/d' /opt/azure-speech-sdk/include/c_api/speechapi_c_property_bag.h && \
-    rm -rf /tmp/build
-
-# ---- Copy project files ----
-COPY api/assistant-api ./api/assistant-api
-COPY bin/ ./bin/
+# ---- Copy only what this service needs ----
 COPY config/ ./config/
-COPY cmd/ ./cmd/
 COPY protos/ ./protos/
 COPY pkg/ ./pkg/
+COPY api/assistant-api ./api/assistant-api
+COPY cmd/assistant/ ./cmd/assistant/
 
 # ---- Build Go binary with all CGO flags in one RUN command ----
-RUN export CGO_CFLAGS="-I/opt/onnxruntime/include -I/usr/local/include -I/opt/azure-speech-sdk/include/c_api" && \
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    export CGO_CFLAGS="-I/opt/onnxruntime/include -I/usr/local/include -I/opt/azure-speech-sdk/include/c_api" && \
     export CGO_LDFLAGS="-L/opt/onnxruntime/lib -lonnxruntime -L/usr/local/lib -lrnnoise -L/opt/azure-speech-sdk/lib/x64 -lMicrosoft.CognitiveServices.Speech.core" && \
     export LD_LIBRARY_PATH="/opt/onnxruntime/lib:/usr/local/lib:/opt/azure-speech-sdk/lib/x64:$LD_LIBRARY_PATH" && \
     CGO_ENABLED=1 go build -v -o assistant-api ./cmd/assistant/assistant.go
 
 # ---- Runtime stage ----
-FROM golang:1.25.7-bookworm AS runtime
+FROM rapidaai/rapida-debian:bookworm-slim AS runtime
 
-WORKDIR /opt/apps
-
-# Install minimal runtime deps
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates wget netcat-openbsd \
-    libopus0 libopusfile0 \
-    && rm -rf /var/lib/apt/lists/*
-
-# Create user
-RUN groupadd -g 1000 rapida-app && useradd -m -u 1000 -g rapida-app rapida-app
+# Install assistant-api specific runtime deps
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
+    libopus0 libopusfile0
 
 # Copy binary and libraries
 COPY --from=builder /app/assistant-api .
