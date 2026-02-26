@@ -76,8 +76,8 @@ services:
       context: .
       dockerfile: docker/web-api/Dockerfile
     container_name: web-api
-    ports:
-      - "9001:9001"
+    # ports:
+    #   - "9001:9001"
     env_file:
       - ./docker/web-api/.web.env
     depends_on:
@@ -107,7 +107,7 @@ services:
       dockerfile: docker/assistant-api/Dockerfile
     container_name: assistant-api
     ports:
-      - "9007:9007"
+      - "9007:9007" # opeing for websocket and REST API
       - "4573:4573"                          # AudioSocket for Asterisk integration
       - "5090:5090/udp"                      # SIP signaling
       - "10000-10199:10000-10199/udp"        # RTP media (100 concurrent calls)
@@ -139,8 +139,8 @@ services:
       context: .
       dockerfile: docker/integration-api/Dockerfile
     container_name: integration-api
-    ports:
-      - "9004:9004"
+    # ports:
+    #   - "9004:9004"
     env_file:
       - ./docker/integration-api/.integration.env
     depends_on:
@@ -169,8 +169,8 @@ services:
       context: .
       dockerfile: docker/endpoint-api/Dockerfile
     container_name: endpoint-api
-    ports:
-      - "9005:9005"
+    # ports:
+    #   - "9005:9005"
     env_file:
       - ./docker/endpoint-api/.endpoint.env
     depends_on:
