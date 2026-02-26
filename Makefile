@@ -7,7 +7,8 @@
         restart-all restart-web restart-integration restart-endpoint \
         ps-all shell-web shell-integration shell-endpoint db-shell
 
-COMPOSE := docker compose -f docker-compose.yml
+COMPOSE           := docker compose -f docker-compose.yml
+COMPOSE_KNOWLEDGE := docker compose -f docker-compose.yml -f docker-compose.knowledge.yml
 
 help:
 	@echo ""
@@ -109,7 +110,7 @@ up-all:
 
 up-all-with-knowledge:
 	@echo "Starting all services including knowledge base..."
-	COMPOSE_PROFILES=knowledge $(COMPOSE) up -d
+	$(COMPOSE_KNOWLEDGE) up -d
 	@echo "✓ All services started (with knowledge base)"
 	@$(MAKE) status
 
@@ -120,7 +121,7 @@ up-ui:
 
 up-document:
 	@echo "Starting document-api..."
-	COMPOSE_PROFILES=knowledge $(COMPOSE) up -d document-api
+	$(COMPOSE_KNOWLEDGE) up -d document-api
 	@echo "✓ document-api started on port 9010"
 
 up-web:
@@ -160,7 +161,7 @@ up-redis:
 
 up-opensearch:
 	@echo "Starting OpenSearch..."
-	COMPOSE_PROFILES=knowledge $(COMPOSE) up -d opensearch
+	$(COMPOSE_KNOWLEDGE) up -d opensearch
 	@echo "✓ OpenSearch started on port 9200"
 
 # Legacy aliases
@@ -172,7 +173,7 @@ up: up-all
 
 down-all:
 	@echo "Stopping all services..."
-	COMPOSE_PROFILES=knowledge $(COMPOSE) down
+	$(COMPOSE_KNOWLEDGE) down
 	@echo "✓ All services stopped"
 
 down-ui:
@@ -187,7 +188,7 @@ down-web:
 
 down-document:
 	@echo "Stopping document-api..."
-	COMPOSE_PROFILES=knowledge $(COMPOSE) stop document-api
+	$(COMPOSE_KNOWLEDGE) stop document-api
 	@echo "✓ document-api stopped"
 
 down-assistant:
@@ -222,7 +223,7 @@ down-nginx:
 
 down-opensearch:
 	@echo "Stopping OpenSearch..."
-	COMPOSE_PROFILES=knowledge $(COMPOSE) stop opensearch
+	$(COMPOSE_KNOWLEDGE) stop opensearch
 	@echo "✓ OpenSearch stopped"
 
 # Legacy alias
@@ -239,7 +240,7 @@ build-all:
 
 build-all-with-knowledge:
 	@echo "Building all services including document-api..."
-	COMPOSE_PROFILES=knowledge $(COMPOSE) build ui web-api integration-api endpoint-api assistant-api document-api
+	$(COMPOSE_KNOWLEDGE) build ui web-api integration-api endpoint-api assistant-api document-api
 	@echo "✓ All services built (with knowledge base)"
 
 build-ui:
@@ -254,7 +255,7 @@ build-web:
 
 build-document:
 	@echo "Building document-api..."
-	COMPOSE_PROFILES=knowledge $(COMPOSE) build document-api
+	$(COMPOSE_KNOWLEDGE) build document-api
 	@echo "✓ document-api built"
 
 build-assistant:
@@ -279,7 +280,7 @@ rebuild-all:
 
 rebuild-all-with-knowledge:
 	@echo "Rebuilding all services including document-api (no cache)..."
-	COMPOSE_PROFILES=knowledge $(COMPOSE) build --no-cache ui web-api integration-api endpoint-api assistant-api document-api
+	$(COMPOSE_KNOWLEDGE) build --no-cache ui web-api integration-api endpoint-api assistant-api document-api
 	@echo "✓ All services rebuilt (with knowledge base)"
 
 rebuild-web:
@@ -294,7 +295,7 @@ rebuild-nginx:
 	
 rebuild-document:
 	@echo "Rebuilding document-api (no cache)..."
-	COMPOSE_PROFILES=knowledge $(COMPOSE) build --no-cache document-api
+	$(COMPOSE_KNOWLEDGE) build --no-cache document-api
 	@echo "✓ document-api rebuilt"
 
 
@@ -327,7 +328,7 @@ rebuild: rebuild-web
 # ============================================================================
 
 logs-all:
-	COMPOSE_PROFILES=knowledge $(COMPOSE) logs -f
+	$(COMPOSE_KNOWLEDGE) logs -f
 
 logs-ui:
 	$(COMPOSE) logs -f ui
@@ -337,7 +338,7 @@ logs-web:
 
 
 logs-document:
-	COMPOSE_PROFILES=knowledge $(COMPOSE) logs -f document-api
+	$(COMPOSE_KNOWLEDGE) logs -f document-api
 
 
 logs-assistant:
@@ -356,7 +357,7 @@ logs-redis:
 	$(COMPOSE) logs -f redis
 
 logs-opensearch:
-	COMPOSE_PROFILES=knowledge $(COMPOSE) logs -f opensearch
+	$(COMPOSE_KNOWLEDGE) logs -f opensearch
 
 # Legacy alias
 logs: logs-all
@@ -367,7 +368,7 @@ logs: logs-all
 
 restart-all:
 	@echo "Restarting all services..."
-	COMPOSE_PROFILES=knowledge $(COMPOSE) restart
+	$(COMPOSE_KNOWLEDGE) restart
 	@echo "✓ All services restarted"
 
 restart-nginx:
@@ -387,7 +388,7 @@ restart-web:
 
 restart-document:
 	@echo "Restarting document-api..."
-	COMPOSE_PROFILES=knowledge $(COMPOSE) restart document-api
+	$(COMPOSE_KNOWLEDGE) restart document-api
 	@echo "✓ document-api restarted"
 
 
@@ -448,7 +449,7 @@ shell-assistant:
 	$(COMPOSE) exec assistant-api sh
 
 shell-document:
-	COMPOSE_PROFILES=knowledge $(COMPOSE) exec document-api sh
+	$(COMPOSE_KNOWLEDGE) exec document-api sh
 
 shell-web:
 	$(COMPOSE) exec web-api sh
@@ -471,12 +472,12 @@ shell: shell-web
 
 clean-volumes:
 	@echo "Removing volumes..."
-	COMPOSE_PROFILES=knowledge $(COMPOSE) down -v
+	$(COMPOSE_KNOWLEDGE) down -v
 	@echo "✓ Volumes removed"
 
 clean:
 	@echo "Cleaning up Docker resources..."
-	COMPOSE_PROFILES=knowledge $(COMPOSE) down -v
+	$(COMPOSE_KNOWLEDGE) down -v
 	@echo "Removing built images..."
 	docker rmi $$(docker images | grep -E '(web-api|integration-api|endpoint-api|assistant-api|document-api|ui)' | awk '{print $$3}') 2>/dev/null || true
 	@echo "✓ Cleanup complete"
@@ -494,7 +495,7 @@ deps:
 # Start all dependencies including opensearch (for knowledge base)
 deps-knowledge:
 	@echo "Starting all dependencies including opensearch..."
-	COMPOSE_PROFILES=knowledge $(COMPOSE) up -d postgres redis opensearch
+	$(COMPOSE_KNOWLEDGE) up -d postgres redis opensearch
 	@echo "✓ Dependencies started (with OpenSearch)"
 
 # Start full stack with UI

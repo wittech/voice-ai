@@ -1,0 +1,95 @@
+# Knowledge base override — merge with docker-compose.yml via:
+#   docker compose -f docker-compose.yml -f docker-compose.knowledge.yml up -d
+#
+# This file adds opensearch and document-api services, enables OpenSearch
+# config in assistant-api, and enables the knowledge feature flag in the UI.
+
+services:
+
+  # OpenSearch — required for knowledge base search
+  opensearch:
+    image: opensearchproject/opensearch:2.11.1
+    container_name: opensearch
+    environment:
+      - cluster.name=opensearch-cluster
+      - node.name=opensearch-node1
+      - discovery.seed_hosts=opensearch
+      - cluster.initial_master_nodes=opensearch-node1
+      - bootstrap.memory_lock=true
+      - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
+      - plugins.security.disabled=true
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    volumes:
+      - ${HOME}/rapida-data/assets/opensearch:/usr/share/opensearch/data
+    ports:
+      - "9200:9200"
+      - "9600:9600"
+    networks:
+      - api-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:9200/_cluster/health | grep -q '\"status\":\"green\"\\|\"status\":\"yellow\"'"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Document API — RAG / knowledge processing
+  document-api:
+    build:
+      context: .
+      dockerfile: docker/document-api/Dockerfile
+    container_name: document-api
+    ports:
+      - "9010:9010"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      opensearch:
+        condition: service_healthy
+    volumes:
+      - ./docker/document-api/config.yaml:/opt/apps/config.yaml:ro
+      - ${HOME}/rapida-data/assets:/app/rapida-data/assets
+    networks:
+      - api-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--method=GET", "-O", "/dev/null", "http://localhost:9010/readiness/"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+
+  # Override assistant-api to inject OpenSearch connection config
+  assistant-api:
+    environment:
+      - OPENSEARCH__SCHEMA=http
+      - OPENSEARCH__HOST=opensearch
+      - OPENSEARCH__PORT=9200
+      - OPENSEARCH__MAX_RETRIES=3
+      - OPENSEARCH__MAX_CONNECTION=10
+    depends_on:
+      opensearch:
+        condition: service_healthy
+      document-api:
+        condition: service_healthy
+
+  # Override ui to mount the knowledge-enabled config
+  ui:
+    volumes:
+      - ./docker/ui/config.development.knowledge.json:/app/src/configs/config.development.json:ro
+    depends_on:
+      - document-api
+
+  # Override nginx to wait for document-api
+  nginx:
+    depends_on:
+      - document-api
+
+networks:
+  api-network:
+    driver: bridge
