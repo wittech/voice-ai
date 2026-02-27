@@ -27,7 +27,7 @@ Rapida is written in **Go**, using the highly optimized [gRPC](https://github.co
 
 ## Architecture
 
-![Rapida Platform Architecture](docs/images/rapida-platform-architecture.svg)
+![Rapida Platform Architecture](.github/rapida-platform-architecture.svg)
 
 ---
 
