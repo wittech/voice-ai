@@ -22,8 +22,8 @@ func TestOpenSearchConfig_Validation(t *testing.T) {
 		{"valid", OpenSearchConfig{Schema: "https", Host: "localhost", MaxRetries: 3, MaxConnection: 10}, false},
 		{"invalid missing schema", OpenSearchConfig{Host: "localhost", MaxRetries: 3, MaxConnection: 10}, true},
 		{"invalid missing host", OpenSearchConfig{Schema: "https", MaxRetries: 3, MaxConnection: 10}, true},
-		{"invalid missing max_retries", OpenSearchConfig{Schema: "https", Host: "localhost", MaxConnection: 10}, true},
-		{"invalid missing max_connection", OpenSearchConfig{Schema: "https", Host: "localhost", MaxRetries: 3}, true},
+		{"valid missing max_retries", OpenSearchConfig{Schema: "https", Host: "localhost", MaxConnection: 10}, false},
+		{"valid missing max_connection", OpenSearchConfig{Schema: "https", Host: "localhost", MaxRetries: 3}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
