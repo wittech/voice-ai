@@ -266,7 +266,7 @@ func (apt *asteriskTelephony) OutboundCall(
 		info.Status = "FAILED"
 		info.ErrorMessage = errMsg
 		apt.logger.Errorf("ARI outbound call failed: %s, response: %+v", errMsg, ariResp)
-		return info, fmt.Errorf(errMsg)
+		return info, fmt.Errorf("%s", errMsg)
 	}
 
 	if id, ok := ariResp["id"]; ok {

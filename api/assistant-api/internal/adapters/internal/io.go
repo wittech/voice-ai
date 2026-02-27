@@ -106,16 +106,19 @@ func (listening *genericRequestor) disconnectSpeechToText(ctx context.Context) e
 		if err := listening.speechToTextTransformer.Close(ctx); err != nil {
 			listening.logger.Warnf("cancel all output transformer with error %v", err)
 		}
+		listening.speechToTextTransformer = nil
 	}
 	if listening.vad != nil {
 		if err := listening.vad.Close(); err != nil {
 			listening.logger.Warnf("cancel vad with error %v", err)
 		}
+		listening.vad = nil
 	}
 	if listening.denoiser != nil {
 		if err := listening.denoiser.Close(); err != nil {
 			listening.logger.Warnf("cancel denoiser with error %v", err)
 		}
+		listening.denoiser = nil
 	}
 	return nil
 
@@ -230,6 +233,7 @@ func (spk *genericRequestor) disconnectTextToSpeech(ctx context.Context) error {
 		if err := spk.textToSpeechTransformer.Close(ctx); err != nil {
 			spk.logger.Errorf("cancel all output transformer with error %v", err)
 		}
+		spk.textToSpeechTransformer = nil
 	}
 	return nil
 }

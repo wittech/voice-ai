@@ -116,9 +116,9 @@ const (
 
 	// DefaultInputDurationMs is the default input buffer accumulation
 	// duration in milliseconds before flushing to InputCh.
-	// 100 ms provides ~3 Silero VAD windows (512 samples each at 16kHz),
+	// 60 ms provides ~2 Silero VAD windows (512 samples each at 16kHz),
 	// improving detection stability with minimal added latency.
-	DefaultInputDurationMs = 100
+	DefaultInputDurationMs = 60
 )
 
 // ============================================================================

@@ -69,22 +69,34 @@ func (t *genericRequestor) Talk(_ context.Context, auth types.SimplePrinciple) e
 
 		case *protos.ConversationConfiguration:
 			if initialized {
-				utils.Go(t.streamer.Context(), func() {
-					t.disconnectSpeechToText(t.streamer.Context())
-				})
-				utils.Go(t.streamer.Context(), func() {
-					t.disconnectTextToSpeech(t.streamer.Context())
-				})
 				switch payload.StreamMode {
 				case protos.StreamMode_STREAM_MODE_TEXT:
+					// Switching to text mode — tear down audio subsystems
+					// only if they are currently active.
+					if t.speechToTextTransformer != nil {
+						utils.Go(t.streamer.Context(), func() {
+							t.disconnectSpeechToText(t.streamer.Context())
+						})
+					}
+					if t.textToSpeechTransformer != nil {
+						utils.Go(t.streamer.Context(), func() {
+							t.disconnectTextToSpeech(t.streamer.Context())
+						})
+					}
 					t.messaging.SwitchMode(type_enums.TextMode)
 				case protos.StreamMode_STREAM_MODE_AUDIO:
-					utils.Go(t.streamer.Context(), func() {
-						t.initializeTextToSpeech(t.streamer.Context())
-					})
-					utils.Go(t.streamer.Context(), func() {
-						t.initializeSpeechToText(t.streamer.Context())
-					})
+					// Switching to audio mode — only initialize subsystems
+					// that are not already running.
+					if t.textToSpeechTransformer == nil {
+						utils.Go(t.streamer.Context(), func() {
+							t.initializeTextToSpeech(t.streamer.Context())
+						})
+					}
+					if t.speechToTextTransformer == nil {
+						utils.Go(t.streamer.Context(), func() {
+							t.initializeSpeechToText(t.streamer.Context())
+						})
+					}
 					t.messaging.SwitchMode(type_enums.AudioMode)
 				}
 			}

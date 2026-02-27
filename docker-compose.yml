@@ -1,6 +1,7 @@
 
 services:
   postgres:
+    platform: linux/amd64
     image: postgres:15-alpine
     container_name: postgres
     environment:
@@ -23,6 +24,7 @@ services:
 
   # Redis Cache
   redis:
+    platform: linux/amd64
     image: redis:7-alpine
     container_name: redis
     # ports:
@@ -40,6 +42,7 @@ services:
 
 
   nginx:
+    platform: linux/amd64
     image: nginx:alpine
     container_name: nginx
     ports:
@@ -59,6 +62,7 @@ services:
       - api-network
 
   ui:
+    platform: linux/amd64
     build:
       context: .
       dockerfile: docker/ui/Dockerfile
@@ -70,6 +74,7 @@ services:
 
   # Web API Service
   web-api:
+    platform: linux/amd64
     build:
       context: .
       dockerfile: docker/web-api/Dockerfile
@@ -135,6 +140,7 @@ services:
 
   # Integration API Service
   integration-api:
+    platform: linux/amd64
     build:
       context: .
       dockerfile: docker/integration-api/Dockerfile
@@ -166,6 +172,7 @@ services:
 
   # Endpoint API Service
   endpoint-api:
+    platform: linux/amd64
     build:
       context: .
       dockerfile: docker/endpoint-api/Dockerfile
