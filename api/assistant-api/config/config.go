@@ -32,14 +32,14 @@ type AudioSocketConfig struct {
 
 type AssistantConfig struct {
 	config.AppConfig    `mapstructure:",squash"`
-	PostgresConfig      configs.PostgresConfig   `mapstructure:"postgres" validate:"required"`
-	RedisConfig         configs.RedisConfig      `mapstructure:"redis" validate:"required"`
+	PostgresConfig      configs.PostgresConfig    `mapstructure:"postgres" validate:"required"`
+	RedisConfig         configs.RedisConfig       `mapstructure:"redis" validate:"required"`
 	OpenSearchConfig    *configs.OpenSearchConfig `mapstructure:"opensearch"`
-	WeaviateConfig      configs.WeaviateConfig   `mapstructure:"weaviate"`
-	AssetStoreConfig    configs.AssetStoreConfig `mapstructure:"asset_store" validate:"required"`
-	PublicAssistantHost string                   `mapstructure:"public_assistant_host" validate:"required"`
-	SIPConfig           *SIPConfig               `mapstructure:"sip"`
-	AudioSocketConfig   *AudioSocketConfig       `mapstructure:"audiosocket"`
+	WeaviateConfig      configs.WeaviateConfig    `mapstructure:"weaviate"`
+	AssetStoreConfig    configs.AssetStoreConfig  `mapstructure:"asset_store" validate:"required"`
+	PublicAssistantHost string                    `mapstructure:"public_assistant_host" validate:"required"`
+	SIPConfig           *SIPConfig                `mapstructure:"sip"`
+	AudioSocketConfig   *AudioSocketConfig        `mapstructure:"audiosocket"`
 }
 
 // reading config and intializing configs for application
