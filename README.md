@@ -25,6 +25,12 @@ Rapida is written in **Go**, using the highly optimized [gRPC](https://github.co
 
 ---
 
+## Architecture
+
+![Rapida Platform Architecture](docs/images/rapida-platform-architecture.svg)
+
+---
+
 ## Features
 
 - **Real-time Voice Orchestration**  
