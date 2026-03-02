@@ -10,6 +10,9 @@
         push-rapida-golang-bookworm push-rapida-golang-alpine push-rapida-alpine \
         push-rapida-debian-slim push-rapida-node-alpine push-rapida-python
 
+# 定义国内 Go 模块代理地址（核心新增配置）
+GOPROXY_ARG := --build-arg GOPROXY=https://goproxy.cn,https://mirrors.aliyun.com/goproxy/,direct
+
 COMPOSE           := DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 DOCKER_DEFAULT_PLATFORM=linux/amd64 docker compose -f docker-compose.yml
 COMPOSE_KNOWLEDGE := DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 DOCKER_DEFAULT_PLATFORM=linux/amd64 docker compose -f docker-compose.yml -f docker-compose.knowledge.yml
 
@@ -284,7 +287,7 @@ push-base-images: push-rapida-golang-bookworm push-rapida-golang-alpine push-rap
 
 build-all:
 	@echo "Building all services (without document-api/opensearch)..."
-	$(COMPOSE) build ui web-api integration-api endpoint-api assistant-api
+	$(COMPOSE) build $(GOPROXY_ARG) ui web-api integration-api endpoint-api assistant-api
 	@echo "✓ All services built"
 
 build-all-with-knowledge:
@@ -309,17 +312,17 @@ build-document:
 
 build-assistant:
 	@echo "Building assistant-api..."
-	$(COMPOSE) build assistant-api
+	$(COMPOSE) build $(GOPROXY_ARG) assistant-api
 	@echo "✓ assistant-api built"
 
 build-integration:
 	@echo "Building integration-api..."
-	$(COMPOSE) build integration-api
+	$(COMPOSE) build $(GOPROXY_ARG) integration-api
 	@echo "✓ integration-api built"
 
 build-endpoint:
 	@echo "Building endpoint-api..."
-	$(COMPOSE) build endpoint-api
+	$(COMPOSE) build $(GOPROXY_ARG) endpoint-api
 	@echo "✓ endpoint-api built"
 
 rebuild-all:
@@ -350,7 +353,7 @@ rebuild-document:
 
 rebuild-assistant:
 	@echo "Rebuilding assistant-api (no cache)..."
-	$(COMPOSE) build --no-cache assistant-api
+	$(COMPOSE) build $(GOPROXY_ARG) --no-cache assistant-api
 	@echo "✓ assistant-api rebuilt"
 
 rebuild-ui:
@@ -360,12 +363,12 @@ rebuild-ui:
 
 rebuild-integration:
 	@echo "Rebuilding integration-api (no cache)..."
-	$(COMPOSE) build --no-cache integration-api
+	$(COMPOSE) build $(GOPROXY_ARG) --no-cache integration-api
 	@echo "✓ integration-api rebuilt"
 
 rebuild-endpoint:
 	@echo "Rebuilding endpoint-api (no cache)..."
-	$(COMPOSE) build --no-cache endpoint-api
+	$(COMPOSE) build $(GOPROXY_ARG) --no-cache endpoint-api
 	@echo "✓ endpoint-api rebuilt"
 
 # Legacy aliases
