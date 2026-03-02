@@ -16,6 +16,7 @@ import (
 	internal_transformer_deepgram "github.com/rapidaai/api/assistant-api/internal/transformer/deepgram"
 	internal_transformer_elevenlabs "github.com/rapidaai/api/assistant-api/internal/transformer/elevenlabs"
 	internal_transformer_google "github.com/rapidaai/api/assistant-api/internal/transformer/google"
+	internal_transformer_qwen3asr "github.com/rapidaai/api/assistant-api/internal/transformer/qwen3-asr"
 	internal_transformer_revai "github.com/rapidaai/api/assistant-api/internal/transformer/revai"
 	internal_transformer_sarvam "github.com/rapidaai/api/assistant-api/internal/transformer/sarvam"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
@@ -35,6 +36,7 @@ const (
 	SARVAM                AudioTransformer = "sarvamai"
 	ELEVENLABS            AudioTransformer = "elevenlabs"
 	ASSEMBLYAI            AudioTransformer = "assemblyai"
+	QWEN3_ASR             AudioTransformer = "qwen3-asr"
 )
 
 func (at AudioTransformer) String() string {
@@ -89,6 +91,8 @@ func GetSpeechToTextTransformer(ctx context.Context,
 		return internal_transformer_sarvam.NewSarvamSpeechToText(ctx, logger, credential, onPacket, opts)
 	case CARTESIA:
 		return internal_transformer_cartesia.NewCartesiaSpeechToText(ctx, logger, credential, onPacket, opts)
+	case QWEN3_ASR:
+		return internal_transformer_qwen3asr.NewQwen3AsrSpeechToText(ctx, logger, credential, onPacket, opts)
 	default:
 		return nil, fmt.Errorf("illegal speech to text idenitfier")
 	}
